@@ -1,6 +1,6 @@
-# HandyFlow
+# Artisans
 
-**HandyFlow** is a modern artisan service platform designed to connect clients with local skilled professionals instantly. Think of it as the "Bolt for Artisans" — simplifying the process of finding, hiring, and paying for reliable help.
+**Artisans** is a modern artisan service platform designed to connect clients with local skilled professionals instantly. Think of it as the "Bolt for Artisans" — simplifying the process of finding, hiring, and paying for reliable help.
 
 ## Project Status
 **Current Phase**: Initial Scaffolding / Development
@@ -18,7 +18,7 @@
 
 1. Navigate to the project directory:
    ```bash
-   cd handyflow
+   cd artisans
    ```
 
 2. Install dependencies:

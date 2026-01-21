@@ -1,29 +1,71 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-green: #00853E;
-  --color-brand-green-50: #f0fdf4;
-  --color-brand-green-100: #dcfce7;
-  --color-brand-green-200: #bbf7d0;
-  --color-brand-green-300: #86efac;
-  --color-brand-green-400: #4ade80;
-  --color-brand-green-500: #22c55e;
-  --color-brand-green-600: #16a34a;
-  --color-brand-green-700: #15803d;
-  --color-brand-green-800: #166534;
-  --color-brand-green-900: #14532d;
-  --color-brand-green-hover: #006837;
+  --font-display: "Manrope", sans-serif;
+  --font-body: "Manrope", sans-serif;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-primary: #1f7a45;
+  --color-primary-light: #38C771;
+  --color-primary-dark: #124d2b;
+  --color-primary-hover: #185f35;
+
+  --color-background-light: #ffffff;
+
+  --color-surface-light: #ffffff;
+
+  --color-text-main: #303338;
+  --color-text-secondary: #64826e;
+
+  --color-brand-green: #1f7a45;
+  --color-brand-green-dark: #124d2b;
+  --color-brand-green-hover: #185f35;
+
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 4rem;
+}
+
+.glass-morphism {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #38C771 0%, #1f7a45 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.asymmetric-frame {
+  border-top-left-radius: 4rem;
+  border-bottom-right-radius: 4rem;
+  border-top-right-radius: 1rem;
+  border-bottom-left-radius: 1rem;
 }
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Fallback or specific usage if not using @theme for everything */
+  --font-manrope: "Manrope", sans-serif;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-sans);
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+button:focus {
+  outline: none !important;
+  box-shadow: none !important;
 }
