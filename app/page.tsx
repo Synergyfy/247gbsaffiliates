@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { HeroCarousel } from "@/components/landing/HeroCarousel";
+import { FaNairaSign } from "react-icons/fa6";
 
 export default function LandingPage() {
   return (
@@ -17,8 +18,9 @@ export default function LandingPage() {
             <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">Mcommall</h2>
           </div>
           <div className="hidden md:flex flex-1 justify-center gap-10">
-            <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">Find Merchants</Link>
+            <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Accountants</Link>
             <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Agents</Link>
+            <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For consultants</Link>
             <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">How it Works</Link>
           </div>
           <div className="flex gap-4">
@@ -93,11 +95,10 @@ export default function LandingPage() {
 
       {/* Stats Section */}
       <section className="px-6 lg:px-40 py-24 bg-primary text-white">
-        <div className="max-w-[1240px] mx-auto grid grid-cols-3 md:grid-cols-4 gap-12 text-center">
+        <div className="max-w-[1240px] mx-auto grid grid-cols-3 md:grid-cols-3 gap-12 text-center">
           {[
             { label: "Active Merchants", value: "2.5k+" },
             { label: "Verified Agents", value: "12k+" },
-            { label: "Daily Transactions", value: "$4.2M" },
             { label: "Match Accuracy", value: "99.2%" }
           ].map((stat, i) => (
             <div key={i} className="space-y-2">
@@ -116,13 +117,11 @@ export default function LandingPage() {
             <h2 className="text-4xl lg:text-5xl font-bold font-display text-text-main">Browse by Role</h2>
             <p className="text-text-secondary text-lg max-w-2xl mx-auto">Discover elite professionals across various disciplines in our specialized ecosystem.</p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             {[
               { name: " Agents", count: "2.1k+", icon: "support_agent" },
               { name: "Consultants", count: "400+", icon: "architecture" },
               { name: "Account Managers", count: "320+", icon: "badge" },
-              { name: "Strategy Leads", count: "120+", icon: "leaderboard" },
-              { name: "Customer Success", count: "450+", icon: "sentiment_satisfied" }
             ].map((cat, i) => (
               <Link href="#" key={i} className="p-8 rounded-2xl border border-primary/5 bg-background-light hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all group">
                 <span className="material-symbols-outlined text-primary text-3xl mb-4 group-hover:scale-110 transition-transform">{cat.icon}</span>

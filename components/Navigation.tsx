@@ -67,4 +67,14 @@ export default function Navigation() {
                                 </Link>
                             </>
                         )}
-                 
+                        <div className="md:hidden">
+                            <button className="text-gray-600 hover:text-green-600">
+                                <span className="material-icons-round text-3xl">menu</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    );
+}
