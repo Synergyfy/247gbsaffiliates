@@ -1,205 +1,102 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
-import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
-import { useOnboardingStore } from "@/store/onboardingStore";
-import { useRouter } from "next/navigation";
-import { ReactNode } from "react";
-
-const testimonials = [
-    {
-        quote: "Artisans made finding reliable artisans incredibly easy. The whole process was smooth and I got my electrical work done within days!",
-        author: "Chioma Adeyemi",
-        role: "Homeowner, Lagos",
-    },
-    {
-        quote: "As an artisan, this platform has transformed my business. I get consistent work and the clients are verified and professional.",
-        author: "Tunde Okafor",
-        role: "Electrician, Abuja",
-    },
-    {
-        quote: "The admin tools are powerful yet easy to use. Managing the platform and verifying artisans has never been simpler.",
-        author: "Amina Bello",
-        role: "Platform Manager, Port Harcourt",
-    },
-];
-
-const GeometricPattern = () => (
-    <div className="absolute top-6 left-6 grid grid-cols-4 gap-2 opacity-60">
-        {[...Array(16)].map((_, i) => (
-            <motion.div
-                key={i}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.03, duration: 0.3 }}
-                className={`w-6 h-6 rounded-md ${[0, 1, 4, 5, 8, 12].includes(i)
-                    ? "bg-white/40"
-                    : "bg-transparent"
-                    }`}
-            />
-        ))}
-    </div>
-);
+import React from 'react';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { UserRole } from '@/lib/mockApi';
 
 interface OnboardingLayoutProps {
-    children: ReactNode;
+    children: React.ReactNode;
+    title?: string;
+    subtitle?: string;
 }
 
-export default function OnboardingLayout({ children }: OnboardingLayoutProps) {
-    const { currentStep, totalSteps, prevStep } = useOnboardingStore();
-    const router = useRouter();
-    const [currentTestimonial, setCurrentTestimonial] = useState(0);
+const steps = [
+    { id: 'basic-info', label: 'Basic Info' },
+    { id: 'profile-info', label: 'Professional Profile' },
+    { id: 'questionnaire', label: 'Expertise' },
+    { id: 'quiz', label: 'Assessment' },
+    { id: 'outcome', label: 'Certification' },
+];
 
-    const progress = ((currentStep + 1) / totalSteps) * 100;
+export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
+    const { currentStep, role } = useOnboardingStore();
 
-    const nextTestimonial = () => {
-        setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
-    };
-
-    const prevTestimonial = () => {
-        setCurrentTestimonial((prev) => (prev - 1 + testimonials.length) % testimonials.length);
-    };
-
-    const handleBack = () => {
-        if (currentStep === 0) {
-            router.push('/signup');
-        } else {
-            prevStep();
-        }
-    };
+    const currentStepIndex = steps.findIndex(s => s.id === currentStep);
 
     return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 md:p-8">
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="w-full max-w-7xl bg-white rounded-2xl shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-2"
-            >
-                {/* Left Panel - Testimonial */}
-                <div className="relative hidden lg:flex flex-col h-full overflow-hidden bg-linear-to-br from-brand-green to-green-600">
-                    {/* Background Pattern */}
-                    <div className="absolute inset-0 opacity-10">
-                        <div className="absolute top-10 left-10 w-20 h-20 bg-white rounded-full blur-3xl"></div>
-                        <div className="absolute bottom-10 right-10 w-32 h-32 bg-white rounded-full blur-3xl"></div>
-                    </div>
-
-                    <GeometricPattern />
-
-                    {/* Logo Badge */}
-                    <div className="relative z-10 p-8 flex justify-end">
-                        <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-2 flex items-center gap-2">
-                            <span className="font-semibold text-white text-sm">Artisans</span>
-                        </div>
-                    </div>
-
-                    {/* Content pushed to bottom */}
-                    <div className="relative z-10 mt-auto p-10">
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={currentTestimonial}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 20 }}
-                                transition={{ duration: 0.4 }}
-                            >
-                                <p className="text-white text-2xl font-medium leading-relaxed mb-6 italic">
-                                    "{testimonials[currentTestimonial].quote}"
-                                </p>
-                                <div>
-                                    <p className="text-white font-semibold text-lg">
-                                        {testimonials[currentTestimonial].author}
-                                    </p>
-                                    <p className="text-white/60 text-sm">
-                                        {testimonials[currentTestimonial].role}
-                                    </p>
-                                </div>
-                            </motion.div>
-                        </AnimatePresence>
-
-                        <div className="flex gap-3 mt-8">
-                            <button
-                                onClick={prevTestimonial}
-                                aria-label="Previous testimonial"
-                                className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center text-white/70 hover:bg-white/10 transition-all"
-                            >
-                                <FiChevronLeft size={24} />
-                            </button>
-                            <button
-                                onClick={nextTestimonial}
-                                aria-label="Next testimonial"
-                                className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center text-white/70 hover:bg-white/10 transition-all"
-                            >
-                                <FiChevronRight size={24} />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right Panel - Content */}
-                <div className="p-6 md:p-10 flex flex-col min-h-[600px]">
-                    {/* Logo & Progress */}
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                        className="flex items-center justify-between mb-8"
-                    >
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-brand-green rounded-lg flex items-center justify-center">
-                                <span className="text-white text-xs font-bold">A</span>
+        <div className="bg-[#F9FAFB] min-h-screen flex flex-col font-body text-text-main">
+            <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 py-6 px-4 sticky top-0 z-50">
+                <div className="max-w-5xl mx-auto">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                            <div className="size-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
+                                <span className="material-symbols-outlined font-bold text-2xl">category</span>
                             </div>
-                            <span className="font-semibold text-gray-900">Artisans</span>
-                        </div>
-
-                        {/* Progress Indicator */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">
-                                Step {currentStep + 1} of {totalSteps}
-                            </span>
-                            <div className="flex gap-1">
-                                {Array.from({ length: totalSteps }).map((_, i) => (
-                                    <div
-                                        key={i}
-                                        className={`w-2 h-2 rounded-full transition-colors ${i <= currentStep ? "bg-brand-green" : "bg-gray-300"
-                                            }`}
-                                    />
-                                ))}
+                            <div>
+                                <h2 className="text-xl font-display font-bold tracking-tight text-text-main leading-none">Mcommall</h2>
+                                <p className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mt-1">Professional</p>
                             </div>
                         </div>
-                    </motion.div>
-
-                    {/* Progress Bar */}
-                    <div className="h-1 bg-gray-100 w-full relative mb-8 rounded-full overflow-hidden">
-                        <motion.div
-                            className="absolute left-0 top-0 h-full bg-brand-green"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${progress}%` }}
-                            transition={{ duration: 0.5 }}
-                        />
+                        {role && (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-100 rounded-full">
+                                <span className="material-symbols-outlined text-sm text-primary">verified_user</span>
+                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                                    {role.replace('-', ' ')} Onboarding
+                                </span>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Back Button */}
-                    {currentStep > 0 && (
-                        <button
-                            onClick={handleBack}
-                            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
-                        >
-                            <FiChevronLeft size={20} />
-                            <span className="text-sm font-medium">Back</span>
-                        </button>
-                    )}
+                    <div className="mt-10 flex items-center justify-between max-w-4xl mx-auto relative px-4">
+                        {steps.map((step, index) => {
+                            const isActive = index === currentStepIndex;
+                            const isCompleted = index < currentStepIndex;
 
-                    {/* Dynamic Content */}
-                    <div className="flex-1 flex flex-col">
-                        <AnimatePresence mode="wait">
-                            {children}
-                        </AnimatePresence>
+                            return (
+                                <React.Fragment key={step.id}>
+                                    <div className="flex flex-col items-center z-10">
+                                        <div className={`size-10 rounded-full flex items-center justify-center transition-all duration-500 ${isCompleted
+                                            ? 'bg-primary text-white scale-90'
+                                            : isActive
+                                                ? 'bg-primary border-4 border-white ring-4 ring-primary/10 text-white shadow-xl shadow-primary/20 scale-110'
+                                                : 'bg-white border-2 border-slate-200 text-slate-400'
+                                            }`}>
+                                            {isCompleted ? (
+                                                <span className="material-symbols-outlined text-xl">check</span>
+                                            ) : (
+                                                <span className="text-sm font-bold font-display">{index + 1}</span>
+                                            )}
+                                        </div>
+                                        <span className={`text-[10px] font-bold mt-3 uppercase tracking-wider transition-colors duration-500 ${isActive ? 'text-primary' : isCompleted ? 'text-text-main/70' : 'text-slate-400'
+                                            }`}>
+                                            {step.label}
+                                        </span>
+                                    </div>
+                                    {index < steps.length - 1 && (
+                                        <div className={`h-0.5 grow mx-2 md:mx-4 rounded-full transition-all duration-700 ${isCompleted ? 'bg-primary' : 'bg-slate-100'
+                                            }`} />
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
                     </div>
                 </div>
-            </motion.div>
+            </header>
+
+            <main className="flex-1 py-16 px-4">
+                {children}
+            </main>
+
+            <footer className="py-10 border-t border-slate-100 bg-white mt-auto">
+                <div className="max-w-5xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <p className="text-xs text-slate-400 font-medium tracking-tight font-display italic">© 2026 mcommall professional marketplace</p>
+                    <div className="flex gap-8 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <a className="hover:text-primary transition-colors" href="#">Privacy Policy</a>
+                        <a className="hover:text-primary transition-colors" href="#">Terms of Service</a>
+                        <a className="hover:text-primary transition-colors" href="#">Help Center</a>
+                    </div>
+                </div>
+            </footer>
         </div>
     );
-}
+};

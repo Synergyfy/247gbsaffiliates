@@ -1,0 +1,95 @@
+"use client";
+
+import Link from "next/link";
+
+const roles = [
+    {
+        id: "agent",
+        title: "Agent",
+        description: "Perfect for independent specialists looking to connect with clients and manage individual project listings.",
+        icon: "person_search",
+        href: "/signup?role=agent",
+    },
+    {
+        id: "account-manager",
+        title: "Account Manager",
+        description: "Ideal for agency leads managing multiple agents, complex client portfolios, and high-volume transactions.",
+        icon: "business_center",
+        href: "/signup?role=account-manager",
+        popular: true,
+    },
+    {
+        id: "consultant",
+        title: "Consultant",
+        description: "Designed for strategic advisors providing expert analysis, reporting, and advisory services to the marketplace.",
+        icon: "insights",
+        href: "/signup?role=consultant",
+    },
+];
+
+export default function RoleSelectionPage() {
+    return (
+        <div className="bg-white min-h-screen flex flex-col items-center justify-center p-6 text-text-main font-display">
+            <div className="mb-12 flex items-center gap-3">
+                <div className="text-primary size-8">
+                    <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
+                    </svg>
+                </div>
+                <span className="text-3xl font-bold tracking-tight text-text-main font-display">Mcommall</span>
+            </div>
+
+            <div className="text-center max-w-2xl mb-16 px-4">
+                <h1 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight text-text-main font-display">Join as a professional</h1>
+                <p className="text-text-secondary text-lg lg:text-xl font-medium leading-relaxed">
+                    Choose the role that best fits your expertise. Scale your business within the Mcommall ecosystem.
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
+                {roles.map((role) => (
+                    <Link
+                        key={role.id}
+                        href={role.href}
+                        className={`group p-8 rounded-[3rem] border border-gray-100 bg-white shadow-sm transition-all duration-500 flex flex-col items-center text-center relative hover:border-primary hover:shadow-2xl hover:-translate-y-3 ${role.popular ? "md:scale-105 border-primary/20 ring-1 ring-primary/5 shadow-md" : ""
+                            }`}
+                    >
+                        {role.popular && (
+                            <div className="absolute -top-4 bg-primary text-white text-[10px] font-bold tracking-widest uppercase px-6 py-2 rounded-full shadow-xl shadow-primary/30 z-10 font-display">
+                                Most Popular
+                            </div>
+                        )}
+                        <div className="w-20 h-20 bg-gray-50 rounded-4xl flex items-center justify-center mb-8 transition-all duration-500 group-hover:bg-primary group-hover:text-white group-hover:rotate-12 group-hover:shadow-xl group-hover:shadow-primary/20">
+                            <span className="material-symbols-outlined text-4xl text-primary group-hover:text-white transition-colors">
+                                {role.icon}
+                            </span>
+                        </div>
+                        <h3 className="text-2xl font-bold mb-4 text-text-main group-hover:text-primary transition-colors font-display tracking-tight">
+                            {role.title}
+                        </h3>
+                        <p className="text-text-secondary font-medium leading-relaxed mb-10 grow">
+                            {role.description}
+                        </p>
+                        <div className="mt-auto flex items-center gap-2 text-primary font-bold text-sm tracking-widest uppercase group-hover:gap-4 transition-all font-display">
+                            Get Started <span className="material-symbols-outlined text-xl">chevron_right</span>
+                        </div>
+                    </Link>
+                ))}
+            </div>
+
+            <div className="mt-16 text-center">
+                <p className="text-text-secondary text-base font-medium">
+                    Already have an account?{" "}
+                    <Link className="text-primary font-bold hover:underline underline-offset-4 decoration-2 transition-all" href="/login">
+                        Log in here
+                    </Link>
+                </p>
+                <div className="mt-12 pt-10 border-t border-slate-50 w-full max-w-sm mx-auto">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
+                        © 2026 mcommall professional marketplace
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}

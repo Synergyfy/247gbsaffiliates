@@ -1,25 +1,21 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono, Manrope } from "next/font/google"; // Added Manrope
+import { Outfit, Inter } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-});
-
-const manrope = Manrope({
-  variable: "--font-manrope",
-  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "Artisans - Professional Service Platform",
-  description: "Connect with elite artisans and master craftsmen for your home projects.",
+  title: "Mcommall - Professional Commerce Ecosystem",
+  description: "The unified platform for Merchants, Agents, and Customers.",
 };
 
 import Providers from "@/components/Providers";
@@ -37,7 +33,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${manrope.className} antialiased font-display bg-white text-text-main transition-colors duration-300`}
+        className={`${outfit.variable} ${inter.variable} antialiased font-body bg-background-light text-text-main transition-colors duration-300`}
       >
         <Providers>
           {children}

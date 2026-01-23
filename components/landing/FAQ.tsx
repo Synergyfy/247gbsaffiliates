@@ -32,7 +32,7 @@ export default function FAQ() {
     };
 
     return (
-        <section className="py-20 bg-brand-green-50">
+        <section className="py-20 bg-brand-blue-50">
             <div className="container mx-auto px-6 md:px-12 max-w-3xl">
                 <FadeIn direction="up">
                     <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">Frequently Asked Questions</h2>

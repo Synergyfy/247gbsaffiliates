@@ -1,27 +1,144 @@
+export type UserRole = 'agent' | 'account-manager' | 'consultant';
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'client' | 'artisan' | 'admin';
+  role: UserRole;
   avatar?: string;
   image?: string;
+  score?: number;
+  skills?: string[];
 }
 
-const mockUsers: User[] = [
-  { id: '1', name: 'Alex Artisan', email: 'alex@artisans.com', role: 'artisan', avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuARXNH-vkGwvmEhwQRV0IBO_YK7Xod_Wo3k6CMwblM4Ws7uMmpyWIT5Ci-rHoheNbf_tLN2oQc8kcW9m9Tuym1MPeHL5weg6KkSNIJ4SvAnBQjcmFGMSSXG8Ar6ipUgF3YK8OwS3iMuqrzhYiL7Ad1HbxsVMWUYgilEndXUlLsE7QNfbzf2ggec8jaB4UoYJPo6fXKLfeGtSuVg2Trz9gmwQTPZy7SHeLT_7Kzp-fuOUTiTPJx8crF1TzcRaCPP1T6Dj2S263LUNwbL' },
-  { id: '2', name: 'John Client', email: 'john@example.com', role: 'client' },
-  { id: '3', name: 'Admin Master', email: 'admin@artisans.com', role: 'admin' },
+export interface Skill {
+  id: string;
+  name: string;
+}
+
+export interface QuizOption {
+  id: string;
+  text: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  text: string;
+  options: QuizOption[];
+  correctOptionId: string;
+  type?: 'scenario' | 'knowledge';
+}
+
+const mockUsers: User[] = [];
+
+const mockSkills: Skill[] = [
+  { id: '1', name: 'Social Media Setup' },
+  { id: '2', name: 'AI Content Generation' },
+  { id: '3', name: 'Local SEO' },
+  { id: '4', name: 'Graphic Design' },
+  { id: '5', name: 'Email Marketing' },
+  { id: '6', name: 'Web Development' },
+  { id: '7', name: 'Copywriting' },
+  { id: '8', name: 'Data Analysis' },
+  { id: '9', name: 'Paid Advertising' },
+  { id: '10', name: 'Community Management' },
+  { id: '11', name: 'Photography' },
+  { id: '12', name: 'UI/UX Design' },
+  { id: '13', name: 'Video Editing' },
+  { id: '14', name: 'Market Research' },
 ];
 
+const mockQuestions: Record<string, QuizQuestion[]> = {
+  agent: [
+    {
+      id: 'a1',
+      text: 'How to optimize a product blurb for SEO?',
+      options: [
+        { id: 'opt1', text: 'Include high-volume keywords naturally within the first 50 words.' },
+        { id: 'opt2', text: 'Repeat the product name as many times as possible in every sentence.' },
+        { id: 'opt3', text: 'Focus on long-tail keywords, benefit-driven language, and meta-descriptions.' },
+        { id: 'opt4', text: 'Keep the blurb under 20 words to ensure faster mobile indexing.' },
+      ],
+      correctOptionId: 'opt3'
+    },
+    {
+      id: 'a2',
+      text: 'What is the most effective way to handle a lead that hasn\'t responded in 48 hours?',
+      options: [
+        { id: 'opt1', text: 'Mark as lost and move on' },
+        { id: 'opt2', text: 'Send a "break-up" email immediately' },
+        { id: 'opt3', text: 'Follow up with a value-driven touchpoint (e.g., a helpful resource)' },
+        { id: 'opt4', text: 'Call them every 2 hours until they pick up' },
+      ],
+      correctOptionId: 'opt3'
+    }
+  ],
+  'account-manager': [
+    {
+      id: 'am1',
+      text: "A high-priority client's campaign is underperforming. How do you strategically reassign tasks?",
+      type: 'scenario',
+      options: [
+        { id: 'opt1', text: 'Skill-Based Redistribution: Identify bottlenecks and reassign to specialists.' },
+        { id: 'opt2', text: 'Capacity & Velocity Mapping: Shift tasks based on Agent bandwidth.' },
+        { id: 'opt3', text: 'Equal Load Distribution: Divide tasks equally to prevent burnout.' },
+        { id: 'opt4', text: 'External Resource Escalation: Request freelance support immediately.' },
+      ],
+      correctOptionId: 'opt2'
+    }
+  ],
+  consultant: [
+    {
+      id: 'c1',
+      text: 'Analyze this business growth chart and identify the primary bottleneck.',
+      type: 'scenario',
+      options: [
+        { id: 'opt1', text: 'Adversely high customer acquisition costs (CAC) exceeding LTV in Q2.' },
+        { id: 'opt2', text: 'A post-acquisition retention failure in Q3 despite high lead volume.' },
+        { id: 'opt3', text: 'Market saturation within the primary demographic preventing penetration.' },
+        { id: 'opt4', text: 'Infrastructure latency in Q4 causing high abandonment rates.' },
+      ],
+      correctOptionId: 'opt2'
+    }
+  ]
+};
+
 export const mockApi = {
+  getSkills: async (): Promise<Skill[]> => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return mockSkills;
+  },
+
+  getQuestions: async (role: UserRole): Promise<QuizQuestion[]> => {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return mockQuestions[role] || [];
+  },
+
+  submitQuiz: async (role: UserRole, answers: Record<string, string>): Promise<{ score: number; performance: any }> => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const questions = mockQuestions[role] || [];
+    let correct = 0;
+    questions.forEach(q => {
+      if (answers[q.id] === q.correctOptionId) correct++;
+    });
+    const score = Math.round((correct / questions.length) * 100);
+    return {
+      score,
+      performance: {
+        speed: 95,
+        accuracy: score,
+        scenarios: 92
+      }
+    };
+  },
+
   login: async (email: string): Promise<{ user: User; token: string }> => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     const user = mockUsers.find(u => u.email === email) || {
       id: Math.random().toString(36).substr(2, 9),
-      name: email.split('@')[0],
+      name: email.split('@')[1] ? email.split('@')[0] : 'User',
       email: email,
-      role: 'client' as const
+      role: 'agent' as const
     };
     return { user, token: 'mock-jwt-token-' + user.id };
   },
@@ -40,12 +157,16 @@ export const mockApi = {
 
   getProfile: async (): Promise<User> => {
     await new Promise((resolve) => setTimeout(resolve, 800));
-    // Simulated logged in user check (logic would go here)
     return mockUsers[0]; 
   },
 
   logout: async (): Promise<void> => {
     await new Promise((resolve) => setTimeout(resolve, 1000));
+  },
+
+  verifyEmail: async (code: string): Promise<boolean> => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return code === '123456';
   },
 
   deleteAccount: async (): Promise<void> => {

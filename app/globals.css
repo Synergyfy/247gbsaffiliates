@@ -1,26 +1,23 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Manrope", sans-serif;
-  --font-body: "Manrope", sans-serif;
-  --font-sans: var(--font-geist-sans);
+  --font-display: "Outfit", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-sans: "Inter", sans-serif;
   --font-mono: var(--font-geist-mono);
 
-  --color-primary: #1f7a45;
-  --color-primary-light: #38C771;
-  --color-primary-dark: #124d2b;
-  --color-primary-hover: #185f35;
+  --color-primary: #2563eb;
+  --color-primary-light: #60a5fa;
+  --color-primary-dark: #1e40af;
+  --color-primary-hover: #1d4ed8;
 
-  --color-background-light: #ffffff;
+  --color-background-light: #f5f8f8;
+  --color-background-dark: #0f1723;
 
   --color-surface-light: #ffffff;
 
-  --color-text-main: #303338;
-  --color-text-secondary: #64826e;
-
-  --color-brand-green: #1f7a45;
-  --color-brand-green-dark: #124d2b;
-  --color-brand-green-hover: #185f35;
+  --color-text-main: #0c1d1a;
+  --color-text-secondary: #475569;
 
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
@@ -35,7 +32,7 @@
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, #38C771 0%, #1f7a45 100%);
+  background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
