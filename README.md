@@ -1,34 +1,67 @@
-# Artisans
+MCOMMALL (Listeo)
 
-**Artisans** is a modern artisan service platform designed to connect clients with local skilled professionals instantly. Think of it as the "Bolt for Artisans" — simplifying the process of finding, hiring, and paying for reliable help.
+MCOMMALL (powered by the Listeo engine) is a high-performance service marketplace and professional ecosystem. It bridges the gap between businesses and a tiered workforce of specialized providers, ranging from micro-task execution to high-level strategic consultancy.
+Project Status
 
-## Project Status
-**Current Phase**: Initial Scaffolding / Development
+Current Phase: Implementation of Tiered Role Hierarchy (Agents, Account Managers, Consultants)
+The Vision
 
-## Vision
-- **For Clients**: Instant access to verified electricians, plumbers, fast-requests, and transparent pricing.
-- **For Artisans**: A dedicated platform to receive jobs, manage schedules, and build a reputation.
+MCOMMALL is built on a "Ladder of Growth" model, ensuring quality control and professional development:
 
-## Technology Stack
-- **Framework**: [Next.js](https://nextjs.org/) (App Router)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
-- **Language**: TypeScript
+    Agents: Entry-level specialists focused on micro-tasks (Social media setup, basic SEO audits, AI content generation).
 
-## Getting Started
+    Account Managers: Mid-level leads who coordinate onboarding, manage teams of agents, and run full campaigns.
 
-1. Navigate to the project directory:
-   ```bash
-   cd artisans
-   ```
+    Consultants: Senior experts providing strategic audits, business coaching, and high-value advisory sessions.
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+Role Hierarchy & Qualification
 
-3. Run the development server:
-   ```bash
-   npm run dev
-   ```
+The platform utilizes a multi-step verification process to maintain marketplace integrity:
 
-Open [http://localhost:3000](http://localhost:3000) to view the application.
+    Role Selection: Users identify their tier at signup.
+
+    Questionnaire: Capture of skills, experience, and turnaround times.
+
+    Quismatic Quiz: A scored competency test that determines visibility for paid assignments.
+
+    Verification: Manual review for senior Consultant profiles to ensure trust and quality.
+
+Technology Stack
+
+    Framework: Next.js 15 (App Router)
+
+    State Management: Zustand (via useAuthStore)
+
+    Styling: Tailwind CSS v4
+
+    Language: TypeScript (Strict Mode)
+
+    Icons: Google Material Icons Round
+
+Getting Started
+
+    Clone and Navigate:
+    Bash
+
+    git clone [repository-url]
+    cd mcommall-listeo
+
+    Install Dependencies:
+    Bash
+
+    npm install
+
+    Configure Environment: Create a .env.local file with your authentication and database credentials.
+
+    Run Development Server:
+    Bash
+
+    npm run dev
+
+Key Directory Structure
+
+    /components: Reusable UI blocks (Role selectors, Skill chips, Quiz components).
+
+    /store: Centralized state management for authentication and user roles.
+
+    /app/dashboard: Nested layouts for agent, account-manager, consultant, and client.

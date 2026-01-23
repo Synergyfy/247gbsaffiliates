@@ -40,8 +40,20 @@ export default function Navigation() {
                     {/* Auth Buttons & Mobile Toggle */}
                     <div className="flex items-center gap-4">
                         {isAuthenticated ? (
-                            <Link href={user?.role === 'artisan' ? '/dashboard/artisan' : '/dashboard/client'} className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100 group">
-                                <div className="w-9 h-9 rounded-full bg-gray-100 border-2 border-white shadow-sm overflow-hidden group-hover:scale-110 transition-transform bg-cover bg-center" style={{ backgroundImage: `url(${user?.image || 'https://lh3.googleusercontent.com/aida-public/AB6AXuCa1mU1Ln7BQmJGtb9xXF32AqxT-iLhGfKqKk-FA-ns1FHWHyTdOngrCqzSHx_jjdZNN0_3y3PJx9-hjjsKZALTQykwTZDBCF0V5iPrwf0xijjX6eVgBsn3qmMnTYGQ_K4lUYvmz8XG0u0JRARwrty66k6tMmUxCR4xtQIzG_XrWMTAHi4Og-qwhQlXwBVtvDxbkAnbAak3VoLNCE7Q0Sut9XZ205ZQ8DJkbLZWQYtMm6xyzCDqgPc0x1pjXwTbZVeHSzy5vJos1HvB'})` }}>
+                            <Link
+                                href={
+                                    user?.role === 'agent' ||
+                                        user?.role === 'account-manager' ||
+                                        user?.role === 'consultant'
+                                        ? `/dashboard/${user.role}`
+                                        : '/dashboard/client'
+                                }
+                                className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100 group"
+                            >
+                                <div
+                                    className="w-9 h-9 rounded-full bg-gray-100 border-2 border-white shadow-sm overflow-hidden group-hover:scale-110 transition-transform bg-cover bg-center"
+                                    style={{ backgroundImage: `url(${user?.image || 'https://ui-avatars.com/api/?name=' + user?.name})` }}
+                                >
                                 </div>
                                 <span className="text-sm font-black text-gray-900 hidden sm:block">Dashboard</span>
                             </Link>

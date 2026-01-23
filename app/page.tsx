@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { HeroCarousel } from "@/components/landing/HeroCarousel";
+import { FaNairaSign } from "react-icons/fa6";
 
 export default function LandingPage() {
   return (
@@ -17,8 +18,9 @@ export default function LandingPage() {
             <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">Mcommall</h2>
           </div>
           <div className="hidden md:flex flex-1 justify-center gap-10">
-            <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">Find Merchants</Link>
+            <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Accountants</Link>
             <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Agents</Link>
+            <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For consultants</Link>
             <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">How it Works</Link>
           </div>
           <div className="flex gap-4">
@@ -93,11 +95,10 @@ export default function LandingPage() {
 
       {/* Stats Section */}
       <section className="px-6 lg:px-40 py-24 bg-primary text-white">
-        <div className="max-w-[1240px] mx-auto grid grid-cols-2 md:grid-cols-4 gap-12 text-center">
+        <div className="max-w-[1240px] mx-auto grid grid-cols-3 md:grid-cols-3 gap-12 text-center">
           {[
             { label: "Active Merchants", value: "2.5k+" },
             { label: "Verified Agents", value: "12k+" },
-            { label: "Daily Transactions", value: "$4.2M" },
             { label: "Match Accuracy", value: "99.2%" }
           ].map((stat, i) => (
             <div key={i} className="space-y-2">
@@ -116,18 +117,13 @@ export default function LandingPage() {
             <h2 className="text-4xl lg:text-5xl font-bold font-display text-text-main">Browse by Role</h2>
             <p className="text-text-secondary text-lg max-w-2xl mx-auto">Discover elite professionals across various disciplines in our specialized ecosystem.</p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             {[
-              { name: "Digital Merchants", count: "850+", icon: "store" },
-              { name: "Sales Agents", count: "2.1k+", icon: "support_agent" },
+              { name: " Agents", count: "2.1k+", icon: "support_agent" },
               { name: "Consultants", count: "400+", icon: "architecture" },
               { name: "Account Managers", count: "320+", icon: "badge" },
-              { name: "Logistics Partners", count: "150+", icon: "local_shipping" },
-              { name: "Marketing Specialists", count: "600+", icon: "campaign" },
-              { name: "Strategy Leads", count: "120+", icon: "leaderboard" },
-              { name: "Customer Success", count: "450+", icon: "sentiment_satisfied" }
             ].map((cat, i) => (
-              <Link href="#" key={i} className="p-8 rounded-3xl border border-primary/5 bg-background-light hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all group">
+              <Link href="#" key={i} className="p-8 rounded-2xl border border-primary/5 bg-background-light hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all group">
                 <span className="material-symbols-outlined text-primary text-3xl mb-4 group-hover:scale-110 transition-transform">{cat.icon}</span>
                 <h4 className="text-text-main font-bold font-display mb-1">{cat.name}</h4>
                 <p className="text-text-secondary text-sm font-medium">{cat.count} Active</p>
@@ -240,47 +236,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section className="px-6 lg:px-40 py-24 flex justify-center bg-white">
-        <div className="max-w-[1240px] w-full">
-          <div className="text-center mb-16 space-y-4">
-            <span className="text-primary font-bold tracking-widest uppercase text-sm">Pricing Plans</span>
-            <h2 className="text-4xl lg:text-5xl font-bold font-display text-text-main">Transparent Pricing</h2>
-            <p className="text-text-secondary text-lg">Choose the plan that fits your professional needs.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            {[
-              { name: "Individual", price: "$0", desc: "Perfect for new agents getting started.", features: ["Basic Profile", "Skill Verification", "Core Dashboard", "Standard Support"] },
-              { name: "Professional", price: "$49", desc: "For established professionals scaling up.", features: ["Elite Verification", "Advanced Analytics", "Campaign Tools", "Priority Support", "Custom Branding"] },
-              { name: "Enterprise", price: "Custom", desc: "Full-scale solutions for large organizations.", features: ["Multi-role Management", "API Access", "Dedicated Success Manager", "SLA Guarantees", "Custom Integrations"] }
-            ].map((plan, i) => (
-              <div key={i} className={`p-10 rounded-[3rem] border ${i === 1 ? 'border-primary ring-1 ring-primary bg-primary/5' : 'border-primary/5 bg-background-light'} flex flex-col items-start gap-8 relative`}>
-                {i === 1 && <span className="absolute top-0 right-10 -translate-y-1/2 bg-primary text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full">Most Popular</span>}
-                <div>
-                  <h4 className="text-2xl font-bold font-display text-text-main mb-2 tracking-tight">{plan.name}</h4>
-                  <p className="text-text-secondary text-sm font-medium">{plan.desc}</p>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-5xl font-bold font-display text-text-main">{plan.price}</span>
-                  {plan.price !== "Custom" && <span className="text-text-secondary font-medium">/mo</span>}
-                </div>
-                <ul className="space-y-4 w-full">
-                  {plan.features.map((f, j) => (
-                    <li key={j} className="flex items-center gap-3 text-sm font-medium text-text-main">
-                      <span className="material-symbols-outlined text-primary text-xl">done</span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button className={`w-full py-4 rounded-xl font-bold transition-all ${i === 1 ? 'bg-primary text-white shadow-xl shadow-primary/20 hover:scale-105' : 'bg-white text-text-main border border-primary/10 hover:bg-slate-50'} mt-auto`}>
-                  {plan.price === "Custom" ? "Contact Sales" : "Get Started"}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
+     
       {/* FAQ Section */}
       <section className="px-6 lg:px-40 py-24 flex justify-center bg-background-light">
         <div className="max-w-[800px] w-full">
