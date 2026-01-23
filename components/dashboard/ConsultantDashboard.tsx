@@ -21,7 +21,7 @@ export const ConsultantDashboard: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 font-display">Hourly Rate</p>
-                            <p className="text-3xl font-bold text-text-main font-display">$185.00</p>
+                            <p className="text-3xl font-bold text-text-main font-display">£185.00</p>
                             <p className="text-[10px] text-green-500 font-bold mt-1 uppercase tracking-widest font-display">+5% Trend</p>
                         </div>
                     </div>

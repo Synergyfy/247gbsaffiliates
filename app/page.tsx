@@ -15,7 +15,7 @@ export default function LandingPage() {
                 <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
               </svg>
             </div>
-            <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">Mcommall</h2>
+            <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">247gds affiliate</h2>
           </div>
           <div className="hidden md:flex flex-1 justify-center gap-10">
             <Link href="#" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Accountants</Link>
@@ -72,7 +72,7 @@ export default function LandingPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-10 text-left">
               {[
                 { title: "Verified Expertise", desc: "Integrated Quismatic assessments ensure all talent meets elite performance standards before they enter your ecosystem.", icon: "verified_user", color: "bg-blue-600" },
-                { title: "Role-Based Tools", desc: "Tailored dashboards and enterprise-grade management tools designed specifically for Merchants, Agents, and Customers.", icon: "dashboard_customize", color: "bg-primary" },
+                { title: "Role-Based Tools", desc: "Tailored dashboards and enterprise-grade management tools designed specifically for Consulatants, Agents, and Account managers.", icon: "dashboard_customize", color: "bg-primary" },
                 { title: "Scalable Growth", desc: "Accelerate your professional network with streamlined campaign management and automated talent pipeline scaling.", icon: "rocket_launch", color: "bg-primary" }
               ].map((feature, i) => (
                 <div key={i} className="group flex flex-col gap-8 rounded-[2.5rem] border border-primary/5 bg-background-light p-12 hover:border-primary/20 transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 relative overflow-hidden">
@@ -236,7 +236,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-     
+
       {/* FAQ Section */}
       <section className="px-6 lg:px-40 py-24 flex justify-center bg-background-light">
         <div className="max-w-[800px] w-full">
@@ -267,8 +267,8 @@ export default function LandingPage() {
       <section className="px-6 lg:px-40 py-24 flex justify-center bg-white">
         <div className="max-w-[1100px] w-full rounded-3xl bg-primary px-8 py-24 text-center flex flex-col items-center gap-12 shadow-2xl shadow-primary/40 relative overflow-hidden group">
           <div className="relative z-10 space-y-8">
-            <h2 className="text-white text-5xl lg:text-7xl font-bold font-display leading-tight tracking-tight">Ready to join the Mcommall ecosystem?</h2>
-            <p className="text-white/90 text-2xl font-medium max-w-[700px] mx-auto">Join hundreds of leading companies already scaling through verified elite talent on Mcommall.</p>
+            <h2 className="text-white text-5xl lg:text-7xl font-bold font-display leading-tight tracking-tight">Ready to join the 247gds affiliate ecosystem?</h2>
+            <p className="text-white/90 text-2xl font-medium max-w-[700px] mx-auto">Join hundreds of leading companies already scaling through verified elite talent on 247gds affiliate.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-8 relative z-10 pt-4">
             <Link href="/signup" className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Get Started Now</Link>
@@ -314,7 +314,7 @@ export default function LandingPage() {
           ))}
         </div>
         <div className="mx-auto max-w-[1240px] mt-24 pt-12 border-t border-primary/5 flex flex-col md:flex-row justify-between items-center gap-8 text-xs lg:text-sm text-text-secondary font-bold uppercase tracking-[0.2em] opacity-60">
-          <p>© 2026 mcommall professional marketplace</p>
+          <p>© {new Date().getFullYear()} 247gds affiliate professional marketplace</p>
           <div className="flex gap-12">
             <Link href="/privacy" className="hover:text-primary transition-colors">Privacy</Link>
             <Link href="/terms" className="hover:text-primary transition-colors">Terms</Link>

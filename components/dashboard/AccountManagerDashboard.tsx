@@ -6,7 +6,7 @@ import { DashboardLayout } from './DashboardLayout';
 export const AccountManagerDashboard: React.FC = () => {
     const stats = [
         { label: "Retention Rate", value: "94.8%", trend: "+2.4%", icon: "trending_up" },
-        { label: "Total Revenue", value: "$1.24M", trend: "+12%", icon: "monetization_on" },
+        { label: "Total Revenue", value: "£1.24M", trend: "+12%", icon: "monetization_on" },
         { label: "Active Projects", value: "24", trend: "0%", icon: "folder_open" },
         { label: "Response Time", value: "1.2h", trend: "-15m", icon: "speed" },
     ];

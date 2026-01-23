@@ -24,6 +24,7 @@ interface OnboardingState {
       scenarios: number;
     };
   } | null;
+  assessmentSkipped: boolean; // New State
 
   setStep: (step: OnboardingStep) => void;
   setRole: (role: UserRole) => void;
@@ -32,6 +33,7 @@ interface OnboardingState {
   toggleSkill: (skillId: string) => void;
   setQuizAnswer: (questionId: string, answerId: string) => void;
   setQuizResult: (result: OnboardingState['quizResult']) => void;
+  setAssessmentSkipped: (skipped: boolean) => void; // New Action
   resetOnboarding: () => void;
 }
 
@@ -75,6 +77,10 @@ export const useOnboardingStore = create<OnboardingState>()(
 
       setQuizResult: (result) => set({ quizResult: result, currentStep: 'outcome' }),
 
+      // New State and Action for Skipped Assessment
+      assessmentSkipped: false,
+      setAssessmentSkipped: (skipped: boolean) => set({ assessmentSkipped: skipped }),
+
       resetOnboarding: () => set({
         currentStep: 'basic-info',
         role: null,
@@ -87,7 +93,8 @@ export const useOnboardingStore = create<OnboardingState>()(
         profileInfo: {},
         selectedSkills: [],
         quizAnswers: {},
-        quizResult: null
+        quizResult: null,
+        assessmentSkipped: false
       }),
     }),
     {

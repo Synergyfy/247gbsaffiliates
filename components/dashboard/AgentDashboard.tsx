@@ -5,9 +5,9 @@ import { DashboardLayout } from './DashboardLayout';
 
 export const AgentDashboard: React.FC = () => {
     const tasks = [
-        { title: "Write 5 Product Descriptions", category: "E-commerce", time: "45m", reward: "$25.00", icon: "description" },
-        { title: "Translate Support Email Template", category: "Localization", time: "English to Spanish", reward: "$12.00", icon: "translate" },
-        { title: "Audit 10 User Comments", category: "Moderation", time: "Policy Compliance", reward: "$35.00", icon: "rate_review" },
+        { title: "Write 5 Product Descriptions", category: "E-commerce", time: "45m", reward: "£25.00", icon: "description" },
+        { title: "Translate Support Email Template", category: "Localization", time: "English to Spanish", reward: "£12.00", icon: "translate" },
+        { title: "Audit 10 User Comments", category: "Moderation", time: "Policy Compliance", reward: "£35.00", icon: "rate_review" },
     ];
 
     return (
@@ -101,7 +101,7 @@ export const AgentDashboard: React.FC = () => {
                         <h3 className="text-[10px] font-bold text-text-main uppercase tracking-[0.2em] font-display border-b border-slate-50 pb-4">Recent Activity</h3>
                         <div className="space-y-6">
                             {[
-                                { title: "Payment processed", desc: "Data Entry Project • $15.00", time: "2h ago", color: "bg-primary" },
+                                { title: "Payment processed", desc: "Data Entry Project • £15.00", time: "2h ago", color: "bg-primary" },
                                 { title: "Task submitted", desc: "Logo Design Feedback", time: "5h ago", color: "bg-slate-200" }
                             ].map((act, i) => (
                                 <div key={i} className="flex items-start gap-4">

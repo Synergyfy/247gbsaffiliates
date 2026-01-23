@@ -4,10 +4,12 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { mockApi } from '@/lib/mockApi';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { useRouter } from 'next/navigation';
 
 export const SkillSelectionStep: React.FC = () => {
-    const { selectedSkills, toggleSkill, setStep } = useOnboardingStore();
+    const { selectedSkills, toggleSkill, setStep, setAssessmentSkipped } = useOnboardingStore();
     const [searchQuery, setSearchQuery] = React.useState('');
+    const router = useRouter();
 
     const { data: skills, isLoading } = useQuery({
         queryKey: ['skills'],
@@ -81,6 +83,15 @@ export const SkillSelectionStep: React.FC = () => {
                     <span>Career Details</span>
                 </button>
                 <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                    <button
+                        onClick={() => {
+                            setAssessmentSkipped(true);
+                            router.push('/dashboard');
+                        }}
+                        className="text-slate-400 font-bold hover:text-text-main text-xs uppercase tracking-widest mr-4"
+                    >
+                        Skip Assessment
+                    </button>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedSkills.length} selected</p>
                     <button
                         disabled={selectedSkills.length < 1}

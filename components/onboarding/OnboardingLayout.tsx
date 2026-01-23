@@ -33,7 +33,7 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) 
                                 <span className="material-symbols-outlined font-bold text-2xl">category</span>
                             </div>
                             <div>
-                                <h2 className="text-xl font-display font-bold tracking-tight text-text-main leading-none">Mcommall</h2>
+                                <h2 className="text-xl font-display font-bold tracking-tight text-text-main leading-none">247gds affiliate</h2>
                                 <p className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mt-1">Professional</p>
                             </div>
                         </div>
@@ -89,7 +89,7 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) 
 
             <footer className="py-10 border-t border-slate-100 bg-white mt-auto">
                 <div className="max-w-5xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <p className="text-xs text-slate-400 font-medium tracking-tight font-display italic">© 2026 mcommall professional marketplace</p>
+                    <p className="text-xs text-slate-400 font-medium tracking-tight font-display italic">© 2026 247gds affiliate professional marketplace</p>
                     <div className="flex gap-8 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                         <a className="hover:text-primary transition-colors" href="#">Privacy Policy</a>
                         <a className="hover:text-primary transition-colors" href="#">Terms of Service</a>

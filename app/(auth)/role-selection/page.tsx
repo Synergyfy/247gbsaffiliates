@@ -36,18 +36,34 @@ export default function RoleSelectionPage() {
                         <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                     </svg>
                 </div>
-                <span className="text-3xl font-bold tracking-tight text-text-main font-display">Mcommall</span>
+                <span className="text-3xl font-bold tracking-tight text-text-main font-display">247gds affiliate</span>
             </div>
 
             <div className="text-center max-w-2xl mb-16 px-4">
                 <h1 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight text-text-main font-display">Join as a professional</h1>
                 <p className="text-text-secondary text-lg lg:text-xl font-medium leading-relaxed">
-                    Choose the role that best fits your expertise. Scale your business within the Mcommall ecosystem.
+                    Choose the role that best fits your expertise. Scale your business within the 247gds affiliate ecosystem.
                 </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
-                {roles.map((role) => (
+                {/* Role cards hidden as per request - Dropdown to be implemented later */}
+                <div className="col-span-1 md:col-span-3 text-center p-12 border border-dashed border-slate-300 rounded-3xl bg-slate-50">
+                    <p className="text-slate-500 font-medium">Role selection interface is currently being updated.</p>
+                    <div className="mt-8 flex justify-center gap-4">
+                        {roles.map(role => (
+                            <Link
+                                key={role.id}
+                                href={role.href}
+                                className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-bold text-text-main hover:border-primary hover:text-primary transition-all"
+                            >
+                                Continue as {role.title}
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+
+                {/* {roles.map((role) => (
                     <Link
                         key={role.id}
                         href={role.href}
@@ -74,7 +90,7 @@ export default function RoleSelectionPage() {
                             Get Started <span className="material-symbols-outlined text-xl">chevron_right</span>
                         </div>
                     </Link>
-                ))}
+                ))} */}
             </div>
 
             <div className="mt-16 text-center">
@@ -86,7 +102,7 @@ export default function RoleSelectionPage() {
                 </p>
                 <div className="mt-12 pt-10 border-t border-slate-50 w-full max-w-sm mx-auto">
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
-                        © 2026 mcommall professional marketplace
+                        © 2026 247gds affiliate professional marketplace
                     </p>
                 </div>
             </div>
