@@ -36,7 +36,7 @@ const ProfileInfoStep: React.FC = () => {
                         <AuthInput
                             label="Specialty Area"
                             type="text"
-                            placeholder="e.g. Residential, Commercial"
+                            placeholder=""
                             value={profileInfo.specialty || ''}
                             onChange={(e) => updateProfileInfo({ specialty: e.target.value })}
                             required

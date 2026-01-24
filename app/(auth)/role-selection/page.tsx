@@ -86,7 +86,7 @@ export default function RoleSelectionPage() {
                 </p>
                 <div className="mt-12 pt-10 border-t border-slate-50 w-full max-w-sm mx-auto">
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
-                        © 2026 247gds affiliate professional marketplace
+                        ©  247gds affiliate professional marketplace
                     </p>
                 </div>
             </div>

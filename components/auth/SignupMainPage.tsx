@@ -29,7 +29,7 @@ export default function SignupPage() {
         try {
             const response = await mockApi.signup({ name, email, role });
             setAuth(response.user, response.token);
-            router.push("/onboarding");
+            router.push("/verify-email");
         } catch (error) {
             console.error("Signup failed", error);
         }
