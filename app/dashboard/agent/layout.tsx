@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { UserMenu } from "@/components/dashboard/UserMenu";
+
 export default function AgentLayout({
     children,
 }: {
@@ -12,10 +15,10 @@ export default function AgentLayout({
 
     const sidebarLinks = [
         { name: "Dashboard", href: "/dashboard/agent", icon: "dashboard" },
-        { name: "My Tasks", href: "#", icon: "assignment" },
-        { name: "Earnings", href: "#", icon: "account_balance_wallet" },
-        { name: "Messages", href: "#", icon: "chat_bubble" },
-        { name: "Settings", href: "#", icon: "settings" },
+        { name: "My Tasks", href: "/dashboard/agent/tasks", icon: "assignment" },
+        { name: "Earnings", href: "/dashboard/agent/earnings", icon: "account_balance_wallet" },
+        { name: "Messages", href: "/dashboard/agent/messages", icon: "chat_bubble" },
+        { name: "Settings", href: "/dashboard/agent/settings", icon: "settings" },
     ];
 
     return (
@@ -41,8 +44,8 @@ export default function AgentLayout({
                                     key={link.name}
                                     href={link.href}
                                     className={`flex items-center gap-3 px-4 py-3 text-sm font-bold transition-all rounded-lg ${isActive
-                                            ? "bg-primary/10 text-primary border-r-4 border-primary"
-                                            : "text-text-secondary hover:text-text-main hover:bg-slate-50"
+                                        ? "bg-primary/10 text-primary border-r-4 border-primary"
+                                        : "text-text-secondary hover:text-text-main hover:bg-slate-50"
                                         }`}
                                 >
                                     <span className="material-symbols-outlined">{link.icon}</span>
@@ -52,25 +55,18 @@ export default function AgentLayout({
                         })}
                     </nav>
                 </div>
-                <div className="mt-auto p-8 border-t border-slate-50">
-                    <div className="flex items-center gap-3">
-                        <div className="size-10 rounded-full bg-slate-800 flex items-center justify-center text-white font-bold text-xs">
-                            JD
-                        </div>
-                        <div className="overflow-hidden">
-                            <p className="text-xs font-bold truncate text-text-main">
-                                John Doe
-                            </p>
-                            <p className="text-[10px] text-text-secondary uppercase tracking-widest">
-                                Agent Level 1
-                            </p>
-                        </div>
-                    </div>
+                <div className="mt-auto p-4 border-t border-slate-50">
+                    <UserMenu name="John Doe" role="Agent Level 1" initials="JD" />
                 </div>
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0">{children}</div>
+            <div className="flex-1 flex flex-col min-w-0">
+                <DashboardPageHeader />
+                <main className="flex-1">
+                    {children}
+                </main>
+            </div>
         </div>
     );
 }

@@ -7,6 +7,7 @@ export type OnboardingStep = 'basic-info' | 'profile-info' | 'questionnaire' | '
 interface OnboardingState {
   currentStep: OnboardingStep;
   role: UserRole | null;
+  userName: string;
   basicInfo: {
     location: string;
     zipCode: string;
@@ -24,18 +25,23 @@ interface OnboardingState {
       scenarios: number;
     };
   } | null;
-  assessmentSkipped: boolean; // New State
+  missedQuestions: string[];
+  performanceBreakdown: {
+    category: string;
+    score: number;
+  }[];
+  retakeAvailableAt: number | null;
+  assessmentSkipped: boolean;
 
   questionnaireAnswers: {
     yearsExperience?: string;
     turnaroundTime?: string;
-    availability?: string; // Yes/No
+    availability?: string;
     portfolioUrl?: string;
     ratePreference?: string;
     languages?: string[];
     acceptFixedPrice?: boolean;
     agreeTerms?: boolean;
-    // Account Manager Specific
     teamLeadershipExp?: string;
     campaignBudgetCapacity?: string;
     availabilityType?: string;
@@ -45,6 +51,7 @@ interface OnboardingState {
 
   setStep: (step: OnboardingStep) => void;
   setRole: (role: UserRole) => void;
+  setUserName: (name: string) => void;
   updateBasicInfo: (info: Partial<OnboardingState['basicInfo']>) => void;
   updateProfileInfo: (info: Record<string, any>) => void;
   updateQuestionnaireAnswers: (answers: Partial<OnboardingState['questionnaireAnswers']>) => void;
@@ -53,6 +60,9 @@ interface OnboardingState {
   toggleSkill: (skillId: string) => void;
   setQuizAnswer: (questionId: string, answerId: string) => void;
   setQuizResult: (result: OnboardingState['quizResult']) => void;
+  setMissedQuestions: (questions: string[]) => void;
+  setPerformanceBreakdown: (breakdown: OnboardingState['performanceBreakdown']) => void;
+  setRetakeAvailableAt: (timestamp: number | null) => void;
   setAssessmentSkipped: (skipped: boolean) => void; 
   resetOnboarding: () => void;
 }
@@ -62,6 +72,7 @@ export const useOnboardingStore = create<OnboardingState>()(
     (set) => ({
       currentStep: 'basic-info',
       role: null,
+      userName: '',
       basicInfo: {
         location: '',
         zipCode: '',
@@ -75,10 +86,16 @@ export const useOnboardingStore = create<OnboardingState>()(
       selectedSkills: [],
       quizAnswers: {},
       quizResult: null,
+      missedQuestions: [],
+      performanceBreakdown: [],
+      retakeAvailableAt: null,
+      assessmentSkipped: false,
 
       setStep: (step) => set({ currentStep: step }),
       
       setRole: (role) => set({ role }),
+      
+      setUserName: (name) => set({ userName: name }),
       
       updateBasicInfo: (info) => set((state) => ({
         basicInfo: { ...state.basicInfo, ...info }
@@ -108,13 +125,18 @@ export const useOnboardingStore = create<OnboardingState>()(
 
       setQuizResult: (result) => set({ quizResult: result, currentStep: 'outcome' }),
 
-      // New State and Action for Skipped Assessment
-      assessmentSkipped: false,
+      setMissedQuestions: (questions) => set({ missedQuestions: questions }),
+
+      setPerformanceBreakdown: (breakdown) => set({ performanceBreakdown: breakdown }),
+
+      setRetakeAvailableAt: (timestamp) => set({ retakeAvailableAt: timestamp }),
+
       setAssessmentSkipped: (skipped: boolean) => set({ assessmentSkipped: skipped }),
 
       resetOnboarding: () => set({
         currentStep: 'basic-info',
         role: null,
+        userName: '',
         basicInfo: {
           location: '',
           zipCode: '',
@@ -125,6 +147,9 @@ export const useOnboardingStore = create<OnboardingState>()(
         selectedSkills: [],
         quizAnswers: {},
         quizResult: null,
+        missedQuestions: [],
+        performanceBreakdown: [],
+        retakeAvailableAt: null,
         assessmentSkipped: false
       }),
     }),
