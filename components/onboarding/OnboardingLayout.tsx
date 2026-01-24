@@ -29,14 +29,14 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) 
                 <div className="max-w-5xl mx-auto">
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
-                            
+
                             <div className="flex items-center gap-2 text-primary">
                                 <div className="size-8">
                                     <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                                         <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                                     </svg>
                                 </div>
-                                <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">247gds affiliate</h2>
+                                <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">247gbs affiliate</h2>
                             </div>
                         </div>
                         {role && (
@@ -91,7 +91,7 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) 
 
             <footer className="py-10 border-t border-slate-100 bg-white mt-auto">
                 <div className="max-w-5xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <p className="text-xs text-slate-400 font-medium tracking-tight font-display italic">© {new Date().getFullYear()} 247gds affiliate professional marketplace</p>
+                    <p className="text-xs text-slate-400 font-medium tracking-tight font-display italic">© {new Date().getFullYear()} 247gbs affiliate professional marketplace</p>
                     <div className="flex gap-8 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                         <a className="hover:text-primary transition-colors" href="#">Privacy Policy</a>
                         <a className="hover:text-primary transition-colors" href="#">Terms of Service</a>
