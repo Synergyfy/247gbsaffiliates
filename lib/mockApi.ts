@@ -639,7 +639,8 @@ const mockQuestionsPool: Record<UserRole, QuizQuestion[]> = {
         correctOptionId: 'opt2',
         type: 'knowledge'
     }
-  ]
+  ],
+  admin: []
 };
 
 // Learning Resources
