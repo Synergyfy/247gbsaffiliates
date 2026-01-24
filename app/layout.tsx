@@ -22,6 +22,9 @@ export const metadata: Metadata = {
 import Providers from "@/components/Providers";
 import CookieBanner from "@/components/CookieBanner";
 
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -39,6 +42,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <CookieBanner />
+          <ToastContainer position="bottom-right" />
         </Providers>
       </body>
     </html>

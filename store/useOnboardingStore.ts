@@ -26,10 +26,30 @@ interface OnboardingState {
   } | null;
   assessmentSkipped: boolean; // New State
 
+  questionnaireAnswers: {
+    yearsExperience?: string;
+    turnaroundTime?: string;
+    availability?: string; // Yes/No
+    portfolioUrl?: string;
+    ratePreference?: string;
+    languages?: string[];
+    acceptFixedPrice?: boolean;
+    agreeTerms?: boolean;
+    // Account Manager Specific
+    teamLeadershipExp?: string;
+    campaignBudgetCapacity?: string;
+    availabilityType?: string;
+  };
+  isPaidVisibilityRequested: boolean;
+  profileStatus: 'active' | 'pending_verification' | null;
+
   setStep: (step: OnboardingStep) => void;
   setRole: (role: UserRole) => void;
   updateBasicInfo: (info: Partial<OnboardingState['basicInfo']>) => void;
   updateProfileInfo: (info: Record<string, any>) => void;
+  updateQuestionnaireAnswers: (answers: Partial<OnboardingState['questionnaireAnswers']>) => void;
+  setIsPaidVisibilityRequested: (requested: boolean) => void;
+  setProfileStatus: (status: OnboardingState['profileStatus']) => void;
   toggleSkill: (skillId: string) => void;
   setQuizAnswer: (questionId: string, answerId: string) => void;
   setQuizResult: (result: OnboardingState['quizResult']) => void;
@@ -49,6 +69,9 @@ export const useOnboardingStore = create<OnboardingState>()(
         headline: '',
       },
       profileInfo: {},
+      questionnaireAnswers: {},
+      isPaidVisibilityRequested: false,
+      profileStatus: null,
       selectedSkills: [],
       quizAnswers: {},
       quizResult: null,
@@ -64,6 +87,14 @@ export const useOnboardingStore = create<OnboardingState>()(
       updateProfileInfo: (info) => set((state) => ({
         profileInfo: { ...state.profileInfo, ...info }
       })),
+
+      updateQuestionnaireAnswers: (answers) => set((state) => ({
+        questionnaireAnswers: { ...state.questionnaireAnswers, ...answers }
+      })),
+
+      setIsPaidVisibilityRequested: (requested) => set({ isPaidVisibilityRequested: requested }),
+      
+      setProfileStatus: (status) => set({ profileStatus: status }),
 
       toggleSkill: (skillId) => set((state) => ({
         selectedSkills: state.selectedSkills.includes(skillId)
