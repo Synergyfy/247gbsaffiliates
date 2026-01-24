@@ -15,8 +15,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Mcommall - Professional Commerce Ecosystem",
-  description: "The unified platform for Merchants, Agents, and Customers.",
+  title: "247GBS - Affliate platform",
+  description: "The unified platform for Merchants, Agents, and Consultants",
 };
 
 import Providers from "@/components/Providers";
@@ -42,7 +42,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <CookieBanner />
-          <ToastContainer position="bottom-right" />
+          <ToastContainer position="top-right" />
         </Providers>
       </body>
     </html>

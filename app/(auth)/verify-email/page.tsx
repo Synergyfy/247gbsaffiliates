@@ -1,107 +1,121 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from 'next/navigation'
-import { useEffect, useRef } from "react";
+import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/store/useAuthStore';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 
 export default function VerifyEmailPage() {
+    const [code, setCode] = useState(['', '', '', '', '', '']);
     const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
-    const router = useRouter()
+    const router = useRouter();
+    const { user } = useAuthStore();
 
-    const handleInput = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-        const value = e.target.value;
-        if (value.length === 1 && index < 5) {
+    // Focus first input on mount
+    useEffect(() => {
+        if (inputsRef.current[0]) {
+            inputsRef.current[0].focus();
+        }
+    }, []);
+
+    const handleChange = (index: number, value: string) => {
+        if (value.length > 1) value = value.slice(0, 1);
+
+        const newCode = [...code];
+        newCode[index] = value;
+        setCode(newCode);
+
+        // Auto-advance focus
+        if (value && index < 5 && inputsRef.current[index + 1]) {
             inputsRef.current[index + 1]?.focus();
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
-        if (e.key === "Backspace" && !e.currentTarget.value && index > 0) {
+    const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Backspace' && !code[index] && index > 0 && inputsRef.current[index - 1]) {
             inputsRef.current[index - 1]?.focus();
         }
     };
 
     const handleVerify = () => {
-        const code = inputsRef.current.map(input => input?.value || '').join('');
-        if (code === '123456') {
+        const fullCode = code.join('');
+        if (fullCode === '123456') {
             router.replace('/onboarding');
         } else {
             alert('Invalid verification code. Please try again.');
         }
-    }
+    };
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-white font-display">
-            <div className="mb-12 flex items-center gap-3">
-                <div className="text-primary size-8">
-                    <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
-                    </svg>
+        <div className="min-h-screen flex bg-white font-display">
+            {/* Left Side - Form */}
+            <div className="w-full lg:w-1/2 flex flex-col justify-between p-8 md:p-12 lg:p-20 relative z-10">
+                <div className="mb-12">
+                    <BrandLogo size="md" />
                 </div>
-                <span className="text-2xl font-bold tracking-tight text-text-main font-display">Mcommall</span>
-            </div>
 
-            <div className="w-full max-w-md bg-white p-10 md:p-12 rounded-[3.5rem] border border-gray-100 shadow-2xl shadow-primary/5 text-center transition-all hover:shadow-primary/10">
-                <div className="mb-10 flex justify-center">
-                    <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center relative overflow-hidden group">
-                        <span className="material-symbols-outlined text-primary text-5xl transition-transform group-hover:scale-110 group-hover:rotate-12">mark_email_unread</span>
+                <div className="max-w-md w-full mx-auto">
+                    <div className="mb-10">
+                        <h1 className="text-4xl font-bold mb-4 text-text-main tracking-tight">Verify email</h1>
+                        <p className="text-text-secondary text-lg leading-relaxed">
+                            We've sent a 6-digit verification code to <span className="text-text-main font-bold">daniel@example.com</span>. Please enter the code below to verify your account.
+                        </p>
                     </div>
-                </div>
 
-                <h1 className="text-3xl font-bold text-text-main mb-4 tracking-tight font-display">Check your inbox</h1>
-                <p className="text-text-secondary font-medium mb-10 leading-relaxed">
-                    We've sent a 6-digit verification code to <span className="text-text-main font-bold">alex@example.com</span>. <br />
-                    <span className="text-primary text-xs font-bold uppercase tracking-widest mt-2 block">Demo Code: 1 2 3 4 5 6</span>
-                </p>
-
-                <form className="space-y-10">
-                    <div className="flex justify-between gap-3 md:gap-4">
-                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <div className="flex gap-3 mb-10 justify-between">
+                        {code.map((digit, index) => (
                             <input
-                                key={i}
-                                ref={(el) => { inputsRef.current[i] = el; }}
-                                className="w-full h-16 md:h-20 text-center text-3xl font-bold border border-slate-100 rounded-2xl bg-slate-50 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all shadow-sm font-display text-primary"
-                                maxLength={1}
+                                key={index}
+                                ref={el => { inputsRef.current[index] = el }}
                                 type="text"
-                                onChange={(e) => handleInput(e, i)}
-                                onKeyDown={(e) => handleKeyDown(e, i)}
-                                placeholder="-"
+                                maxLength={1}
+                                value={digit}
+                                onChange={(e) => handleChange(index, e.target.value)}
+                                onKeyDown={(e) => handleKeyDown(index, e)}
+                                className="w-12 h-16 md:w-14 md:h-16 text-center text-2xl font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-text-main"
                             />
                         ))}
                     </div>
 
-                    <div className="my-2 bg-gray-300">
-                        demo 123456
+                    <div className="mb-6 bg-slate-50 p-3 rounded-lg text-center text-sm text-slate-500">
+                        Demo Code: <span className="font-bold text-primary tracking-widest">123456</span>
                     </div>
 
                     <button
-                        className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-5 rounded-2xl transition-all duration-300 shadow-2xl shadow-primary/30 tracking-widest active:scale-[0.98] font-display"
+                        className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-5 rounded-2xl transition-all duration-300 shadow-xl shadow-primary/25 tracking-widest active:scale-[0.98] text-sm uppercase mb-6"
                         type="button"
                         onClick={handleVerify}
                     >
                         Verify Account
                     </button>
-                </form>
 
-                <div className="mt-10">
-                    <p className="text-text-secondary font-medium text-sm">
-                        Didn't receive the email?{" "}
-                        <button className="text-primary font-bold hover:underline underline-offset-4 decoration-2 transition-all" type="button">
-                            Resend code
-                        </button>
+                    <p className="text-center text-text-secondary font-medium">
+                        Didn't receive the email? <button className="text-primary font-bold hover:underline">Resend Code</button>
+                    </p>
+                </div>
+
+                <div className="mt-12 text-center lg:text-left">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                        © 247gbs affiliate professional marketplace
                     </p>
                 </div>
             </div>
 
-            <div className="mt-16 text-center">
-                <div className="flex items-center justify-center gap-8 mb-10 text-xs font-bold text-slate-400 uppercase tracking-widest font-display">
-                    <Link className="hover:text-primary transition-colors" href="/privacy">Privacy Policy</Link>
-                    <Link className="hover:text-primary transition-colors" href="/terms">Terms of Service</Link>
-                    <Link className="hover:text-primary transition-colors" href="/contact">Support</Link>
+            {/* Right Side - Image */}
+            <div className="hidden lg:block w-1/2 relative bg-slate-900 overflow-hidden">
+                <div className="absolute inset-0 bg-linear-to-br from-primary/20 to-slate-900/90 mix-blend-multiply z-10" />
+                {/* Placeholder for professional image */}
+                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-50 grayscale hover:grayscale-0 transition-all duration-1000 transform hover:scale-105" />
+
+                <div className="absolute bottom-20 left-12 right-12 z-20 text-white max-w-lg">
+                    <div className="size-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-8 border border-white/20">
+                        <span className="material-symbols-outlined text-3xl">verified_user</span>
+                    </div>
+                    <h2 className="text-4xl font-bold mb-6 leading-tight">Secure & Trusted Marketplace</h2>
+                    <p className="text-lg text-slate-300 font-medium leading-relaxed">
+                        Join thousands of verified professionals. We ensure a safe environment for all transactions and collaborations within the 247gbs ecosystem.
+                    </p>
                 </div>
-                <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest font-display">
-                    © {new Date().getFullYear()} mcommall professional marketplace
-                </p>
             </div>
         </div>
     );

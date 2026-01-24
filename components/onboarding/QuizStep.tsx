@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { mockApi, QuizQuestion } from '@/lib/mockApi';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { useRouter } from 'next/navigation';
 
 export const QuizStep: React.FC = () => {
     const { role, quizAnswers, setQuizAnswer, setQuizResult, setStep } = useOnboardingStore();
@@ -26,10 +27,14 @@ export const QuizStep: React.FC = () => {
         enabled: !!role,
     });
 
+    const router = useRouter();
+
     const submitMutation = useMutation({
         mutationFn: () => mockApi.submitQuiz(role!, quizAnswers),
         onSuccess: (data) => {
             setQuizResult(data);
+            // Redirect to standalone Certification page
+            router.push('/certification');
         },
     });
 
