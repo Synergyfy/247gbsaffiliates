@@ -27,7 +27,7 @@ export default function LandingPage() {
             <Link href="/login" className="hidden sm:flex min-w-[100px] items-center justify-center rounded-xl h-11 px-6 bg-white text-text-main text-sm font-semibold border border-primary/10 hover:bg-slate-50 transition-all font-display">
               Login
             </Link>
-            <Link href="/signup" className="flex min-w-[110px] items-center justify-center rounded-xl h-11 px-6 bg-primary text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all font-display">
+            <Link href="/role-selection" className="flex min-w-[110px] items-center justify-center rounded-xl h-11 px-6 bg-primary text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all font-display">
               Get Started
             </Link>
           </div>

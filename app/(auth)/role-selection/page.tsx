@@ -47,23 +47,7 @@ export default function RoleSelectionPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
-                {/* Role cards hidden as per request - Dropdown to be implemented later */}
-                <div className="col-span-1 md:col-span-3 text-center p-12 border border-dashed border-slate-300 rounded-3xl bg-slate-50">
-                    <p className="text-slate-500 font-medium">Role selection interface is currently being updated.</p>
-                    <div className="mt-8 flex justify-center gap-4">
-                        {roles.map(role => (
-                            <Link
-                                key={role.id}
-                                href={role.href}
-                                className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-bold text-text-main hover:border-primary hover:text-primary transition-all"
-                            >
-                                Continue as {role.title}
-                            </Link>
-                        ))}
-                    </div>
-                </div>
-
-                {/* {roles.map((role) => (
+                {roles.map((role) => (
                     <Link
                         key={role.id}
                         href={role.href}
@@ -90,7 +74,7 @@ export default function RoleSelectionPage() {
                             Get Started <span className="material-symbols-outlined text-xl">chevron_right</span>
                         </div>
                     </Link>
-                ))} */}
+                ))}
             </div>
 
             <div className="mt-16 text-center">

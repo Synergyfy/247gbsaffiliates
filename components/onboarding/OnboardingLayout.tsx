@@ -29,12 +29,14 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) 
                 <div className="max-w-5xl mx-auto">
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
-                            <div className="size-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
-                                <span className="material-symbols-outlined font-bold text-2xl">category</span>
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-display font-bold tracking-tight text-text-main leading-none">247gds affiliate</h2>
-                                <p className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mt-1">Professional</p>
+                            
+                            <div className="flex items-center gap-2 text-primary">
+                                <div className="size-8">
+                                    <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                                        <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">247gds affiliate</h2>
                             </div>
                         </div>
                         {role && (

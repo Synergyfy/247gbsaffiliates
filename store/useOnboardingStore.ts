@@ -33,7 +33,7 @@ interface OnboardingState {
   toggleSkill: (skillId: string) => void;
   setQuizAnswer: (questionId: string, answerId: string) => void;
   setQuizResult: (result: OnboardingState['quizResult']) => void;
-  setAssessmentSkipped: (skipped: boolean) => void; // New Action
+  setAssessmentSkipped: (skipped: boolean) => void; 
   resetOnboarding: () => void;
 }
 

@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useAuthStore } from '@/store/useAuthStore';
-// Refreshed onboarding component imports
 import BasicInfoStep from '@/components/onboarding/BasicInfoStep';
 import ProfileInfoStep from '@/components/onboarding/ProfileInfoStep';
 import { SkillSelectionStep } from '@/components/onboarding/SkillSelectionStep';

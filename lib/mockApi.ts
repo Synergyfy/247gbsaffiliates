@@ -9,7 +9,7 @@ export interface User {
   image?: string;
   score?: number;
   skills?: string[];
-  assessmentSkipped?: boolean; // Added for skip functionality
+  assessmentSkipped?: boolean; 
 }
 
 export interface Skill {
@@ -74,7 +74,6 @@ const mockQuestionsPool: Record<UserRole, QuizQuestion[]> = {
       ],
       correctOptionId: 'opt3'
     },
-    // New questions (Agent)
     {
       id: 'a3',
       text: 'When setting up a social media profile for a client, what is the first step?',
