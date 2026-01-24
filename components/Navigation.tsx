@@ -30,11 +30,10 @@ export default function Navigation() {
 
                     {/* Desktop Nav */}
                     <div className="hidden md:flex space-x-8 items-center">
-                        <Link className="text-sm font-bold text-gray-600 hover:text-green-600 transition-colors" href="/explore">Find Artisans</Link>
-                        <Link className="text-sm font-bold text-gray-600 hover:text-green-600 transition-colors" href="/services">Services</Link>
-                        <Link className="text-sm font-bold text-gray-600 hover:text-green-600 transition-colors" href="/signup">Join as Pro</Link>
-                        <Link className="text-sm font-bold text-gray-600 hover:text-green-600 transition-colors" href="/faq">FAQ</Link>
-                        <Link className="text-sm font-bold text-gray-600 hover:text-green-600 transition-colors" href="/#how-it-works">How it Works</Link>
+                        <Link className="text-sm font-bold text-gray-600 hover:text-primary transition-colors" href="/for-agent">For Agents</Link>
+                        <Link className="text-sm font-bold text-gray-600 hover:text-primary transition-colors" href="/for-account-manager">For Account Managers</Link>
+                        <Link className="text-sm font-bold text-gray-600 hover:text-primary transition-colors" href="/for-consultant">For Consultants</Link>
+                        <Link className="text-sm font-bold text-gray-600 hover:text-primary transition-colors" href="/#how-it-works">How it Works</Link>
                     </div>
 
                     {/* Auth Buttons & Mobile Toggle */}

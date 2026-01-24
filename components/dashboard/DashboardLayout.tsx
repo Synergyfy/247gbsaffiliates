@@ -68,7 +68,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
                                 <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                             </svg>
                         </div>
-                        <h2 className="text-xl font-bold tracking-tight text-text-main font-display">247gds affiliate</h2>
+                        <h2 className="text-xl font-bold tracking-tight text-text-main font-display">247gbs affiliate</h2>
                     </div>
                     <nav className="space-y-1">
                         {navItems.map((item) => (
@@ -139,7 +139,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
 
                 <footer className="mt-auto py-8 border-t border-slate-100 bg-white/50 px-8">
                     <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">© 2026 247gds affiliate professional marketplace</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">© 2026 247gbs affiliate professional marketplace</p>
                         <div className="flex gap-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
                             <Link className="hover:text-primary transition-colors" href="#">Support</Link>
                             <Link className="hover:text-primary transition-colors" href="#">Community</Link>

@@ -21,7 +21,14 @@ export default function LoginPage() {
                                 <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                             </svg>
                         </div>
-                        <span className="text-2xl font-bold text-text-main tracking-tight font-display">Mcommall</span>
+                        <span className="text-2xl font-bold text-text-main tracking-tight font-display">247gbs affiliate</span>
+                    </div>
+
+                    <div className="mb-8">
+                        <Link className="inline-flex items-center text-primary text-sm font-bold hover:underline transition-all duration-200 tracking-widest gap-2 group font-display" href="/">
+                            <span className="material-symbols-outlined group-hover:-translate-x-1 transition-transform">arrow_back</span>
+                            Back to Home
+                        </Link>
                     </div>
 
                     <div className="mb-10">
@@ -120,7 +127,7 @@ export default function LoginPage() {
                     </p>
 
                     <p className="mt-12 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
-                        © 2026 mcommall professional marketplace
+                        © 2026 247gbs affiliate professional marketplace
                     </p>
                 </div>
             </div>

@@ -23,6 +23,12 @@ const config: Config = {
         display: "var(--font-display)",
         body: "var(--font-body)",
       },
+      flex: {
+        "2": "2 2 0%",
+      },
+      borderWidth: {
+        "12": "12px",
+      },
     },
   },
   plugins: [],

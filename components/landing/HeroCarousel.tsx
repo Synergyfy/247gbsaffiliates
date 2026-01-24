@@ -42,7 +42,7 @@ export function HeroCarousel() {
     }, []);
 
     return (
-        <div className="relative w-full h-[600px] lg:h-[700px] overflow-hidden rounded-4xl bg-slate-900 border border-white/10 shadow-2xl">
+        <div className="relative w-full h-[600px] lg:h-[700px] overflow-hidden rounded-4xl bg-slate-900 border border-slate-800 shadow-2xl">
             <AnimatePresence mode="wait">
                 <motion.div
                     key={current}
@@ -57,7 +57,7 @@ export function HeroCarousel() {
                         className="absolute inset-0 bg-cover bg-center transition-transform duration-10000 scale-110"
                         style={{ backgroundImage: `url(${slides[current].image})` }}
                     />
-                    <div className="absolute inset-0 bg-linear-to-b from-black/40 via-black/60 to-black/80" />
+                    <div className="absolute inset-0 bg-linear-to-b from-slate-900/60 via-slate-900/80 to-slate-900/95" />
 
                     {/* Content */}
                     <div className="relative h-full flex flex-col items-center justify-center text-center px-6 md:px-12">
@@ -65,7 +65,7 @@ export function HeroCarousel() {
                             initial={{ y: 20, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
                             transition={{ delay: 0.2 }}
-                            className="text-blue-400 font-display font-semibold tracking-wider uppercase text-sm mb-4"
+                            className="text-primary font-display font-semibold tracking-wider uppercase text-sm mb-4"
                         >
                             For {slides[current].role}
                         </motion.span>
@@ -95,7 +95,7 @@ export function HeroCarousel() {
                         >
                             <Link
                                 href={slides[current].href}
-                                className="inline-flex items-center px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-display font-semibold transition-all hover:scale-105 shadow-lg shadow-blue-500/25"
+                                className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary-hover text-white rounded-full font-display font-semibold transition-all hover:scale-105 shadow-lg shadow-primary/25"
                             >
                                 {slides[current].cta}
                                 <span className="material-symbols-outlined ml-2">arrow_forward</span>
@@ -111,7 +111,7 @@ export function HeroCarousel() {
                     <button
                         key={index}
                         onClick={() => setCurrent(index)}
-                        className={`h-2 transition-all duration-300 rounded-full ${current === index ? "w-12 bg-blue-500" : "w-2 bg-white/30 hover:bg-white/50"
+                        className={`h-2 transition-all duration-300 rounded-full ${current === index ? "w-12 bg-primary" : "w-2 bg-white/30 hover:bg-white/50"
                             }`}
                     />
                 ))}
