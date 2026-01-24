@@ -6,14 +6,14 @@ const roles = [
     {
         id: "agent",
         title: "Agent",
-        description: "Perfect for independent specialists looking to connect with clients and manage individual project listings.",
+        description: "Entry-level specialists who complete focused micro-tasks like social post setup, basic email templates, short product descriptions, quick website checks, or small audits. Agents take a short qualification test to appear in listings.",
         icon: "person_search",
         href: "/signup?role=agent",
     },
     {
         id: "account-manager",
         title: "Account Manager",
-        description: "Ideal for agency leads managing multiple agents, complex client portfolios, and high-volume transactions.",
+        description: "Mid-level professionals who coordinate onboarding, manage teams of agents, plan and run campaigns, and match businesses to services. Account Managers handle client communications and deliver measurable results.",
         icon: "business_center",
         href: "/signup?role=account-manager",
         popular: true,
@@ -21,7 +21,7 @@ const roles = [
     {
         id: "consultant",
         title: "Consultant",
-        description: "Designed for strategic advisors providing expert analysis, reporting, and advisory services to the marketplace.",
+        description: "Senior experts who provide business advice, audits, strategic plans, and deep coaching. Consultants can be visible immediately after signup but are flagged for verification. They charge per session or project.",
         icon: "insights",
         href: "/signup?role=consultant",
     },
