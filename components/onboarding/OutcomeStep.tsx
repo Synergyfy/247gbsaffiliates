@@ -4,7 +4,7 @@ import React from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AssessmentModal } from '@/components/AssessmentModal'; // Assuming path for AssessmentModal
+import { AssessmentModal } from '@/components/onboarding/AssessmentModal';
 
 export const OutcomeStep: React.FC = () => {
     const { quizResult, role, resetOnboarding, isPaidVisibilityRequested } = useOnboardingStore();
