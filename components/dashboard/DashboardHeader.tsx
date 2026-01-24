@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 
 export const DashboardHeader: React.FC = () => {
     const pathname = usePathname();
-    const { logout } = useAuthStore();
+    const { clearAuth } = useAuthStore();
 
     // Simple breadcrumb logic
     const pathSegments = pathname.split('/').filter(Boolean);
@@ -24,7 +24,7 @@ export const DashboardHeader: React.FC = () => {
                     <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border border-white"></span>
                 </button>
                 <button
-                    onClick={logout}
+                    onClick={clearAuth}
                     className="h-10 px-4 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors font-display"
                 >
                     Log out

@@ -21,7 +21,7 @@ export const getDashboardLinks = (role: string | null) => {
     return [
         ...common,
         ...roleSpecific,
-        { name: 'Learning', href: '/learning', icon: 'school' },
+        { name: 'Learning', href: '/dashboard/learning', icon: 'school' },
         { name: 'Settings', href: '/settings', icon: 'settings' },
     ];
 };

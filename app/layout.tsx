@@ -42,7 +42,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <CookieBanner />
-          <ToastContainer position="bottom-right" />
+          <ToastContainer position="top-right" />
         </Providers>
       </body>
     </html>
