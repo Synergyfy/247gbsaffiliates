@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useRouter } from 'next/navigation';
 
 interface DashboardLayoutProps {
@@ -12,6 +13,7 @@ interface DashboardLayoutProps {
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, roleTitle }) => {
     const { user, clearAuth } = useAuthStore();
+    const { assessmentSkipped, quizResult } = useOnboardingStore();
     const router = useRouter();
 
     const handleLogout = () => {
@@ -27,7 +29,36 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
     ];
 
     return (
-        <div className="bg-background-light min-h-screen font-body text-text-main flex">
+        <div className="bg-background-light min-h-screen font-body text-text-main flex relative">
+            {/* Assessment Lock Overlay */}
+            {assessmentSkipped && !quizResult && (
+                <div className="absolute inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center border border-slate-100">
+                        <div className="size-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
+                            <span className="material-symbols-outlined text-3xl">lock</span>
+                        </div>
+                        <h2 className="text-2xl font-bold text-text-main mb-3 font-display">Dashboard Locked</h2>
+                        <p className="text-slate-500 mb-8 font-medium">
+                            You skipped the mandatory role assessment. To access your dashboard and receive paid assignments, you must verify your skills.
+                        </p>
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={() => router.push('/onboarding')}
+                                className="w-full py-3 px-6 bg-primary text-white font-bold rounded-xl hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20 font-display uppercase tracking-wider text-xs"
+                            >
+                                Complete Assessment
+                            </button>
+                            <button
+                                onClick={handleLogout}
+                                className="w-full py-3 px-6 bg-slate-50 text-slate-500 font-bold rounded-xl hover:bg-slate-100 transition-colors font-display uppercase tracking-wider text-xs"
+                            >
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Sidebar */}
             <aside className="w-64 bg-white border-r border-slate-100 hidden lg:flex flex-col sticky top-0 h-screen">
                 <div className="p-8">
@@ -37,7 +68,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
                                 <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                             </svg>
                         </div>
-                        <h2 className="text-xl font-bold tracking-tight text-text-main font-display">Mcommall</h2>
+                        <h2 className="text-xl font-bold tracking-tight text-text-main font-display">247gds affiliate</h2>
                     </div>
                     <nav className="space-y-1">
                         {navItems.map((item) => (
@@ -82,6 +113,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
                     <div className="flex items-center gap-4">
                         <h1 className="text-xl font-bold text-text-main font-display">{roleTitle} Dashboard</h1>
                         <span className="px-2.5 py-1 bg-green-500/10 text-green-500 text-[10px] font-bold rounded-full uppercase tracking-wider">Online</span>
+                        {quizResult && (
+                            <span className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-full uppercase tracking-wider">
+                                <span className="material-symbols-outlined text-sm">verified</span>
+                                Verified
+                            </span>
+                        )}
                     </div>
                     <div className="flex items-center gap-6">
                         <button className="relative text-slate-400 hover:text-text-main transition-colors">
@@ -91,7 +128,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
                         <div className="h-8 w-px bg-slate-100"></div>
                         <div className="flex flex-col text-right">
                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter font-display">Current Balance</span>
-                            <span className="text-sm font-bold text-text-main">$1,240.50</span>
+                            <span className="text-sm font-bold text-text-main">£1,240.50</span>
                         </div>
                     </div>
                 </header>
@@ -102,7 +139,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
 
                 <footer className="mt-auto py-8 border-t border-slate-100 bg-white/50 px-8">
                     <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">© 2026 mcommall professional marketplace</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">© 2026 247gds affiliate professional marketplace</p>
                         <div className="flex gap-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
                             <Link className="hover:text-primary transition-colors" href="#">Support</Link>
                             <Link className="hover:text-primary transition-colors" href="#">Community</Link>

@@ -24,14 +24,36 @@ interface OnboardingState {
       scenarios: number;
     };
   } | null;
+  assessmentSkipped: boolean; // New State
+
+  questionnaireAnswers: {
+    yearsExperience?: string;
+    turnaroundTime?: string;
+    availability?: string; // Yes/No
+    portfolioUrl?: string;
+    ratePreference?: string;
+    languages?: string[];
+    acceptFixedPrice?: boolean;
+    agreeTerms?: boolean;
+    // Account Manager Specific
+    teamLeadershipExp?: string;
+    campaignBudgetCapacity?: string;
+    availabilityType?: string;
+  };
+  isPaidVisibilityRequested: boolean;
+  profileStatus: 'active' | 'pending_verification' | null;
 
   setStep: (step: OnboardingStep) => void;
   setRole: (role: UserRole) => void;
   updateBasicInfo: (info: Partial<OnboardingState['basicInfo']>) => void;
   updateProfileInfo: (info: Record<string, any>) => void;
+  updateQuestionnaireAnswers: (answers: Partial<OnboardingState['questionnaireAnswers']>) => void;
+  setIsPaidVisibilityRequested: (requested: boolean) => void;
+  setProfileStatus: (status: OnboardingState['profileStatus']) => void;
   toggleSkill: (skillId: string) => void;
   setQuizAnswer: (questionId: string, answerId: string) => void;
   setQuizResult: (result: OnboardingState['quizResult']) => void;
+  setAssessmentSkipped: (skipped: boolean) => void; 
   resetOnboarding: () => void;
 }
 
@@ -47,6 +69,9 @@ export const useOnboardingStore = create<OnboardingState>()(
         headline: '',
       },
       profileInfo: {},
+      questionnaireAnswers: {},
+      isPaidVisibilityRequested: false,
+      profileStatus: null,
       selectedSkills: [],
       quizAnswers: {},
       quizResult: null,
@@ -63,6 +88,14 @@ export const useOnboardingStore = create<OnboardingState>()(
         profileInfo: { ...state.profileInfo, ...info }
       })),
 
+      updateQuestionnaireAnswers: (answers) => set((state) => ({
+        questionnaireAnswers: { ...state.questionnaireAnswers, ...answers }
+      })),
+
+      setIsPaidVisibilityRequested: (requested) => set({ isPaidVisibilityRequested: requested }),
+      
+      setProfileStatus: (status) => set({ profileStatus: status }),
+
       toggleSkill: (skillId) => set((state) => ({
         selectedSkills: state.selectedSkills.includes(skillId)
           ? state.selectedSkills.filter(id => id !== skillId)
@@ -74,6 +107,10 @@ export const useOnboardingStore = create<OnboardingState>()(
       })),
 
       setQuizResult: (result) => set({ quizResult: result, currentStep: 'outcome' }),
+
+      // New State and Action for Skipped Assessment
+      assessmentSkipped: false,
+      setAssessmentSkipped: (skipped: boolean) => set({ assessmentSkipped: skipped }),
 
       resetOnboarding: () => set({
         currentStep: 'basic-info',
@@ -87,7 +124,8 @@ export const useOnboardingStore = create<OnboardingState>()(
         profileInfo: {},
         selectedSkills: [],
         quizAnswers: {},
-        quizResult: null
+        quizResult: null,
+        assessmentSkipped: false
       }),
     }),
     {

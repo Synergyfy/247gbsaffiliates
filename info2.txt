@@ -1,0 +1,10 @@
+--- assesment will be later 
+-they should be able to skipp assesment 
+--inside the dashboard pop up for assesment, you can skip you will not be able to access anything
+--verfied badge after assesment.
+--they would have a dashboard regardless we can lock everything.
+-- pounds not dollars 
+
+--247gds affiliate change from mcommall
+
+--dropdown later 

@@ -22,7 +22,7 @@ const BasicInfoStep: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <AuthInput
-                        label="Work Location"
+                        label="Location"
                         type="text"
                         placeholder="e.g. New York, NY"
                         value={basicInfo.location}

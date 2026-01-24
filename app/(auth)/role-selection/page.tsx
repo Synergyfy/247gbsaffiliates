@@ -36,13 +36,13 @@ export default function RoleSelectionPage() {
                         <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                     </svg>
                 </div>
-                <span className="text-3xl font-bold tracking-tight text-text-main font-display">Mcommall</span>
+                <span className="text-3xl font-bold tracking-tight text-text-main font-display">247gds affiliate</span>
             </div>
 
             <div className="text-center max-w-2xl mb-16 px-4">
                 <h1 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight text-text-main font-display">Join as a professional</h1>
                 <p className="text-text-secondary text-lg lg:text-xl font-medium leading-relaxed">
-                    Choose the role that best fits your expertise. Scale your business within the Mcommall ecosystem.
+                    Choose the role that best fits your expertise. Scale your business within the 247gds affiliate ecosystem.
                 </p>
             </div>
 
@@ -86,7 +86,7 @@ export default function RoleSelectionPage() {
                 </p>
                 <div className="mt-12 pt-10 border-t border-slate-50 w-full max-w-sm mx-auto">
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
-                        © 2026 mcommall professional marketplace
+                        ©  247gds affiliate professional marketplace
                     </p>
                 </div>
             </div>

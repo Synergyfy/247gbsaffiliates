@@ -29,7 +29,7 @@ export default function SignupPage() {
         try {
             const response = await mockApi.signup({ name, email, role });
             setAuth(response.user, response.token);
-            router.push("/onboarding");
+            router.push("/verify-email");
         } catch (error) {
             console.error("Signup failed", error);
         }
@@ -56,7 +56,7 @@ export default function SignupPage() {
                                 <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                             </svg>
                         </div>
-                        <span className="text-2xl font-bold tracking-tight text-text-main font-display">Mcommall</span>
+                        <span className="text-2xl font-bold tracking-tight text-text-main font-display">247gds affiliate</span>
                     </div>
 
                     <div className="mb-10">
@@ -160,7 +160,7 @@ export default function SignupPage() {
                     </div>
 
                     <p className="mt-12 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
-                        © {new Date().getFullYear()} mcommall professional marketplace
+                        © {new Date().getFullYear()} 247gds affiliate professional marketplace
                     </p>
                 </div>
             </div>

@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from 'next/navigation'
 import { useEffect, useRef } from "react";
 
 export default function VerifyEmailPage() {
     const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
+    const router = useRouter()
 
     const handleInput = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
         const value = e.target.value;
@@ -18,6 +20,15 @@ export default function VerifyEmailPage() {
             inputsRef.current[index - 1]?.focus();
         }
     };
+
+    const handleVerify = () => {
+        const code = inputsRef.current.map(input => input?.value || '').join('');
+        if (code === '123456') {
+            router.replace('/onboarding');
+        } else {
+            alert('Invalid verification code. Please try again.');
+        }
+    }
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-white font-display">
@@ -59,9 +70,14 @@ export default function VerifyEmailPage() {
                         ))}
                     </div>
 
+                    <div className="my-2 bg-gray-300">
+                        demo 123456
+                    </div>
+
                     <button
                         className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-5 rounded-2xl transition-all duration-300 shadow-2xl shadow-primary/30 tracking-widest active:scale-[0.98] font-display"
                         type="button"
+                        onClick={handleVerify}
                     >
                         Verify Account
                     </button>
@@ -84,7 +100,7 @@ export default function VerifyEmailPage() {
                     <Link className="hover:text-primary transition-colors" href="/contact">Support</Link>
                 </div>
                 <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest font-display">
-                    © 2026 mcommall professional marketplace
+                    © {new Date().getFullYear()} mcommall professional marketplace
                 </p>
             </div>
         </div>
