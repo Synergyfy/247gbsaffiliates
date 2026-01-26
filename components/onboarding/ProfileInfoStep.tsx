@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,10 +11,14 @@ import { COUNTRY_OPTIONS, TIMEZONE_OPTIONS, TOP_LANGUAGES } from '@/lib/constant
 
 const ProfileInfoStep: React.FC = () => {
     const { role, profileInfo, updateProfileInfo, setStep } = useOnboardingStore();
+    const [detectingLocation, setDetectingLocation] = useState(false);
+    const [currency, setCurrency] = useState("$"); // Default currency
 
     const {
         register,
         handleSubmit,
+        setValue,
+        watch,
         formState: { errors },
     } = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
@@ -30,6 +34,29 @@ const ProfileInfoStep: React.FC = () => {
         },
     });
 
+    const watchedCountry = watch('country');
+
+    // Map common countries to currencies (basic mapping)
+    const getCurrencyForCountry = (country: string) => {
+        const mapping: Record<string, string> = {
+            'Nigeria': '₦',
+            'United Kingdom': '£',
+            'United States': '$',
+            'Canada': 'CA$',
+            'Australia': 'AU$',
+            'Ghana': '₵',
+            'South Africa': 'R',
+        };
+        return mapping[country] || '$';
+    };
+
+    useEffect(() => {
+        if (watchedCountry) {
+            const newCurrency = getCurrencyForCountry(watchedCountry);
+            setCurrency(newCurrency);
+        }
+    }, [watchedCountry]);
+
     const onSubmit = (data: ProfileFormValues) => {
         updateProfileInfo(data);
         toast.success("Profile details saved!");
@@ -38,6 +65,40 @@ const ProfileInfoStep: React.FC = () => {
 
     const onError = () => {
         toast.error("Please fix the errors before continuing.");
+    };
+
+    const detectLocation = () => {
+        if (!navigator.geolocation) {
+            toast.error("Geolocation is not supported by your browser.");
+            return;
+        }
+
+        setDetectingLocation(true);
+        navigator.geolocation.getCurrentPosition(async (position) => {
+            try {
+                const response = await fetch(
+                    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&localityLanguage=en`
+                );
+                const data = await response.json();
+
+                if (data.countryName) {
+                    // Try to match standard country name to our options if possible
+                    // Ideally we'd map standard names to our values, but for now we'll assumes names match or set directly
+                    // This sets the value in the form
+                    setValue('country', data.countryName, { shouldValidate: true });
+                    toast.success(`Detected Location: ${data.countryName}`);
+                }
+            } catch (error) {
+                console.error("Location error:", error);
+                toast.error("Failed to fetch location details.");
+            } finally {
+                setDetectingLocation(false);
+            }
+        }, (error) => {
+            console.error("Geolocation error:", error);
+            toast.error("Location access denied or unavailable.");
+            setDetectingLocation(false);
+        });
     };
 
     const renderRoleFields = () => {
@@ -58,7 +119,6 @@ const ProfileInfoStep: React.FC = () => {
                             placeholder="e.g. 5"
                             error={errors.yearsExperience}
                         />
-                        {/* Removed Specialty Area to align with project spec if needed, keeping generic for now or removing if strictly unnecessary */}
                     </>
                 );
             case 'account-manager':
@@ -70,7 +130,6 @@ const ProfileInfoStep: React.FC = () => {
                             placeholder="e.g. Prime Realty Group"
                             error={errors.company}
                         />
-                        {/* Removed Units Managed / Approach */}
                     </>
                 );
             case 'consultant':
@@ -118,13 +177,19 @@ const ProfileInfoStep: React.FC = () => {
 
                 {/* Common Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormInput
-                        label="Hourly/Rate"
-                        register={register('hourlyRate')}
-                        placeholder="$25/hr"
-                        error={errors.hourlyRate}
-                        required
-                    />
+                    <div className="relative">
+                        <FormInput
+                            label={`Hourly Rate (${currency})`}
+                            register={register('hourlyRate')}
+                            placeholder={`${currency}25/hr`}
+                            error={errors.hourlyRate}
+                            required
+                        />
+                        {/* Currency Dropdown / Indicator - simplified for this iteration */}
+                        <div className="absolute right-4 top-[38px] text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                            {currency} / hr
+                        </div>
+                    </div>
                     <FormSelect
                         label="Primary Language"
                         register={register('languages')}
@@ -135,13 +200,25 @@ const ProfileInfoStep: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormSelect
-                        label="Country"
-                        register={register('country')}
-                        options={COUNTRY_OPTIONS}
-                        error={errors.country}
-                        required
-                    />
+                    <div className="relative">
+                        <FormSelect
+                            label="Country"
+                            register={register('country')}
+                            options={COUNTRY_OPTIONS}
+                            error={errors.country}
+                            required
+                        />
+                        <button
+                            type="button"
+                            onClick={detectLocation}
+                            disabled={detectingLocation}
+                            className="absolute right-0 top-0 text-[10px] font-bold text-primary uppercase tracking-wider hover:underline flex items-center gap-1 mt-1"
+                        >
+                            <span className="material-symbols-outlined text-[14px]">my_location</span>
+                            {detectingLocation ? 'Detecting...' : 'Use Current Location'}
+                        </button>
+                    </div>
+
                     <FormSelect
                         label="Timezone"
                         register={register('timezone')}
@@ -157,8 +234,8 @@ const ProfileInfoStep: React.FC = () => {
                     </label>
                     <textarea
                         className={`w-full bg-white border rounded-xl p-4 text-text-main placeholder-gray-400 outline-none transition-all font-medium resize-none ${errors.bio
-                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
-                                : 'border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10'
+                            ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
+                            : 'border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10'
                             }`}
                         placeholder="Briefly describe your expertise..."
                         rows={3}
