@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 export default function AdminLayout({
     children,
@@ -20,10 +21,11 @@ export default function AdminLayout({
     return (
         <div className="bg-background-light min-h-screen font-sans text-text-main flex">
             {/* Sidebar */}
-            <aside className="w-64 bg-slate-900 border-r border-slate-800 hidden lg:flex flex-col sticky top-0 h-screen z-10 text-white">
+            <aside className="w-64 bg-surface-light border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen z-10 text-white">
                 <div className="p-8">
                     <div className="flex items-center gap-2 mb-10">
-                        <div className="size-8 bg-red-500 rounded-lg flex items-center justify-center text-white">
+                        <BrandLogo/>
+                        <div className="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
                             <span className="material-symbols-outlined font-bold text-xl">
                                 admin_panel_settings
                             </span>

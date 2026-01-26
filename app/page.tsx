@@ -212,7 +212,7 @@ export default function LandingPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10 max-w-[1240px] mx-auto">
           {[
-            { role: "Merchants", desc: "Manage storefronts, products, and inventory with elite precision and advanced analytics.", icon: "storefront", color: "bg-blue-600", features: ["Inventory Tracking", "Sales Analytics", "Payout Systems"] },
+            { role: "Account Manager ", desc: "Manage storefront", icon: "storefront", color: "bg-blue-600", features: ["Inventory Tracking", "Sales Analytics", "Payout Systems"] },
             { role: "Agents", desc: "Empower your field force to drive transactions and manage complex client portfolios.", icon: "support_agent", color: "bg-primary", features: ["Commission Automation", "Lead Management", "Support Tools"] },
             { role: "Consultants", desc: "Experience a premium commerce journey with personalized discovery and secure checkout.", icon: "shopping_bag", color: "bg-primary-dark", features: ["Personalized Feed", "Order History", "Loyalty Rewards"] }
           ].map((r, i) => (
@@ -281,22 +281,16 @@ export default function LandingPage() {
       <footer className="bg-white border-t border-primary/5 px-6 lg:px-40 py-24">
         <div className="mx-auto max-w-[1240px] grid grid-cols-2 lg:grid-cols-4 gap-16 lg:gap-24">
           <div className="col-span-2 lg:col-span-1 flex flex-col gap-10">
-            <div className="flex items-center gap-3">
-              <div className="size-8 text-primary">
-                <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
-                </svg>
-              </div>
-              <h2 className="text-text-main text-3xl font-bold font-display tracking-tight">Mcommall</h2>
+         <div className="flex items-center gap-2 text-primary">
+            <div className="size-8">
+              <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
+              </svg>
             </div>
+            <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">247gbs affiliate</h2>
+          </div>
             <p className="text-text-secondary text-lg font-medium leading-relaxed max-w-sm">The professional standard for commerce ecosystems. Verified, scalable, and built for modern business.</p>
-            <div className="flex gap-4">
-              {['public', 'terminal', 'share', 'contact_support'].map((icon, i) => (
-                <a key={i} className="w-14 h-14 rounded-2xl bg-background-light border border-primary/5 flex items-center justify-center text-text-secondary hover:bg-primary hover:text-white hover:-translate-y-2 transition-all cursor-pointer shadow-sm">
-                  <span className="material-symbols-outlined text-2xl">{icon}</span>
-                </a>
-              ))}
-            </div>
+      
           </div>
           {[
             { title: "Marketplace", links: ["Find Merchants", "Success Stories", "Pricing", "Enterprise"] },
