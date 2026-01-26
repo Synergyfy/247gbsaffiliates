@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { UserMenu } from "@/components/dashboard/UserMenu";
+
 export default function ConsultantLayout({
     children,
 }: {
@@ -12,9 +15,9 @@ export default function ConsultantLayout({
 
     const sidebarLinks = [
         { name: "Dashboard", href: "/dashboard/consultant", icon: "dashboard" },
-        { name: "Sessions", href: "#", icon: "calendar_today" },
-        { name: "Earnings", href: "#", icon: "payments" },
-        { name: "Profile", href: "#", icon: "person" },
+        { name: "Sessions", href: "/dashboard/consultant/sessions", icon: "calendar_today" },
+        { name: "Earnings", href: "/dashboard/consultant/earnings", icon: "payments" },
+        { name: "Profile", href: "/dashboard/consultant/profile", icon: "person" },
     ];
 
     return (
@@ -44,8 +47,8 @@ export default function ConsultantLayout({
                                 key={link.name}
                                 href={link.href}
                                 className={`flex items-center gap-3 px-6 py-3 text-sm font-semibold transition-all ${isActive
-                                        ? "text-primary bg-primary/5 border-r-4 border-primary"
-                                        : "text-text-secondary hover:text-text-main hover:bg-slate-50"
+                                    ? "text-primary bg-primary/5 border-r-4 border-primary"
+                                    : "text-text-secondary hover:text-text-main hover:bg-slate-50"
                                     }`}
                             >
                                 <span className="material-symbols-outlined">{link.icon}</span>
@@ -54,23 +57,18 @@ export default function ConsultantLayout({
                         );
                     })}
                 </nav>
-                <div className="p-6 border-t border-slate-100">
-                    <div className="bg-slate-800 rounded-xl p-4 text-white">
-                        <p className="text-[10px] font-bold text-primary uppercase mb-1">
-                            Support
-                        </p>
-                        <p className="text-xs text-slate-300 leading-relaxed mb-3">
-                            Need help with your sessions?
-                        </p>
-                        <button className="text-xs font-bold underline hover:text-primary">
-                            Contact Admin
-                        </button>
-                    </div>
+                <div className="p-4 border-t border-slate-100">
+                    <UserMenu name="Sarah Jenkins" role="Senior Consultant" initials="SJ" />
                 </div>
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0">{children}</div>
+            <div className="flex-1 flex flex-col min-w-0">
+                <DashboardPageHeader />
+                <main className="flex-1">
+                    {children}
+                </main>
+            </div>
         </div>
     );
 }

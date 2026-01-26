@@ -1,4 +1,4 @@
-export type UserRole = 'agent' | 'account-manager' | 'consultant';
+export type UserRole = 'agent' | 'account-manager' | 'consultant' | 'admin';
 
 export interface User {
   id: string;
@@ -30,7 +30,49 @@ export interface QuizQuestion {
   type?: 'scenario' | 'knowledge';
 }
 
-const mockUsers: User[] = [];
+export interface LearningResource {
+  id: string;
+  title: string;
+  description: string;
+  category: 'scenario' | 'knowledge' | 'skills' | 'general';
+  duration: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  url: string;
+  role: UserRole;
+}
+
+const mockUsers: User[] = [
+  {
+    id: 'demo-agent-001',
+    name: 'Sarah Mitchell',
+    email: 'demo.agent@247gbs.com',
+    role: 'agent',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
+    score: 85,
+    skills: ['Social Media Setup', 'AI Content Generation', 'Local SEO', 'Graphic Design'],
+    assessmentSkipped: false
+  },
+  {
+    id: 'demo-manager-001',
+    name: 'Marcus Johnson',
+    email: 'demo.manager@247gbs.com',
+    role: 'account-manager',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Marcus',
+    score: 92,
+    skills: ['Client Management', 'Project Planning', 'Team Leadership', 'Data Analysis'],
+    assessmentSkipped: false
+  },
+  {
+    id: 'demo-consultant-001',
+    name: 'Dr. Elena Rodriguez',
+    email: 'demo.consultant@247gbs.com',
+    role: 'consultant',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Elena',
+    score: 78,
+    skills: ['Business Strategy', 'Market Research', 'Financial Analysis', 'Change Management'],
+    assessmentSkipped: false
+  }
+];
 
 const mockSkills: Skill[] = [
   { id: '1', name: 'Social Media Setup' },
@@ -597,8 +639,196 @@ const mockQuestionsPool: Record<UserRole, QuizQuestion[]> = {
         correctOptionId: 'opt2',
         type: 'knowledge'
     }
-  ]
+  ],
+  admin: []
 };
+
+// Learning Resources
+const mockLearningResources: LearningResource[] = [
+  // Agent Resources
+  {
+    id: 'agent-1',
+    title: 'Mastering SEO Fundamentals',
+    description: 'Learn the core principles of Search Engine Optimization including keyword research, on-page optimization, and link building strategies.',
+    category: 'knowledge',
+    duration: '45 min',
+    difficulty: 'beginner',
+    url: '#',
+    role: 'agent'
+  },
+  {
+    id: 'agent-2',
+    title: 'Social Media Strategy Workshop',
+    description: 'Develop effective social media campaigns that drive engagement and conversions across multiple platforms.',
+    category: 'skills',
+    duration: '60 min',
+    difficulty: 'intermediate',
+    url: '#',
+    role: 'agent'
+  },
+  {
+    id: 'agent-3',
+    title: 'Client Communication Best Practices',
+    description: 'Handle difficult client scenarios with professionalism and turn challenges into opportunities.',
+    category: 'scenario',
+    duration: '30 min',
+    difficulty: 'intermediate',
+    url: '#',
+    role: 'agent'
+  },
+  {
+    id: 'agent-4',
+    title: 'AI Content Generation Tools',
+    description: 'Leverage AI tools to create compelling content faster while maintaining quality and authenticity.',
+    category: 'skills',
+    duration: '40 min',
+    difficulty: 'advanced',
+    url: '#',
+    role: 'agent'
+  },
+  {
+    id: 'agent-5',
+    title: 'Email Marketing Essentials',
+    description: 'Build effective email campaigns that convert subscribers into customers.',
+    category: 'knowledge',
+    duration: '35 min',
+    difficulty: 'beginner',
+    url: '#',
+    role: 'agent'
+  },
+  {
+    id: 'agent-6',
+    title: 'Graphic Design Principles',
+    description: 'Understand color theory, typography, and layout to create visually appealing designs.',
+    category: 'skills',
+    duration: '50 min',
+    difficulty: 'intermediate',
+    url: '#',
+    role: 'agent'
+  },
+  // Account Manager Resources
+  {
+    id: 'manager-1',
+    title: 'Project Management Fundamentals',
+    description: 'Master the basics of project planning, execution, and delivery using Agile and Waterfall methodologies.',
+    category: 'knowledge',
+    duration: '55 min',
+    difficulty: 'intermediate',
+    url: '#',
+    role: 'account-manager'
+  },
+  {
+    id: 'manager-2',
+    title: 'Handling Scope Creep',
+    description: 'Learn strategies to identify and manage scope creep while maintaining client satisfaction.',
+    category: 'scenario',
+    duration: '25 min',
+    difficulty: 'advanced',
+    url: '#',
+    role: 'account-manager'
+  },
+  {
+    id: 'manager-3',
+    title: 'Team Leadership Skills',
+    description: 'Develop leadership capabilities to motivate teams and drive project success.',
+    category: 'skills',
+    duration: '45 min',
+    difficulty: 'intermediate',
+    url: '#',
+    role: 'account-manager'
+  },
+  {
+    id: 'manager-4',
+    title: 'Client Onboarding Excellence',
+    description: 'Create seamless onboarding experiences that set clear expectations and build trust.',
+    category: 'knowledge',
+    duration: '30 min',
+    difficulty: 'beginner',
+    url: '#',
+    role: 'account-manager'
+  },
+  {
+    id: 'manager-5',
+    title: 'KPI Tracking and Reporting',
+    description: 'Identify the right metrics and create compelling reports that demonstrate value to clients.',
+    category: 'skills',
+    duration: '40 min',
+    difficulty: 'intermediate',
+    url: '#',
+    role: 'account-manager'
+  },
+  {
+    id: 'manager-6',
+    title: 'Crisis Management Strategies',
+    description: 'Navigate project crises and client emergencies with confidence and professionalism.',
+    category: 'scenario',
+    duration: '35 min',
+    difficulty: 'advanced',
+    url: '#',
+    role: 'account-manager'
+  },
+  // Consultant Resources
+  {
+    id: 'consultant-1',
+    title: 'Strategic Business Analysis',
+    description: 'Conduct comprehensive business analysis using frameworks like SWOT, Porter\'s Five Forces, and PESTLE.',
+    category: 'knowledge',
+    duration: '60 min',
+    difficulty: 'advanced',
+    url: '#',
+    role: 'consultant'
+  },
+  {
+    id: 'consultant-2',
+    title: 'Financial Modeling Basics',
+    description: 'Build financial models to forecast revenue, analyze profitability, and support strategic decisions.',
+    category: 'skills',
+    duration: '70 min',
+    difficulty: 'advanced',
+    url: '#',
+    role: 'consultant'
+  },
+  {
+    id: 'consultant-3',
+    title: 'Change Management Workshop',
+    description: 'Guide organizations through transformation with proven change management methodologies.',
+    category: 'scenario',
+    duration: '50 min',
+    difficulty: 'intermediate',
+    url: '#',
+    role: 'consultant'
+  },
+  {
+    id: 'consultant-4',
+    title: 'Market Entry Strategies',
+    description: 'Develop comprehensive market entry plans for businesses expanding into new territories.',
+    category: 'knowledge',
+    duration: '55 min',
+    difficulty: 'advanced',
+    url: '#',
+    role: 'consultant'
+  },
+  {
+    id: 'consultant-5',
+    title: 'Executive Presentation Skills',
+    description: 'Deliver compelling presentations to C-level executives and board members.',
+    category: 'skills',
+    duration: '40 min',
+    difficulty: 'intermediate',
+    url: '#',
+    role: 'consultant'
+  },
+  {
+    id: 'consultant-6',
+    title: 'Digital Transformation Roadmaps',
+    description: 'Create actionable digital transformation strategies for legacy businesses.',
+    category: 'scenario',
+    duration: '65 min',
+    difficulty: 'advanced',
+    url: '#',
+    role: 'consultant'
+  }
+];
 
 // Helper to shuffle array
 const shuffleArray = <T>(array: T[]): T[] => {
@@ -624,35 +854,75 @@ export const mockApi = {
     return shuffled.slice(0, 10);
   },
 
-  submitQuiz: async (role: UserRole, answers: Record<string, string>): Promise<{ score: number; performance: any }> => {
+  submitQuiz: async (role: UserRole, answers: Record<string, string>): Promise<{ 
+    score: number; 
+    performance: any;
+    missedQuestions: string[];
+    performanceBreakdown: { category: string; score: number }[];
+  }> => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    // Since we return a subset, we need to find the questions again or assume the client sends IDs.
-    // Ideally, the server tracks the session. logic here simplifies by checking against the full pool.
-    // In a real app, you'd check against the specific subset sent to the user.
     const questions = mockQuestionsPool[role] || [];
     let correct = 0;
     let answeredCount = 0;
+    const missedQuestions: string[] = [];
+    
+    // Track performance by question type
+    let scenarioCorrect = 0;
+    let scenarioTotal = 0;
+    let knowledgeCorrect = 0;
+    let knowledgeTotal = 0;
     
     // Calculate based on answers provided
     Object.keys(answers).forEach(questionId => {
       const question = questions.find(q => q.id === questionId);
-      if (question && answers[questionId] === question.correctOptionId) {
-        correct++;
+      if (question) {
+        answeredCount++;
+        const isCorrect = answers[questionId] === question.correctOptionId;
+        
+        if (isCorrect) {
+          correct++;
+        } else {
+          missedQuestions.push(questionId);
+        }
+        
+        // Track by type
+        if (question.type === 'scenario') {
+          scenarioTotal++;
+          if (isCorrect) scenarioCorrect++;
+        } else {
+          knowledgeTotal++;
+          if (isCorrect) knowledgeCorrect++;
+        }
       }
-      if(question) answeredCount++;
     });
 
-    // Score is based on the questions answered (assuming 10 were served)
-    // If the frontend sends all answers, this works.
     const score = answeredCount > 0 ? Math.round((correct / answeredCount) * 100) : 0;
+    
+    // Calculate performance breakdown
+    const performanceBreakdown = [
+      {
+        category: 'Scenario Analysis',
+        score: scenarioTotal > 0 ? Math.round((scenarioCorrect / scenarioTotal) * 100) : 0
+      },
+      {
+        category: 'Knowledge Base',
+        score: knowledgeTotal > 0 ? Math.round((knowledgeCorrect / knowledgeTotal) * 100) : 0
+      },
+      {
+        category: 'Overall Accuracy',
+        score: score
+      }
+    ];
     
     return {
       score,
       performance: {
         speed: 95,
         accuracy: score,
-        scenarios: 92
-      }
+        scenarios: scenarioTotal > 0 ? Math.round((scenarioCorrect / scenarioTotal) * 100) : 0
+      },
+      missedQuestions,
+      performanceBreakdown
     };
   },
 
@@ -693,6 +963,11 @@ export const mockApi = {
   verifyEmail: async (code: string): Promise<boolean> => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     return code === '123456';
+  },
+
+  getLearningResources: async (role: UserRole): Promise<LearningResource[]> => {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    return mockLearningResources.filter(resource => resource.role === role);
   },
 
   deleteAccount: async (): Promise<void> => {

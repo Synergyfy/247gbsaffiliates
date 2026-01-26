@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { UserMenu } from "@/components/dashboard/UserMenu";
+
 export default function AccountManagerLayout({
     children,
 }: {
@@ -16,10 +19,10 @@ export default function AccountManagerLayout({
             href: "/dashboard/account-manager",
             icon: "dashboard",
         },
-        { name: "Campaigns", href: "#", icon: "campaign" },
-        { name: "Agents", href: "#", icon: "groups" },
-        { name: "Revenue", href: "#", icon: "payments" },
-        { name: "Settings", href: "#", icon: "settings" },
+        { name: "Campaigns", href: "/dashboard/account-manager/campaigns", icon: "campaign" },
+        { name: "Agents", href: "/dashboard/account-manager/agents", icon: "groups" },
+        { name: "Revenue", href: "/dashboard/account-manager/revenue", icon: "payments" },
+        { name: "Settings", href: "/dashboard/account-manager/settings", icon: "settings" },
     ];
 
     return (
@@ -46,8 +49,8 @@ export default function AccountManagerLayout({
                                 key={link.name}
                                 href={link.href}
                                 className={`flex items-center gap-3 px-6 py-3 text-sm font-semibold transition-colors ${isActive
-                                        ? "bg-slate-50 text-primary border-r-4 border-primary"
-                                        : "text-text-secondary hover:text-primary hover:bg-slate-50"
+                                    ? "bg-slate-50 text-primary border-r-4 border-primary"
+                                    : "text-text-secondary hover:text-primary hover:bg-slate-50"
                                     }`}
                             >
                                 <span className="material-symbols-outlined">{link.icon}</span>
@@ -56,23 +59,18 @@ export default function AccountManagerLayout({
                         );
                     })}
                 </nav>
-                <div className="p-6 border-t border-slate-100">
-                    <div className="flex items-center gap-3">
-                        <div className="size-10 rounded-full bg-slate-800 flex items-center justify-center text-white text-xs font-bold">
-                            AM
-                        </div>
-                        <div>
-                            <p className="text-sm font-bold text-text-main">Sarah Jenkins</p>
-                            <p className="text-xs text-text-secondary font-medium">
-                                Account Manager
-                            </p>
-                        </div>
-                    </div>
+                <div className="p-4 border-t border-slate-100">
+                    <UserMenu name="Sarah Jenkins" role="Account Manager" initials="SJ" />
                 </div>
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0">{children}</div>
+            <div className="flex-1 flex flex-col min-w-0">
+                <DashboardPageHeader />
+                <main className="flex-1">
+                    {children}
+                </main>
+            </div>
         </div>
     );
 }

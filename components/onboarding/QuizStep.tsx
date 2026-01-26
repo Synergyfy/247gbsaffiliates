@@ -5,13 +5,25 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { mockApi, QuizQuestion } from '@/lib/mockApi';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useRouter } from 'next/navigation';
+import { CertificationModal } from './CertificationModal';
 
 export const QuizStep: React.FC = () => {
-    const { role, quizAnswers, setQuizAnswer, setQuizResult, setStep } = useOnboardingStore();
+    const {
+        role,
+        quizAnswers,
+        setQuizAnswer,
+        setQuizResult,
+        setStep,
+        setMissedQuestions,
+        setPerformanceBreakdown,
+        setRetakeAvailableAt,
+        resetOnboarding
+    } = useOnboardingStore();
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [timeLeft, setTimeLeft] = useState(30);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submissionStep, setSubmissionStep] = useState(0);
+    const [showModal, setShowModal] = useState(false);
 
     const submissionSteps = [
         "Analyzing your responses...",
@@ -32,9 +44,31 @@ export const QuizStep: React.FC = () => {
     const submitMutation = useMutation({
         mutationFn: () => mockApi.submitQuiz(role!, quizAnswers),
         onSuccess: (data) => {
+            // Set quiz result
             setQuizResult(data);
-            // Redirect to standalone Certification page
-            router.push('/certification');
+
+            // Set missed questions and performance breakdown
+            setMissedQuestions(data.missedQuestions);
+            setPerformanceBreakdown(data.performanceBreakdown);
+
+            // If failed (score < 50%), set retake timestamp and redirect
+            if (data.score < 50) {
+                const retakeTime = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+                setRetakeAvailableAt(retakeTime);
+                // Redirect to learning dashboard
+                if (role === 'agent') {
+                    router.push('/learning/agent');
+                } else if (role === 'consultant') {
+                    router.push('/learning/consultant');
+                } else {
+                    // Default fallback
+                    router.push('/learning/agent');
+                }
+            } else {
+                // Passed: Show modal
+                resetOnboarding();
+                setShowModal(true);
+            }
         },
     });
 
@@ -196,6 +230,12 @@ export const QuizStep: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Certification Modal */}
+            <CertificationModal
+                isOpen={showModal}
+                onClose={() => setShowModal(false)}
+            />
         </div>
     );
 };
