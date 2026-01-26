@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandLogo } from "@/components/ui/BrandLogo";
+import { UserMenu } from "@/components/dashboard/UserMenu";
+
 
 export default function AdminLayout({
     children,
@@ -13,8 +15,8 @@ export default function AdminLayout({
 
     const sidebarLinks = [
         { name: "Overview", href: "/dashboard/admin", icon: "dashboard" },
-        { name: "User Management", href: "/dashboard/admin/users", icon: "manage_accounts" },
-        { name: "Platform Settings", href: "/dashboard/admin/settings", icon: "settings_suggest" },
+        { name: "User", href: "/dashboard/admin/users", icon: "manage_accounts" },
+        { name: "Settings", href: "/dashboard/admin/settings", icon: "settings_suggest" },
         { name: "Reports", href: "/dashboard/admin/reports", icon: "summarize" },
     ];
 
@@ -24,7 +26,7 @@ export default function AdminLayout({
             <aside className="w-64 bg-surface-light border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen z-10 text-white">
                 <div className="p-8">
                     <div className="flex items-center gap-2 mb-10">
-                        <BrandLogo/>
+                        <BrandLogo />
                         <div className="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
                             <span className="material-symbols-outlined font-bold text-xl">
                                 admin_panel_settings
@@ -42,7 +44,7 @@ export default function AdminLayout({
                                     key={link.name}
                                     href={link.href}
                                     className={`flex items-center gap-3 px-4 py-3 text-sm font-bold transition-all rounded-lg ${isActive
-                                        ? "bg-red-500 text-white shadow-lg shadow-red-500/20"
+                                        ? "bg-primary text-white shadow-lg shadow-primary/20"
                                         : "text-slate-400 hover:text-white hover:bg-slate-800"
                                         }`}
                                 >
@@ -54,18 +56,8 @@ export default function AdminLayout({
                     </nav>
                 </div>
                 <div className="mt-auto p-8 border-t border-slate-800">
-                    <div className="flex items-center gap-3">
-                        <div className="size-10 rounded-full bg-red-500 flex items-center justify-center text-white font-bold text-xs">
-                            AD
-                        </div>
-                        <div className="overflow-hidden">
-                            <p className="text-xs font-bold truncate text-white">
-                                Super Admin
-                            </p>
-                            <p className="text-[10px] text-slate-400 uppercase tracking-widest">
-                                System Owner
-                            </p>
-                        </div>
+                    <div className="mt-auto p-4 border-t border-slate-50">
+                        <UserMenu name="Anthony James" role="Admin" initials="AJ" />
                     </div>
                 </div>
             </aside>
@@ -75,7 +67,7 @@ export default function AdminLayout({
                 <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-20">
                     <h1 className="text-lg font-bold text-text-main">Platform Administration</h1>
                     <div className="flex items-center gap-4">
-                        <button className="text-slate-400 hover:text-red-500 transition-colors">
+                        <button className="text-slate-400 hover:text-primary transition-colors">
                             <span className="material-symbols-outlined">notifications</span>
                         </button>
                     </div>
