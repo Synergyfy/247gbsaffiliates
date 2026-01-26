@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { BrandLogo } from "../../../components/ui/BrandLogo";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 
 export default function ConsultantLayout({
@@ -26,14 +27,7 @@ export default function ConsultantLayout({
             <aside className="w-64 bg-surface-light border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen z-10">
                 <div className="p-6 border-b border-slate-100">
                     <div className="flex items-center gap-2">
-                        <div className="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
-                            <span className="material-symbols-outlined font-bold text-xl">
-                                category
-                            </span>
-                        </div>
-                        <h2 className="text-xl font-bold tracking-tight text-text-main">
-                            Listeo
-                        </h2>
+                       <BrandLogo/>
                     </div>
                 </div>
                 <nav className="flex-1 py-6">
