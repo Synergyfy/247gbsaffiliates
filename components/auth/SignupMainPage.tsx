@@ -4,34 +4,42 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import AuthSidebar from "@/components/auth/AuthSidebar";
 import AuthInput from "@/components/auth/AuthInput";
-import { mockApi, UserRole } from "@/lib/mockApi";
-import { useAuthStore } from "@/store/useAuthStore";
+import { useAuth } from "@/hooks/useAuth";
+import { UserRole } from "@/types/auth";
 
 export default function SignupPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { setAuth } = useAuthStore();
+    const { signup, isSigningUp } = useAuth();
     const [role, setRole] = useState<UserRole>('agent');
 
     useEffect(() => {
-        const roleParam = searchParams.get("role") as UserRole;
-        if (roleParam && ['agent', 'account-manager', 'consultant'].includes(roleParam)) {
-            setRole(roleParam);
+        const roleParam = searchParams.get("role");
+        if (roleParam) {
+            const mappedRole = roleParam === 'account-manager' ? 'account_manager' : roleParam;
+            if (['agent', 'account_manager', 'consultant'].includes(mappedRole)) {
+                setRole(mappedRole as UserRole);
+            }
         }
     }, [searchParams]);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
-        const name = `${formData.get('firstName')} ${formData.get('lastName')}`;
+        const firstName = formData.get('firstName') as string;
+        const lastName = formData.get('lastName') as string;
         const email = formData.get('email') as string;
+        const password = formData.get('password') as string;
 
         try {
-            const response = await mockApi.signup({ name, email, role });
-            setAuth(response.user, response.token);
-            router.push("/verify-email");
-        } catch (error) {
+            await signup({ email, password, firstName, lastName, role });
+        } catch (error: any) {
             console.error("Signup failed", error);
+            if (error.response?.status === 409) {
+                alert("This email is already registered. Please sign in or use a different email.");
+            } else {
+                alert(error.response?.data?.message || "An error occurred during signup. Please try again.");
+            }
         }
     };
 
@@ -96,6 +104,7 @@ export default function SignupPage() {
                         <div className="grid grid-cols-2 gap-4">
                             <AuthInput
                                 id="firstName"
+                                name="firstName"
                                 label="First Name"
                                 type="text"
                                 placeholder="John"
@@ -103,6 +112,7 @@ export default function SignupPage() {
                             />
                             <AuthInput
                                 id="lastName"
+                                name="lastName"
                                 label="Last Name"
                                 type="text"
                                 placeholder="Doe"
@@ -112,6 +122,7 @@ export default function SignupPage() {
 
                         <AuthInput
                             id="email"
+                            name="email"
                             label="Email Address"
                             type="email"
                             placeholder="john@example.com"
@@ -127,6 +138,7 @@ export default function SignupPage() {
                                 </div>
                                 <input
                                     id="password"
+                                    name="password"
                                     className="block w-full pl-10 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-text-main placeholder-gray-400 transition-all outline-none font-medium"
                                     placeholder="••••••••"
                                     type="password"
@@ -152,10 +164,11 @@ export default function SignupPage() {
                         </div>
 
                         <button
-                            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-4 rounded-xl shadow-2xl shadow-primary/20 transition-all duration-300 transform active:scale-[0.98] tracking-widest font-display"
+                            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-4 rounded-xl shadow-2xl shadow-primary/20 transition-all duration-300 transform active:scale-[0.98] tracking-widest font-display disabled:opacity-50"
                             type="submit"
+                            disabled={isSigningUp}
                         >
-                            Create Account
+                            {isSigningUp ? "Creating Account..." : "Create Account"}
                         </button>
                     </form>
 

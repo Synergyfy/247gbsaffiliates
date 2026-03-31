@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { mockApi, QuizQuestion } from '@/lib/mockApi';
+import apiClient from '@/lib/apiClient';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useRouter } from 'next/navigation';
 import { CertificationModal } from './CertificationModal';
@@ -14,8 +14,6 @@ export const QuizStep: React.FC = () => {
         setQuizAnswer,
         setQuizResult,
         setStep,
-        setMissedQuestions,
-        setPerformanceBreakdown,
         setRetakeAvailableAt,
         resetOnboarding
     } = useOnboardingStore();
@@ -34,38 +32,41 @@ export const QuizStep: React.FC = () => {
     ];
 
     const { data: questions, isLoading } = useQuery({
-        queryKey: ['questions', role],
-        queryFn: () => mockApi.getQuestions(role!),
-        enabled: !!role,
+        queryKey: ['questions'], // role is redundant as backend uses user context
+        queryFn: async () => {
+            const response = await apiClient.get('/assessment/quiz');
+            return response.data as { id: string; text: string; options: string[]; type: string }[];
+        },
     });
 
     const router = useRouter();
 
     const submitMutation = useMutation({
-        mutationFn: () => mockApi.submitQuiz(role!, quizAnswers),
+        mutationFn: async () => {
+            // Transform Record<string, string> where value is the index to [{ questionId, selectedOptionIndex }]
+            const formattedAnswers = Object.entries(quizAnswers).map(([questionId, optionId]) => ({
+                questionId,
+                selectedOptionIndex: parseInt(optionId, 10)
+            }));
+            const response = await apiClient.post('/assessment/submit', { answers: formattedAnswers });
+            return response.data;
+        },
         onSuccess: (data) => {
-            // Set quiz result
-            setQuizResult(data);
+            // data: { score, maxScore, percentage, band }
+            setQuizResult({
+                score: data.score,
+                maxScore: data.maxScore,
+                percentage: data.percentage,
+                band: data.band
+            });
 
-            // Set missed questions and performance breakdown
-            setMissedQuestions(data.missedQuestions);
-            setPerformanceBreakdown(data.performanceBreakdown);
-
-            // If failed (score < 50%), set retake timestamp and redirect
-            if (data.score < 50) {
+            // If failed (band === 'Fail'), set retake timestamp and redirect
+            if (data.band === 'Fail') {
                 const retakeTime = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
                 setRetakeAvailableAt(retakeTime);
-                // Redirect to learning dashboard
-                if (role === 'agent') {
-                    router.push('/learning/agent');
-                } else if (role === 'consultant') {
-                    router.push('/learning/consultant');
-                } else {
-                    // Default fallback
-                    router.push('/learning/agent');
-                }
+                router.push('/learning');
             } else {
-                // Passed: Show modal
+                // Passed or Partition: Show modal
                 resetOnboarding();
                 setShowModal(true);
             }
@@ -180,28 +181,31 @@ export const QuizStep: React.FC = () => {
                 </div>
 
                 <div className="p-8 lg:px-12 space-y-4">
-                    {currentQuestion.options.map((option) => (
-                        <button
-                            key={option.id}
-                            onClick={() => setQuizAnswer(currentQuestion.id, option.id)}
-                            className={`w-full group flex items-start gap-4 p-5 rounded-2xl border-2 text-left transition-all font-display ${quizAnswers[currentQuestion.id] === option.id
-                                ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
-                                : 'border-slate-50 hover:border-primary/50'
-                                }`}
-                        >
-                            <div className={`size-6 rounded-full border-2 shrink-0 flex items-center justify-center mt-0.5 transition-colors ${quizAnswers[currentQuestion.id] === option.id
-                                ? 'border-primary bg-primary'
-                                : 'border-slate-300 group-hover:border-primary'
-                                }`}>
-                                <div className={`size-2 rounded-full bg-white transition-transform ${quizAnswers[currentQuestion.id] === option.id ? 'scale-100' : 'scale-0'
-                                    }`} />
-                            </div>
-                            <span className={`font-bold text-sm lg:text-base ${quizAnswers[currentQuestion.id] === option.id ? 'text-text-main' : 'text-slate-500'
-                                }`}>
-                                {option.text}
-                            </span>
-                        </button>
-                    ))}
+                    {currentQuestion.options.map((optionText, index) => {
+                        const optionId = index.toString();
+                        return (
+                            <button
+                                key={optionId}
+                                onClick={() => setQuizAnswer(currentQuestion.id, optionId)}
+                                className={`w-full group flex items-start gap-4 p-5 rounded-2xl border-2 text-left transition-all font-display ${quizAnswers[currentQuestion.id] === optionId
+                                    ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
+                                    : 'border-slate-50 hover:border-primary/50'
+                                    }`}
+                            >
+                                <div className={`size-6 rounded-full border-2 shrink-0 flex items-center justify-center mt-0.5 transition-colors ${quizAnswers[currentQuestion.id] === optionId
+                                    ? 'border-primary bg-primary'
+                                    : 'border-slate-300 group-hover:border-primary'
+                                    }`}>
+                                    <div className={`size-2 rounded-full bg-white transition-transform ${quizAnswers[currentQuestion.id] === optionId ? 'scale-100' : 'scale-0'
+                                        }`} />
+                                </div>
+                                <span className={`font-bold text-sm lg:text-base ${quizAnswers[currentQuestion.id] === optionId ? 'text-text-main' : 'text-slate-500'
+                                    }`}>
+                                    {optionText}
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
 
                 <div className="px-8 lg:px-12 pb-10 flex flex-col sm:flex-row items-center justify-between gap-6 border-t border-slate-50 pt-8 mt-4">

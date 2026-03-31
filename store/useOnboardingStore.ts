@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { UserRole } from '@/lib/mockApi';
+import { UserRole } from '@/types/auth';
 
 export type OnboardingStep = 'basic-info' | 'profile-info' | 'questionnaire' | 'quiz' | 'outcome';
 
@@ -19,17 +19,10 @@ interface OnboardingState {
   quizAnswers: Record<string, string>;
   quizResult: {
     score: number;
-    performance: {
-      speed: number;
-      accuracy: number;
-      scenarios: number;
-    };
+    maxScore: number;
+    percentage: number;
+    band: string;
   } | null;
-  missedQuestions: string[];
-  performanceBreakdown: {
-    category: string;
-    score: number;
-  }[];
   retakeAvailableAt: number | null;
   assessmentSkipped: boolean;
 
@@ -60,8 +53,6 @@ interface OnboardingState {
   toggleSkill: (skillId: string) => void;
   setQuizAnswer: (questionId: string, answerId: string) => void;
   setQuizResult: (result: OnboardingState['quizResult']) => void;
-  setMissedQuestions: (questions: string[]) => void;
-  setPerformanceBreakdown: (breakdown: OnboardingState['performanceBreakdown']) => void;
   setRetakeAvailableAt: (timestamp: number | null) => void;
   setAssessmentSkipped: (skipped: boolean) => void; 
   resetOnboarding: () => void;
@@ -125,10 +116,6 @@ export const useOnboardingStore = create<OnboardingState>()(
 
       setQuizResult: (result) => set({ quizResult: result, currentStep: 'outcome' }),
 
-      setMissedQuestions: (questions) => set({ missedQuestions: questions }),
-
-      setPerformanceBreakdown: (breakdown) => set({ performanceBreakdown: breakdown }),
-
       setRetakeAvailableAt: (timestamp) => set({ retakeAvailableAt: timestamp }),
 
       setAssessmentSkipped: (skipped: boolean) => set({ assessmentSkipped: skipped }),
@@ -147,8 +134,6 @@ export const useOnboardingStore = create<OnboardingState>()(
         selectedSkills: [],
         quizAnswers: {},
         quizResult: null,
-        missedQuestions: [],
-        performanceBreakdown: [],
         retakeAvailableAt: null,
         assessmentSkipped: false
       }),

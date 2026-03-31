@@ -1,36 +1,57 @@
+'use client';
+
+import React from 'react';
+import { useTasks, Task } from '@/hooks/useTasks';
+import { useWallet } from '@/hooks/useWallet';
+import { useAuthStore } from '@/store/useAuthStore';
+
 export default function ConsultantDashboard() {
+    const { user } = useAuthStore();
+    const { tasks, isLoading: isLoadingTasks } = useTasks();
+    const { wallet, isLoading: isLoadingWallet } = useWallet();
+
+    if (isLoadingTasks || isLoadingWallet) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary"></div>
+            </div>
+        );
+    }
+
+    // Filter tasks for 'audit' or 'review' types which are common for consultants
+    const consultancySessions = tasks?.filter(t => t.type === 'audit' || t.type === 'review') || [];
+
     return (
-        <>
+        <div className="font-display">
             <div className="bg-amber-50 border-b border-amber-100 py-3 px-6 flex items-center justify-center gap-3">
                 <span className="material-symbols-outlined text-amber-600 text-sm">
                     verified_user
                 </span>
-                <p className="text-sm font-medium text-amber-800">
+                <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">
                     Your Consultant credentials are being verified by our compliance team.
-                    Some features may be limited.
                 </p>
             </div>
             <header className="h-20 bg-surface-light border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
-                <h1 className="text-xl font-bold text-text-main">
-                    Consultant Dashboard
+                <h1 className="text-xl font-black text-text-main italic uppercase tracking-tighter">
+                    Consultant <span className="text-primary tracking-normal not-italic">Portal</span>
                 </h1>
                 <div className="flex items-center gap-6">
                     <button className="relative p-2 text-text-secondary hover:text-text-main transition-colors">
                         <span className="material-symbols-outlined">notifications</span>
-                        <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border-2 border-white"></span>
+                        <span className="absolute top-2 right-2 size-1.5 bg-red-500 rounded-full border border-white"></span>
                     </button>
                     <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
                         <div className="text-right">
-                            <p className="text-sm font-bold text-text-main">Sarah Jenkins</p>
-                            <p className="text-xs text-text-secondary font-medium">
-                                Senior Consultant
+                            <p className="text-sm font-black text-text-main">{user?.name || 'Consultant'}</p>
+                            <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">
+                                Senior Strategic Consultant
                             </p>
                         </div>
-                        <div className="size-10 rounded-full bg-slate-200 overflow-hidden border border-slate-200">
+                        <div className="size-10 rounded-full bg-slate-200 overflow-hidden border-2 border-primary/20 shadow-sm">
                             <img
                                 alt="Avatar"
                                 className="w-full h-full object-cover"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5WQs5AcsGU5iEJYEdetO1a1E9jyhOFoI667C-RD0wQEHeejEfCv47tosiwIb8I7ziyt54R_f-rgG2sLBHqzSRXSN5Oxpc3cMM8BsLGvrAcPe7mGEV1gmF4F8jqXFgAGHC5L26aYoV5NxyxQJ3M8zSSpAoLEcDVK_C6eawQue2b4zkSfgYHob9kS9lBcfnnR_3raNLupAnQXZmDfbFkxrzxf4Z2qTfwpKxQHGkaP5HOK7nqmfxz0EHGmWCwsxTmnP0hhEsjUn_XF0"
+                                src={user?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Elena"}
                             />
                         </div>
                     </div>
@@ -39,248 +60,140 @@ export default function ConsultantDashboard() {
             <main className="flex-1 p-8 overflow-y-auto">
                 <div className="max-w-6xl mx-auto">
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                        <div className="bg-surface-light p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
-                            <div className="size-14 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+                        <div className="bg-surface-light p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5 transition-all hover:shadow-md">
+                            <div className="size-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
                                 <span className="material-symbols-outlined text-3xl">
-                                    attach_money
+                                    payments
                                 </span>
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1">
-                                    Hourly Rate
+                                <p className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">
+                                    Account Balance
                                 </p>
-                                <p className="text-2xl font-black text-text-main">£185.00</p>
-                                <p className="text-xs text-primary font-bold mt-1">
-                                    +5% from last month
+                                <p className="text-2xl font-black text-text-main italic">
+                                    £{(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
                         </div>
-                        <div className="bg-surface-light p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
-                            <div className="size-14 rounded-xl bg-slate-600/10 flex items-center justify-center text-text-main">
+                        <div className="bg-surface-light p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5 transition-all hover:shadow-md">
+                            <div className="size-14 rounded-2xl bg-slate-800 flex items-center justify-center text-white shadow-lg">
                                 <span className="material-symbols-outlined text-3xl">bolt</span>
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1">
-                                    Strategic Impact Score
+                                <p className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">
+                                    Strategic Influence
                                 </p>
                                 <div className="flex items-baseline gap-1">
-                                    <p className="text-2xl font-black text-text-main">94</p>
-                                    <span className="text-xs text-text-secondary font-bold">
-                                        / 100
-                                    </span>
-                                </div>
-                                <div className="w-24 h-1.5 bg-slate-200 rounded-full mt-2 overflow-hidden">
-                                    <div
-                                        className="h-full bg-primary"
-                                        style={{ width: "94%" }}
-                                    ></div>
+                                    <p className="text-2xl font-black text-text-main italic">94</p>
+                                    <span className="text-[10px] text-text-secondary font-black italic">/ 100</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-surface-light p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5 lg:col-span-1">
-                            <div className="size-14 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                        <div className="bg-surface-light p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5 transition-all hover:shadow-md lg:col-span-1">
+                            <div className="size-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
                                 <span className="material-symbols-outlined text-3xl">
                                     event_available
                                 </span>
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1">
-                                    Active Sessions
+                                <p className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">
+                                    Upcoming Audits
                                 </p>
-                                <p className="text-2xl font-black text-text-main">12</p>
-                                <p className="text-xs text-text-secondary font-medium mt-1">
-                                    Next: Today, 2:00 PM
+                                <p className="text-2xl font-black text-text-main italic">
+                                    {consultancySessions.length}
                                 </p>
                             </div>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                        {/* Calendar Section */}
+                        {/* Session List */}
                         <div className="xl:col-span-2 space-y-6">
-                            <div className="bg-surface-light rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div className="bg-surface-light rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                                 <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-                                    <h3 className="font-bold text-text-main flex items-center gap-2">
+                                    <h3 className="font-black text-text-main uppercase tracking-widest flex items-center gap-2 text-sm">
                                         <span className="material-symbols-outlined text-primary">
-                                            calendar_month
+                                            assignment_turned_in
                                         </span>
-                                        Session Calendar
+                                        Available Consultations
                                     </h3>
-                                    <div className="flex items-center gap-2">
-                                        <button className="p-1 hover:bg-slate-50 rounded">
-                                            <span className="material-symbols-outlined text-xl">
-                                                chevron_left
-                                            </span>
-                                        </button>
-                                        <span className="text-sm font-bold text-text-main">
-                                            October 2024
-                                        </span>
-                                        <button className="p-1 hover:bg-slate-50 rounded">
-                                            <span className="material-symbols-outlined text-xl">
-                                                chevron_right
-                                            </span>
-                                        </button>
-                                    </div>
+                                    <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full uppercase">
+                                        Live Feed
+                                    </span>
                                 </div>
-                                <div className="p-6">
-                                    <div className="grid grid-cols-7 border-t border-l border-slate-200">
-                                        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                                            (day) => (
-                                                <div
-                                                    key={day}
-                                                    className="p-2 border-r border-b border-slate-200 bg-slate-50 text-[10px] font-black text-text-secondary uppercase text-center"
-                                                >
-                                                    {day}
+                                <div className="p-6 space-y-4">
+                                    {consultancySessions.length > 0 ? (
+                                        consultancySessions.map((session: Task) => (
+                                            <div key={session.id} className="p-5 border border-slate-100 rounded-2xl hover:border-primary/20 transition-all flex items-center justify-between group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="size-12 rounded-xl bg-slate-50 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                                                        <span className="material-symbols-outlined">analytics</span>
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-bold text-text-main text-sm">{session.title}</h4>
+                                                        <p className="text-[10px] text-text-secondary font-medium uppercase tracking-tighter mt-0.5">
+                                                            {(typeof session.category === 'string' ? session.category : session.category?.name) || 'General Finance'} • {session.estimatedTime || '60m'}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                            )
-                                        )}
-                                        {/* Calendar Days */}
-                                        {[27, 28, 29, 30].map((d) => (
-                                            <div
-                                                key={d}
-                                                className="h-24 p-2 border-r border-b border-slate-200 text-sm text-slate-300"
-                                            >
-                                                {d}
+                                                <div className="text-right">
+                                                    <p className="text-lg font-black text-text-main italic">£{Number(session.budget).toLocaleString()}</p>
+                                                    <button className="text-[9px] font-black text-primary uppercase tracking-widest mt-1 hover:underline">
+                                                        Accept Session
+                                                    </button>
+                                                </div>
                                             </div>
-                                        ))}
-                                        {[1, 2, 3, 4].map((d) => (
-                                            <div
-                                                key={d}
-                                                className="h-24 p-2 border-r border-b border-slate-200 text-sm text-text-main font-bold"
-                                            >
-                                                {d}
-                                            </div>
-                                        ))}
-                                        <div className="h-24 p-2 border-r border-b border-slate-200 text-sm text-text-main font-bold bg-primary/5 ring-1 ring-inset ring-primary">
-                                            5
-                                            <div className="mt-1 px-1.5 py-0.5 bg-primary text-[9px] text-white rounded font-bold truncate">
-                                                Strategy Call: Nike
-                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="py-12 text-center">
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">No active consultancy sessions found.</p>
                                         </div>
-                                        <div className="h-24 p-2 border-r border-b border-slate-200 text-sm text-text-main font-bold">
-                                            6
-                                        </div>
-                                        <div className="h-24 p-2 border-r border-b border-slate-200 text-sm text-text-main font-bold">
-                                            7
-                                            <div className="mt-1 px-1.5 py-0.5 bg-slate-800 text-[9px] text-white rounded font-bold truncate">
-                                                Audit: Tesla
-                                            </div>
-                                        </div>
-                                        {[8, 9, 10].map((d) => (
-                                            <div
-                                                key={d}
-                                                className="h-24 p-2 border-r border-b border-slate-200 text-sm text-text-main font-bold"
-                                            >
-                                                {d}
-                                            </div>
-                                        ))}
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Upcoming Calls Sidebar */}
+                        {/* Recent Performance Sidebar */}
                         <div className="space-y-6">
-                            <div className="bg-surface-light rounded-2xl border border-slate-200 shadow-sm p-6">
-                                <h3 className="font-bold text-text-main mb-6 flex items-center justify-between">
-                                    <span>Upcoming Calls</span>
-                                    <a
-                                        href="#"
-                                        className="text-xs text-primary hover:underline"
-                                    >
-                                        View All
-                                    </a>
-                                </h3>
-                                <div className="space-y-4">
-                                    {/* Call 1 */}
-                                    <div className="p-4 bg-background-light rounded-xl border border-slate-200 hover:border-primary/30 transition-colors">
-                                        <div className="flex items-center gap-3 mb-3">
-                                            <div className="size-10 rounded-full overflow-hidden border border-white shadow-sm">
-                                                <img
-                                                    alt="Client"
-                                                    className="w-full h-full object-cover"
-                                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3q-tVF51umLMdMcKNDrIm3bGoG6vydb7mgaQvqi6T9sZxjtu61Y3nn8lqZZJgnabr9l-gOmQEYnyw2bM05ukWpuBEVLMm9vTl2BJrK_Pdjv3QDEnK-2KvADGCPwS2Z-BhLBA_q3inhyhB-8IHHnf1_Fugmn2IWJsfxCddx2zrn92TrTfmRK6ksuL_L1nDHozZZtN63DxOoOheMb8EXPuPCD9GyveiLfMNfaw7cE2C11RBqAFd44KDFPcd-NTJPkQGAkC93YgztWY"
-                                                />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-text-main">
-                                                    Marcus Aurelius
-                                                </p>
-                                                <p className="text-[10px] text-text-secondary font-medium">
-                                                    Chief Strategy Officer
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between text-xs">
-                                            <div className="flex items-center gap-1.5 text-text-main font-semibold">
-                                                <span className="material-symbols-outlined text-sm text-primary">
-                                                    schedule
-                                                </span>
-                                                Today, 2:00 PM
-                                            </div>
-                                            <button className="px-3 py-1.5 bg-primary text-white font-bold rounded-lg text-[10px] hover:opacity-90">
-                                                Join Call
-                                            </button>
-                                        </div>
+                            <div className="bg-surface-light rounded-3xl border border-slate-200 shadow-sm p-8">
+                                <h3 className="font-black text-text-main uppercase tracking-widest text-sm mb-6">Expertise Level</h3>
+                                <div className="flex justify-between items-end mb-4">
+                                    <div>
+                                        <span className="text-5xl font-black italic text-primary">T-1</span>
+                                        <p className="text-[10px] text-text-secondary font-black uppercase mt-1">Tier Ranking</p>
                                     </div>
-
-                                    {/* Call 2 */}
-                                    <div className="p-4 bg-background-light rounded-xl border border-slate-200 hover:border-primary/30 transition-colors">
-                                        <div className="flex items-center gap-3 mb-3">
-                                            <div className="size-10 rounded-full overflow-hidden border border-white shadow-sm">
-                                                <img
-                                                    alt="Client"
-                                                    className="w-full h-full object-cover"
-                                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDivQadxsYbT851NoYSMsRiZgH_zBwWB3nKAli1RbLbQh54NF9BtWXbvxMC2qOaYhvQRBLgeahEOU2gdjqfJ-QIBaCd5GUH8lQ7oU8ha1dvFg1f78a1ET_3QOTs3RBK4x8w8ZieeIGxbfnh7CCzD0SbgHsL-JhLyG66IYxH69KSMAzuZe8IR0Tvc6cMyyQYgT0csSrf4kCecN87UdnWEKN0JV_-iCog6rOms0oyrivnwpfdjEZf1fwpblXzm8rei21lym1O2LcWnqM"
-                                                />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-text-main">
-                                                    Elena Rodriguez
-                                                </p>
-                                                <p className="text-[10px] text-text-secondary font-medium">
-                                                    Founder, GreenTech
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between text-xs">
-                                            <div className="flex items-center gap-1.5 text-text-secondary font-semibold">
-                                                <span className="material-symbols-outlined text-sm text-primary">
-                                                    schedule
-                                                </span>
-                                                Tomorrow, 10:00 AM
-                                            </div>
-                                            <button className="px-3 py-1.5 border border-slate-300 text-text-main font-bold rounded-lg text-[10px] hover:bg-white">
-                                                Details
-                                            </button>
-                                        </div>
+                                    <div className="text-right">
+                                        <span className="text-[10px] font-bold text-text-secondary uppercase block">Experience</span>
+                                        <span className="text-sm font-black text-text-main italic">4.9/5.0 Stars</span>
                                     </div>
+                                </div>
+                                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary" style={{ width: '92%' }}></div>
                                 </div>
                             </div>
 
                             {/* Quick Actions */}
-                            <div className="bg-slate-800 rounded-2xl p-6 text-white shadow-lg">
-                                <h3 className="font-bold text-sm mb-4">Quick Actions</h3>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button className="flex flex-col items-center gap-2 p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-colors">
-                                        <span className="material-symbols-outlined text-primary">
-                                            add_box
-                                        </span>
-                                        <span className="text-[10px] font-bold">New Session</span>
-                                    </button>
-                                    <button className="flex flex-col items-center gap-2 p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-colors">
-                                        <span className="material-symbols-outlined text-primary">
-                                            description
-                                        </span>
-                                        <span className="text-[10px] font-bold">Reports</span>
-                                    </button>
+                            <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden group">
+                                <div className="relative z-10">
+                                    <h3 className="font-black text-sm uppercase tracking-widest mb-6">Consultant Actions</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button className="flex flex-col items-center gap-2 p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-white/10">
+                                            <span className="material-symbols-outlined text-primary text-2xl">add_box</span>
+                                            <span className="text-[9px] font-black uppercase tracking-tighter">New Slot</span>
+                                        </button>
+                                        <button className="flex flex-col items-center gap-2 p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-white/10">
+                                            <span className="material-symbols-outlined text-primary text-2xl">description</span>
+                                            <span className="text-[9px] font-black uppercase tracking-tighter">Reports</span>
+                                        </button>
+                                    </div>
                                 </div>
+                                <div className="absolute -bottom-10 -right-10 size-40 bg-primary/20 rounded-full blur-3xl group-hover:scale-125 transition-transform"></div>
                             </div>
                         </div>
                     </div>
                 </div>
             </main>
-        </>
+        </div>
     );
 }

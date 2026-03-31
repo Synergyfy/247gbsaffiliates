@@ -90,10 +90,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
                 <div className="mt-auto p-8 border-t border-slate-50">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-                            {user?.name?.substring(0, 2).toUpperCase() || 'JD'}
+                            {(user?.name || 'User').substring(0, 2).toUpperCase()}
                         </div>
                         <div className="overflow-hidden">
-                            <p className="text-sm font-bold truncate text-text-main">{user?.name || 'John Doe'}</p>
+                            <p className="text-sm font-bold truncate text-text-main">{user?.name || 'User'}</p>
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">{roleTitle}</p>
                         </div>
                     </div>

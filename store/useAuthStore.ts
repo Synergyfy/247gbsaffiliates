@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User } from '@/lib/mockApi';
+import { User } from '@/types/auth';
 
 interface AuthState {
   user: User | null;
@@ -18,17 +18,27 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       token: null,
 
-      setAuth: (user, token) => set({ 
-        user, 
-        token, 
-        isAuthenticated: true 
-      }),
+      setAuth: (user, token) => {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('auth_token', token);
+        }
+        set({ 
+          user, 
+          token, 
+          isAuthenticated: true 
+        });
+      },
 
-      clearAuth: () => set({ 
-        user: null, 
-        token: null, 
-        isAuthenticated: false 
-      }),
+      clearAuth: () => {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth_token');
+        }
+        set({ 
+          user: null, 
+          token: null, 
+          isAuthenticated: false 
+        });
+      },
 
       updateUser: (userData) => set((state) => ({
         user: state.user ? { ...state.user, ...userData } : null

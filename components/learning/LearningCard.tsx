@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { LearningResource } from '@/lib/mockApi';
+import { LearningResource } from '@/types/onboarding';
 
 interface LearningCardProps {
     resource: LearningResource;

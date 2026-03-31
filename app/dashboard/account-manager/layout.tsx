@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import { UserMenu } from "@/components/dashboard/UserMenu";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function AccountManagerLayout({
     children,
@@ -13,6 +14,12 @@ export default function AccountManagerLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const { user } = useAuthStore();
+    
+    // Fallback initials and name
+    const userName = user?.name || "Sarah Jenkins";
+    const userRole = user?.role || "Account Manager";
+    const userInitials = user?.name ? user.name.split(' ').map(n => n[0]).join('') : "SJ";
 
     const sidebarLinks = [
         {
@@ -54,7 +61,7 @@ export default function AccountManagerLayout({
                     })}
                 </nav>
                 <div className="p-4 border-t border-slate-100">
-                    <UserMenu name="Sarah Jenkins" role="Account Manager" initials="SJ" />
+                    <UserMenu name={userName} role={userRole} initials={userInitials} />
                 </div>
             </aside>
 

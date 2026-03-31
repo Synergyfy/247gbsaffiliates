@@ -3,34 +3,24 @@
 import Link from "next/link";
 import AuthSidebar from "@/components/auth/AuthSidebar";
 import AuthInput from "@/components/auth/AuthInput";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function LoginPage() {
-    const router = useRouter();
-    const [isLoading, setIsLoading] = useState<string | null>(null);
-    const { setRole, setUserName } = useOnboardingStore();
+    const { login, isLoggingIn, loginError } = useAuth();
 
-    const handleDemoLogin = async (role: 'agent' | 'account-manager' | 'consultant' | 'admin', email: string) => {
-        setIsLoading(role);
-
-        // Simulating login process
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        // Set store values for demo
-        setRole(role);
-        setUserName(role === 'account-manager' ? 'Sarah Jenkins' : role === 'consultant' ? 'Sarah Jenkins' : role === 'admin' ? 'Super Admin' : 'John Doe');
-
-        // Redirect based on role
-        if (role === 'agent') {
-            router.push('/dashboard/agent');
-        } else if (role === 'admin') {
-            router.push('/dashboard/admin');
-        } else {
-            router.push(`/dashboard/${role}`);
+    const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const email = formData.get("email") as string;
+        const password = formData.get("password") as string;
+        
+        try {
+            await login({ email, password });
+        } catch (error) {
+            console.error("Login failed", error);
         }
     };
+
 
     return (
         <div className="min-h-screen flex bg-white font-display">
@@ -63,9 +53,15 @@ export default function LoginPage() {
                         <p className="text-text-secondary font-medium">Enter your credentials to access your professional account.</p>
                     </div>
 
-                    <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); router.push('/dashboard/agent'); }}>
+                    <form className="space-y-6" onSubmit={handleLogin}>
+                        {loginError && (
+                            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-medium">
+                                {(loginError as any)?.response?.data?.message || "Invalid credentials"}
+                            </div>
+                        )}
                         <AuthInput
                             id="email"
+                            name="email"
                             label="Email Address"
                             type="email"
                             placeholder="name@company.com"
@@ -88,6 +84,7 @@ export default function LoginPage() {
                                 </div>
                                 <input
                                     id="password"
+                                    name="password"
                                     type="password"
                                     placeholder="••••••••"
                                     className="block w-full pl-10 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-text-main placeholder-gray-400 transition-all outline-none font-medium"
@@ -112,10 +109,11 @@ export default function LoginPage() {
 
                         <button
                             type="submit"
-                            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-4 rounded-xl transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2 group active:scale-[0.98] tracking-widest font-display"
+                            disabled={isLoggingIn}
+                            className={`w-full bg-primary hover:bg-primary-hover text-white font-bold py-4 rounded-xl transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2 group active:scale-[0.98] tracking-widest font-display ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : ''}`}
                         >
-                            Sign In
-                            <span className="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                            {isLoggingIn ? 'Signing In...' : 'Sign In'}
+                            {!isLoggingIn && <span className="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">arrow_forward</span>}
                         </button>
                     </form>
 
@@ -146,79 +144,6 @@ export default function LoginPage() {
                         </button>
                     </div>
 
-                    {/* one-tap login */}
-                    <div className="mt-8">
-                        <div className="flex items-center gap-2 mb-4 justify-center">
-                            <span className="material-symbols-outlined text-primary text-xl">bolt</span>
-                            <h3 className="text-sm font-bold text-text-main uppercase tracking-wider">One-Tap Demo Login</h3>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            {/* Agent */}
-                            <button
-                                onClick={() => handleDemoLogin('agent', 'demo.agent@247gbs.com')}
-                                disabled={isLoading !== null}
-                                className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${isLoading === 'agent' ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-primary/30 hover:bg-slate-50'}`}
-                            >
-                                <div className="size-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-2">
-                                    {isLoading === 'agent' ? (
-                                        <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                                    ) : (
-                                        <span className="material-symbols-outlined">support_agent</span>
-                                    )}
-                                </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Agent</span>
-                            </button>
-
-                            {/* Manager */}
-                            <button
-                                onClick={() => handleDemoLogin('account-manager', 'demo.manager@247gbs.com')}
-                                disabled={isLoading !== null}
-                                className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${isLoading === 'account-manager' ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-primary/30 hover:bg-slate-50'}`}
-                            >
-                                <div className="size-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mb-2">
-                                    {isLoading === 'account-manager' ? (
-                                        <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                                    ) : (
-                                        <span className="material-symbols-outlined">badge</span>
-                                    )}
-                                </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Manager</span>
-                            </button>
-
-                            {/* Consultant */}
-                            <button
-                                onClick={() => handleDemoLogin('consultant', 'demo.consultant@247gbs.com')}
-                                disabled={isLoading !== null}
-                                className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${isLoading === 'consultant' ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-primary/30 hover:bg-slate-50'}`}
-                            >
-                                <div className="size-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2">
-                                    {isLoading === 'consultant' ? (
-                                        <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                                    ) : (
-                                        <span className="material-symbols-outlined">school</span>
-                                    )}
-                                </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Consultant</span>
-                            </button>
-
-                            {/* Admin (New) */}
-                            <button
-                                onClick={() => handleDemoLogin('admin', 'admin@247gbs.com')}
-                                disabled={isLoading !== null}
-                                className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${isLoading === 'admin' ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-primary/30 hover:bg-slate-50'}`}
-                            >
-                                <div className="size-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-2">
-                                    {isLoading === 'admin' ? (
-                                        <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                                    ) : (
-                                        <span className="material-symbols-outlined">admin_panel_settings</span>
-                                    )}
-                                </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Admin</span>
-                            </button>
-                        </div>
-                    </div>
 
                     <p className="mt-10 text-center text-text-secondary text-sm font-medium">
                         Don't have an account?{" "}

@@ -51,6 +51,7 @@ interface FormSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> 
     register: UseFormRegisterReturn;
     error?: FieldError;
     options: { value: string; label: string }[];
+    helperText?: string;
 }
 
 export const FormSelect: React.FC<FormSelectProps> = ({
@@ -59,6 +60,7 @@ export const FormSelect: React.FC<FormSelectProps> = ({
     error,
     options,
     required,
+    helperText,
     ...props
 }) => {
     return (
@@ -85,6 +87,9 @@ export const FormSelect: React.FC<FormSelectProps> = ({
                     <span className="material-symbols-outlined">expand_more</span>
                 </div>
             </div>
+            {helperText && !error && (
+                <p className="text-xs text-slate-400 ml-1">{helperText}</p>
+            )}
             {error && (
                 <p className="text-xs text-red-500 font-bold ml-1 flex items-center gap-1 animate-in slide-in-from-top-1">
                     <span className="material-symbols-outlined text-[14px]">error</span>

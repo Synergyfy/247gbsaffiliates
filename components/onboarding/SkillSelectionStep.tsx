@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { mockApi } from '@/lib/mockApi';
+import apiClient from '@/lib/apiClient';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
@@ -25,10 +25,13 @@ export const SkillSelectionStep: React.FC = () => {
 
     const { data: skills, isLoading } = useQuery({
         queryKey: ['skills'],
-        queryFn: mockApi.getSkills,
+        queryFn: async () => {
+            const response = await apiClient.get('/skills');
+            return response.data as { id: string; name: string }[];
+        },
     });
 
-    const filteredSkills = skills?.filter(skill =>
+    const filteredSkills = skills?.filter((skill: { name: string }) =>
         skill.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -83,7 +86,7 @@ export const SkillSelectionStep: React.FC = () => {
                 </div>
 
                 <div className="flex flex-wrap gap-3 mb-8">
-                    {filteredSkills?.map((skill) => {
+                    {filteredSkills?.map((skill: { id: string; name: string }) => {
                         const isSelected = selectedSkills.includes(skill.id);
                         return (
                             <button

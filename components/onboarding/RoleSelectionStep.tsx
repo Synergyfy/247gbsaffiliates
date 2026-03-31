@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
-import { UserRole } from '@/lib/mockApi';
+import { UserRole } from '@/types/auth';
 
 interface RoleOption {
     id: UserRole;
@@ -19,7 +19,7 @@ const roles: RoleOption[] = [
         icon: 'person_search',
     },
     {
-        id: 'account-manager',
+        id: 'account_manager',
         title: 'Account Manager',
         description: 'Ideal for agency leads managing multiple agents, complex client portfolios, and high-volume transactions.',
         icon: 'business_center',

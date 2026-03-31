@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
-import { mockApi, LearningResource } from '@/lib/mockApi';
+import { useLearningResources } from '@/hooks/useLearningResources';
 import { CountdownTimer } from '@/components/learning/CountdownTimer';
 import { LearningCard } from '@/components/learning/LearningCard';
 import { ProgressTracker } from '@/components/learning/ProgressTracker';
@@ -17,8 +16,7 @@ export default function LearningPage() {
         role,
         quizResult,
         userName,
-        retakeAvailableAt,
-        performanceBreakdown
+        retakeAvailableAt
     } = useOnboardingStore();
 
     const [completedResources, setCompletedResources] = useState<Set<string>>(new Set());
@@ -26,11 +24,7 @@ export default function LearningPage() {
     const [canRetake, setCanRetake] = useState(false);
 
     // Fetch learning resources
-    const { data: resources, isLoading } = useQuery({
-        queryKey: ['learning-resources', role],
-        queryFn: () => mockApi.getLearningResources(role!),
-        enabled: !!role,
-    });
+    const { data: resources, isLoading } = useLearningResources(role!);
 
     // Check if user can retake quiz
     useEffect(() => {
@@ -117,26 +111,22 @@ export default function LearningPage() {
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                             <div>
                                 <h2 className="text-2xl font-bold text-text-main mb-2">
-                                    Previous Assessment: {quizResult.score}%
+                                    Previous Assessment: {quizResult.percentage}%
                                 </h2>
                                 <p className="text-text-secondary">
-                                    You need 50% or higher to pass. Review the resources below to improve your score.
+                                    Status: <span className={`font-bold ${quizResult.band === 'Pass' ? 'text-primary' : quizResult.band === 'Partial' ? 'text-orange-400' : 'text-red-500'}`}>{quizResult.band}</span>. You need 50% or higher to pass. Review the resources below to improve your score.
                                 </p>
                             </div>
-                            {performanceBreakdown && performanceBreakdown.length > 0 && (
-                                <div className="flex gap-4">
-                                    {performanceBreakdown.slice(0, 2).map((item, index) => (
-                                        <div key={index} className="text-center">
-                                            <div className={`text-2xl font-bold ${item.score < 50 ? 'text-red-500' : item.score < 70 ? 'text-orange-400' : 'text-primary'}`}>
-                                                {item.score}%
-                                            </div>
-                                            <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
-                                                {item.category}
-                                            </div>
-                                        </div>
-                                    ))}
+                            <div className="flex gap-4">
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-primary">
+                                        {quizResult.score} / {quizResult.maxScore}
+                                    </div>
+                                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
+                                        Raw Score
+                                    </div>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     </div>
                 )}

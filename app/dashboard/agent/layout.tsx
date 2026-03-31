@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { UserMenu } from "@/components/dashboard/UserMenu";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function AgentLayout({
     children,
@@ -12,6 +13,20 @@ export default function AgentLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const { user } = useAuthStore();
+    
+    // Derived user fields
+    const name = user?.name || "John Doe";
+    const initials = name.substring(0, 2).toUpperCase();
+    
+    let roleTitle = 'Agent Level 1';
+    if (user?.roles?.includes('account-manager') || user?.role === 'account_manager') {
+        roleTitle = 'Account Manager';
+    } else if (user?.roles?.includes('consultant') || user?.role === 'consultant') {
+        roleTitle = 'Consultant';
+    } else if (user?.roles?.includes('admin') || user?.role === 'admin') {
+        roleTitle = 'Administrator';
+    }
 
     const sidebarLinks = [
         { name: "Dashboard", href: "/dashboard/agent", icon: "dashboard" },
@@ -56,7 +71,7 @@ export default function AgentLayout({
                     </nav>
                 </div>
                 <div className="mt-auto p-4 border-t border-slate-50">
-                    <UserMenu name="John Doe" role="Agent Level 1" initials="JD" />
+                    <UserMenu name={name} role={roleTitle} initials={initials} />
                 </div>
             </aside>
 

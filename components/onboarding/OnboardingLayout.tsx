@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
-import { UserRole } from '@/lib/mockApi';
+import { UserRole } from '@/types/auth';
 
 interface OnboardingLayoutProps {
     children: React.ReactNode;

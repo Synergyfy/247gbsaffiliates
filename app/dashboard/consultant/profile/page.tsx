@@ -1,66 +1,124 @@
-"use client";
+'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useProfile } from '@/hooks/useProfile';
 
 export default function ConsultantProfilePage() {
+    const { user, updateProfile, isUpdating } = useProfile();
+    const [formData, setFormData] = useState({
+        name: user?.name || '',
+        bio: user?.bio || 'Senior Strategic Advisor with expert-level proficiency in tactical analysis and platform optimization.',
+        skills: user?.skills || ['Strategic Planning', 'Business Auditing', 'Tactical Growth'],
+    });
+
+    useEffect(() => {
+        if (user) {
+            setFormData({
+                name: user.name || '',
+                bio: user.bio || 'Senior Strategic Advisor with expert-level proficiency in tactical analysis and platform optimization.',
+                skills: user.skills || ['Strategic Planning', 'Business Auditing', 'Tactical Growth'],
+            });
+        }
+    }, [user]);
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await updateProfile(formData);
+            alert('Strategic profile updated successfully!');
+        } catch (error) {
+            alert('Failed to update strategic profile.');
+        }
+    };
+
     return (
-        <div className="p-8">
-            <header className="mb-8">
-                <h1 className="text-2xl font-black text-text-main">Consultant Profile</h1>
-                <p className="text-text-secondary text-sm font-medium">Manage your public profile and expertise.</p>
+        <div className="p-8 lg:p-10 max-w-5xl mx-auto w-full font-display">
+            <header className="mb-10">
+                <h1 className="text-3xl font-black text-text-main uppercase tracking-tighter italic">Strategic Profile</h1>
+                <p className="text-text-secondary text-sm font-medium italic">Manage your public expert identity and tactical expertise.</p>
             </header>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 max-w-3xl">
-                <div className="flex items-center gap-6 mb-8">
-                    <div className="size-24 rounded-full bg-slate-200 border-4 border-white shadow-lg overflow-hidden">
-                        <img
-                            alt="Avatar"
-                            className="w-full h-full object-cover"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5WQs5AcsGU5iEJYEdetO1a1E9jyhOFoI667C-RD0wQEHeejEfCv47tosiwIb8I7ziyt54R_f-rgG2sLBHqzSRXSN5Oxpc3cMM8BsLGvrAcPe7mGEV1gmF4F8jqXFgAGHC5L26aYoV5NxyxQJ3M8zSSpAoLEcDVK_C6eawQue2b4zkSfgYHob9kS9lBcfnnR_3raNLupAnQXZmDfbFkxrzxf4Z2qTfwpKxQHGkaP5HOK7nqmfxz0EHGmWCwsxTmnP0hhEsjUn_XF0"
-                        />
+            <div className="bg-surface-light rounded-[2.5rem] border border-slate-200 shadow-sm p-10">
+                <div className="flex items-center gap-10 mb-12">
+                    <div className="relative group">
+                        <div className="size-32 rounded-[2.5rem] bg-slate-800 border-4 border-white shadow-2xl overflow-hidden flex items-center justify-center text-white text-3xl font-black italic">
+                            {user?.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <button className="absolute -bottom-2 -right-2 size-10 bg-primary text-white rounded-2xl shadow-lg border-4 border-white flex items-center justify-center hover:scale-110 transition-all">
+                            <span className="material-symbols-outlined text-sm">photo_camera</span>
+                        </button>
                     </div>
                     <div>
-                        <button className="bg-slate-100 hover:bg-slate-200 text-text-main font-bold px-4 py-2 rounded-lg text-sm transition-colors">
-                            Change Photo
-                        </button>
+                        <h2 className="text-2xl font-black text-text-main italic">{user?.name}</h2>
+                        <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mt-1 italic border-b border-primary/20 pb-1 w-fit">Tactical Consultant ID: #{user?.id.slice(0, 8)}</p>
                     </div>
                 </div>
 
-                <form className="space-y-6">
-                    <div className="grid grid-cols-2 gap-6">
+                <form onSubmit={handleSave} className="space-y-8">
+                    <div className="grid grid-cols-1 gap-8">
                         <div>
-                            <label className="block text-xs font-bold text-text-secondary uppercase tracking-widest mb-2">First Name</label>
-                            <input type="text" defaultValue="Sarah" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-text-secondary uppercase tracking-widest mb-2">Last Name</label>
-                            <input type="text" defaultValue="Jenkins" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
+                            <label className="block text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-3">Professional Nomenclature</label>
+                            <input 
+                                type="text" 
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                className="w-full px-6 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-sm focus:ring-4 focus:ring-primary/5 focus:border-primary outline-none transition-all italic" 
+                            />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-text-secondary uppercase tracking-widest mb-2">Expertise</label>
-                        <div className="flex flex-wrap gap-2 mb-3">
-                            {['Strategic Planning', 'Business Auditing', 'Growth Marketing'].map((skill) => (
-                                <span key={skill} className="bg-primary/10 text-primary text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-2">
+                        <label className="block text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-3">Tactical Expertise Index</label>
+                        <div className="flex flex-wrap gap-3 mb-4">
+                            {formData.skills.map((skill) => (
+                                <span key={skill} className="bg-slate-900 text-white text-[10px] font-black px-4 py-2 rounded-xl flex items-center gap-2 italic tracking-widest border border-slate-800 shadow-md">
                                     {skill}
-                                    <button type="button" className="hover:text-red-500">
-                                        <span className="material-symbols-outlined text-sm">close</span>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setFormData({ ...formData, skills: formData.skills.filter(s => s !== skill) })}
+                                        className="hover:text-primary transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-xs">close</span>
                                     </button>
                                 </span>
                             ))}
                         </div>
-                        <input type="text" placeholder="Add a skill..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                placeholder="Attribute new skill matrix..." 
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const val = (e.target as HTMLInputElement).value.trim();
+                                        if (val && !formData.skills.includes(val)) {
+                                            setFormData({ ...formData, skills: [...formData.skills, val] });
+                                            (e.target as HTMLInputElement).value = '';
+                                        }
+                                    }
+                                }}
+                                className="w-full px-6 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-xs focus:ring-4 focus:ring-primary/5 focus:border-primary outline-none transition-all italic placeholder:text-slate-300" 
+                            />
+                        </div>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-text-secondary uppercase tracking-widest mb-2">Bio</label>
-                        <textarea rows={4} defaultValue="Senior Business Consultant with over 10 years of experience in scaling enterprise operations." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
+                        <label className="block text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-3">Operational Directive / Bio</label>
+                        <textarea 
+                            rows={5} 
+                            value={formData.bio}
+                            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                            className="w-full px-6 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-sm focus:ring-4 focus:ring-primary/5 focus:border-primary outline-none transition-all italic leading-relaxed" 
+                        />
                     </div>
 
-                    <div className="pt-4 border-t border-slate-100 flex justify-end">
-                        <button className="bg-primary text-white font-bold px-6 py-3 rounded-xl hover:bg-primary-hover shadow-lg shadow-primary/20 transition-all">
-                            Save Changes
+                    <div className="pt-6 border-t border-slate-100 flex justify-end">
+                        <button 
+                            type="submit"
+                            disabled={isUpdating}
+                            className="bg-primary text-white font-black text-xs uppercase tracking-[0.2em] px-10 py-4 rounded-2xl hover:bg-primary-hover hover:scale-105 active:scale-95 shadow-xl shadow-primary/20 transition-all disabled:opacity-50"
+                        >
+                            {isUpdating ? 'Executing Tactical Update...' : 'Commit Strategic Profile'}
                         </button>
                     </div>
                 </form>
