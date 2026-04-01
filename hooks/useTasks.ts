@@ -15,18 +15,26 @@ export interface Task {
   requiredSkills?: string[];
 }
 
-export const useTasks = () => {
+export interface TaskFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  categoryId?: string;
+  assignedAgentId?: string;
+}
+
+export const useTasks = (filters: TaskFilters = {}) => {
   const queryClient = useQueryClient();
 
   const { data: tasks, isLoading } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: ['tasks', filters],
     queryFn: async () => {
-      const response = await apiClient.get('/tasks');
+      const response = await apiClient.get('/tasks', { params: filters });
       const data = response.data;
       if (Array.isArray(data)) return data as Task[];
-      if (data && Array.isArray(data.data)) return data.data as Task[];
-      if (data && Array.isArray(data.tasks)) return data.tasks as Task[];
       if (data && Array.isArray(data.items)) return data.items as Task[];
+      if (data && Array.isArray(data.data)) return data.data as Task[];
       return [] as Task[];
     },
   });

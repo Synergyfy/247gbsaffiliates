@@ -30,7 +30,8 @@ export default function AgentLayout({
 
     const sidebarLinks = [
         { name: "Dashboard", href: "/dashboard/agent", icon: "dashboard" },
-        { name: "My Tasks", href: "/dashboard/agent/tasks", icon: "assignment" },
+        { name: "Available Tasks", href: "/dashboard/agent/tasks", icon: "assignment" },
+        { name: "My Missions", href: "/dashboard/agent/my-missions", icon: "rocket_launch" },
         { name: "Earnings", href: "/dashboard/agent/earnings", icon: "account_balance_wallet" },
         { name: "Messages", href: "/dashboard/agent/messages", icon: "chat_bubble" },
         { name: "Settings", href: "/dashboard/agent/settings", icon: "settings" },

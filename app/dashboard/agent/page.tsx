@@ -8,10 +8,12 @@ import { toast } from 'react-toastify';
 
 export default function AgentDashboard() {
     const { user } = useAuthStore();
-    const { tasks, isLoading: isLoadingTasks, acceptTask, isAccepting } = useTasks();
+    const { tasks, isLoading: isLoadingTasks, acceptTask, isAccepting } = useTasks({ status: 'open' });
     const { wallet, transactions, isLoading: isLoadingWallet } = useWallet();
 
-    const campaigns = (tasks || []).filter(t => {
+    const availableTasks = (tasks || []).filter(t => t.status === 'open');
+    
+    const campaigns = availableTasks.filter(t => {
         const catName = typeof t.category === 'object' ? t.category?.name : t.category;
         return t.type?.toLowerCase() === 'campaign' || catName?.toLowerCase() === 'campaign';
     });
@@ -84,8 +86,8 @@ export default function AgentDashboard() {
                         </div>
 
                         <div className="space-y-4">
-                            {tasks && tasks.length > 0 ? (
-                                tasks.map((task: Task) => (
+                            {availableTasks && availableTasks.length > 0 ? (
+                                availableTasks.map((task: Task) => (
                                     <div key={task.id} className="bg-surface-light p-6 rounded-2xl border border-slate-200 transition-all cursor-pointer flex items-center justify-between group hover:shadow-lg hover:-translate-y-0.5">
                                         <div className="flex items-center gap-4">
                                             <div className="size-12 rounded-xl bg-background-light flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
