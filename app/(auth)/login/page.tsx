@@ -20,8 +20,6 @@ export default function LoginPage() {
             console.error("Login failed", error);
         }
     };
-
-
     return (
         <div className="min-h-screen flex bg-white font-display">
             <AuthSidebar
