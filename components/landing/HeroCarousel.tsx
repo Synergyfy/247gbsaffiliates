@@ -93,13 +93,16 @@ export function HeroCarousel() {
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.8 }}
                         >
-                            <Link
-                                href={slides[current].href}
+                            <a
+                                href={`${process.env.NEXT_PUBLIC_MCOM_SOLUTIONS_URL || 'https://mcomsolutions.vercel.app'}/register/affiliate/signup?role=${
+                                    slides[current].role === 'Agents' ? 'agent' :
+                                    slides[current].role === 'Account Managers' ? 'account-manager' : 'consultant'
+                                }`}
                                 className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary-hover text-white rounded-full font-display font-semibold transition-all hover:scale-105 shadow-lg shadow-primary/25"
                             >
                                 {slides[current].cta}
                                 <span className="material-symbols-outlined ml-2">arrow_forward</span>
-                            </Link>
+                            </a>
                         </motion.div>
                     </div>
                 </motion.div>
