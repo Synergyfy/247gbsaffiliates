@@ -1,0 +1,45 @@
+# dependencies
+node_modules
+.pnp
+.pnp.*
+
+# turbo
+.turbo
+
+# build outputs
+dist
+build
+.next
+out
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# test
+coverage
+.nyc_output
+
+# temp
+.tmp
+.temp
+
+# typescript
+*.tsbuildinfo
