@@ -1,0 +1,403 @@
+===========================================================================================
+
+Agents, Account Managers, Consultants — Roles, Onboarding & Qualification
+Purpose: This document captures how Agents, Account Managers, and Consultants should sign up, qualify, and operate inside the MCOMMALL (Listeo) marketplace. 
+1) High-level summary (one-sentence)
+At signup we must identify whether a person is an Agent, Account Manager, or Consultant so the platform can control quality, charge for visibility, route them into training, and show the right features and pay rates.
+2) Role hierarchy (Henry’s model)
+Agent → entry-level, small, focused tasks. (Lowest gate)
+Account Manager → mid-level, coordinates agents, runs campaigns and onboarding. (Higher gate)
+Consultant → top-level expert; advisory, audits, strategy. (Highest gate)
+This simple ladder allows people to grow: Agent → Account Manager → Consultant.
+3) What to show at signup — Form components (build each as a separate Canvas block)
+Create each form component as a separate block so designers/developers can reuse them.
+A. Role selection block (dropdown)
+Label: Which role are you applying for?
+Options: Agent / Account Manager / Consultant
+Note: If user selects Consultant, allow immediate profile creation but flag for verification.
+B. Short skills selector (multi-select)
+Label: Pick your top 2–3 skills
+Display as selectable chips. Limit selection to 2–3.
+Use a pre-defined list (example list below).
+Example skill list (editable by admin):
+Social media setup & posting
+Email marketing basics
+Short product descriptions / copywriting
+ChatGPT / AI content generation
+Simple website checks (speed, links, SEO basics)
+Basic graphic design (banners, thumbnails)
+Customer messaging & support
+Local SEO / listings
+Google Ads basics
+Facebook ads basics
+C. Paid-assignment visibility checkbox
+Label: I want to apply to be visible for paid assignments
+If checked: applicant is placed in the paid supplier review flow.
+D. Quick profile fields (short)
+Full name / Business name
+Email / Phone
+Short bio (50–120 characters)
+Hourly or per-session rate (optional)
+Country / Timezone / Languages
+Portfolio link / sample work
+Upload ID / verification docs (hidden until asked)
+E. CTA buttons (for Canvas and UI)
+Apply to be an Agent → routes to Questionnaire + Quiz flow
+Apply to be an Account Manager → routes to Questionnaire + Quiz flow
+Apply to be a Consultant → immediate profile creation (flagged) + Questionnaire + Quiz for verification
+Why flag Consultants: Henry said consultants can create profiles early so businesses can see them, but they must still pass a verification step before receiving paid assignments.
+4) Short card and full description (put these in listing pages and role details modal)
+For each role we must include two pieces of copy: a short card (50–80 words) and a full description (200–400 words). Add these exact blocks to the UI so listing pages, dropdowns, and modals can call them.
+Agent — Short card (50–80 words)
+Agent — Entry-level specialists who complete focused micro-tasks like social post setup, basic email templates, short product descriptions, quick website checks, or small audits. Agents take a short qualification test to appear in listings. They can opt in to be visible for paid assignments and are paid per task. Ideal for fast, low-cost services.
+Agent — Full description (200–400 words)
+Agents are entry-level service providers focused on quick, repeatable tasks. Their scope includes simple jobs such as setting up a social media post, creating basic email templates, writing short product blurbs, performing a lightweight website check (links, load time hints), or running a small audit. Agents are the platform’s flexible workforce: they complete small assignments quickly and reliably.
+Expectations and deliverables:
+Clear, short task results (one deliverable per assignment).
+Fast turnaround times.
+Follow platform templates and checklists for consistency.
+Qualification and pay:
+Agents must pass a basic qualification quiz to appear in listings.
+Agents can toggle a checkbox to apply for paid assignments; paid visibility is reviewed.
+Payment model is task-based: fixed fee per micro-service or a small hourly rate.
+Support and growth:
+Agents can be invited to training modules when they want to upgrade.
+High-performing Agents can apply/upgrade to Account Manager after reaching platform milestones.
+This role is perfect for people who are building experience, want flexible short work, or provide niche, tactical skills.
+Account Manager — Short card (50–80 words)
+Account Manager — Mid-level professionals who coordinate onboarding, manage teams of agents, plan and run campaigns, and match businesses to services. Account Managers handle client communications, create campaign plans, and deliver measurable results. They have higher pay, need deeper tests and verification, and can act as project leads across the platform.
+Account Manager — Full description (200–400 words)
+Account Managers are the project leads and coordinators who ensure client needs are turned into successful campaigns. They onboard businesses, plan campaign schedules, assign tasks to Agents, and handle day-to-day client communications. Their core job is to manage delivery and quality.
+Responsibilities:
+Client onboarding and intake: gather goals, timelines, assets, and brief the delivery team.
+Campaign planning: design the campaign, assign Agents, set deadlines and checkpoints.
+Team coordination: supervise Agents, review work, and perform quality checks.
+Reporting: deliver simple performance reports and suggested next steps.
+Qualification and pay:
+Account Managers must pass a deeper quiz and may need verification or a portfolio review.
+Payment is higher than Agents; they can charge per-project, per-month retainer, or take a share of campaign revenue.
+Why businesses use them:
+Account Managers reduce friction: businesses get a single point of contact and a predictable delivery plan.
+They are preferred for larger or multi-step projects where coordination matters more than single tasks.
+Account Managers form the platform’s mid-tier professionals and are critical for predictable, repeatable business results.
+Consultant — Short card (50–80 words)
+Consultant — Senior experts who provide business advice, audits, strategic plans, and deep coaching. Consultants can be visible immediately after signup but are flagged for verification. They charge per session or project, deliver high-value recommendations, and are expected to have proven credentials and measurable experience.
+Consultant — Full description (200–400 words)
+Consultants are senior-level professionals who offer high-value services such as business audits, strategy sessions, marketing plans, financial or operational advice, and advanced coaching. Their work is outcome-focused and typically priced higher than other roles.
+Key activities:
+Deep discovery and audits: review a business’s current setup and produce a clear list of changes.
+Strategy and planning: develop step-by-step plans for growth, product launches, or operational improvements.
+Hands-on coaching and session-based work: provide expert time, review deliverables, and help the business implement key changes.
+Qualification and verification:
+Consultants can create a visible profile immediately, but each profile is flagged and enters a verification queue.
+Verification may include document checks, portfolio review, and a live interview or sample session.
+Pricing and payment:
+Consultants usually charge per session, per project, or via a retainer.
+They may also negotiate custom packages for long-term advisory work.
+Why businesses choose Consultants:
+They want senior guidance and measurable change.
+Consultants are used for complex problems where strategic thinking and experienced judgment matter.
+Consultants carry the highest trust on the platform, so the platform must verify credentials and protect businesses by ensuring quality control.
+5) Training & qualification: questionnaire vs quiz (exact steps)
+Henry asked for a two-part approach: a Questionnaire for quick tagging and a Quismatic quiz for real grading. Build both in Canvas as separate pages.
+A. Questionnaire (8–12 short questions)
+Purpose: quick surface data to tag skills, experience levels, and availability. These answers create quick filters and populate the user’s profile tags.
+Suggested questions (multi-choice or short select):
+Which role are you applying for? (Agent / Account Manager / Consultant)
+Pick your top 2–3 skills. (multi-select from the pre-defined list)
+How many years of experience do you have in these skills? (0–1 / 1–3 / 3–5 / 5+)
+What types of services have you delivered? (social posts / emails / copy / SEO / ads / design)
+What is your typical turnaround time for small tasks? (<24h / 24–72h / 3–7 days)
+Are you available for immediate paid assignments? (Yes / No)
+Do you have a portfolio link or sample work? (Yes — provide link / No)
+Do you accept fixed-price micro-tasks? (Yes / No)
+Preferred payment currency? (dropdown)
+Languages you speak fluently (multi-select)
+Result: Store answers as skill tags and quick filters on the profile (e.g., "social-posts", "email-marketing", "fast-turnaround").
+B. Quismatic Quiz (10–20 scored questions)
+Purpose: a scored competency test that decides whether the person can be visible for paid assignments, must take training, or is ready for higher roles.
+Design notes for the quiz engine:
+Each question has a weight and correct answer(s).
+Mix practical multiple-choice and scenario questions (not only theory).
+Randomize question order on retakes.
+Show overall score and band at the end.
+Allow a short explanation for each correct answer in the review screen.
+Provide time limits per question or for the whole quiz (optional).
+Example quiz topics and sample questions:
+Social media setup and posting — e.g., "You need to schedule 5 posts for a launch. Which elements must be included in each post?" (options)
+Email marketing basics — e.g., "What is a good subject line strategy for a promotional email?" (options)
+Writing short product descriptions — e.g., "Which sentence best balances features and benefit?" (choose best)
+Using ChatGPT for content — e.g., "Which prompt results in a better product blurb?" (choose best)
+Simple website checks — e.g., "You find a broken image and slow load time on a product page; which steps do you report?" (scenario)
+Sample scoring bands (customize later):
+85–100%: Pass — Eligible for Consultant / Account Manager application (if other checks pass)
+70–84%: Pass — Eligible for Account Manager / Agent with higher visibility
+50–69%: Partial — Eligible for Agent-level tasks; recommended training modules
+0–49%: Fail — Must complete suggested training before paid visibility
+Outcome actions after quiz:
+Create a score badge on the profile (e.g., "Quismatic: 78% — Account Manager candidate").
+If pass band reached: show "Apply for paid visibility" and route to a verification step.
+If fail or partial: show recommended training modules and an option to retake the quiz after completing training.
+6) Outcome page & badges
+Build an outcome page that shows:
+Final score and band.
+A short explanation of what the score means.
+Recommended training modules (linked)
+Button: Apply for paid visibility (if eligible)
+Button: Retake quiz (only after X days or after completing required modules)
+Awarded badge: show graphical badge and short copy (e.g., "Quismatic Verified — Social Media Basics — 82%").
+Badge examples:
+Quismatic Verified — Agent
+Quismatic Verified — Account Manager
+Quismatic Verified — Consultant Candidate
+7) Developer implementation checklist (every part you will need)
+This is a practical checklist for developers and product owners. Build/check each item.
+User model & database
+ User record: name, contact, timezone, languages
+ Role field: agent/account_manager/consultant
+ Skill tags array
+ Short bio & long bio fields
+ Portfolio links / files storage references
+ Rates: hourly / per-session / per-task
+ Paid-visibility flag and review status
+ Verification docs storage (secure)
+ Quiz results: score, date, attempts
+ Training modules completed
+ Ratings / reviews / earnings history
+Authentication & access
+ OAuth / email login
+ Two-factor authentication (optional)
+ Role-based access control (RBAC) middleware
+ Admin roles and permissions
+UI components (Canvas blocks)
+ Role selection dropdown
+ Short skills selector (chip multi-select, limit 2–3)
+ Paid-assignment checkbox
+ Questionnaire page (8–12 questions)
+ Quiz page (Quismatic) with timer and scoring
+ Outcome & badge page
+ Profile page with verification status and badges
+ Listing card (short card) and role-details modal (full description)
+ Apply buttons and routing
+ Admin review queue UI for paid-visibility and consultant verification
+Quiz engine & training
+ Quismatic-like quiz engine: question bank, randomized delivery, weighted scoring
+ Admin interface to add/edit questions and answer keys
+ Training module library (content, video, docs)
+ Tracking for training completion and certificates
+Payments & commerce
+ Integration with payment provider (Stripe / PayPal / local options)
+ Escrow or hold-until-completion logic for assignments (recommended)
+ Payout schedule and provider integrations
+ Commission or service fee rules
+ Billing UI for service providers (invoices, payout history)
+Verification & moderation
+ Manual verification queue for Consultants
+ Auto-checks for ID documents (where possible)
+ Fraud detection flags (spammy profiles, too many fails)
+ Appeals workflow and notes
+Search, discovery & listing
+ Index skill tags, roles, price, rating, location, language
+ Filters: role, skills, price, availability, ratings
+ Paid visibility / featured listing support (pay-to-appear)
+ Sorting rules (relevance, score, rating, paid boost)
+Notifications & comms
+ Email templates for: welcome, quiz result, verification request, paid-visibility approval/denial
+ In-app notifications for assignment invites and messages
+ Webhooks for external systems
+Reporting & analytics
+ Dashboard for admin: active providers, pending verifications, pay-to-appear revenue
+ Provider dashboard: earnings, jobs, quiz status, training progress
+ Logs of profile changes and quiz attempts
+Legal & privacy
+ Terms of service updates for paid visibility and verification
+ Privacy policy and data retention rules for uploaded documents
+ Consent checkbox for sharing profile with paying customers
+Misc
+ Versioning for role descriptions and skill lists (admin-editable)
+ Export and CSV of provider lists for business use
+ Localization ready (text for multiple languages)
+😎 Permissions & feature matrix (who can do what)
+Create a simple table in the UI (for developers) mapping role → allowed actions. Keep it simple and enforce in backend.
+Agent
+Create tasks, complete micro-services, receive payments for tasks (yes)
+Be visible for paid assignments (only if checkbox + approved)
+Create long advice threads / sell advisory sessions (no)
+Account Manager
+Manage multiple clients and Agents (yes)
+Create and run campaigns (yes)
+Access client billing (yes)
+Take percentage of team revenue (yes, if agreed)
+Consultant
+Offer paid sessions and strategic packages (yes)
+Immediate profile creation but must pass verification for paid work (flagged)
+Access to premium client leads (yes, when verified)
+Enforce at API level with RBAC & claims inside auth tokens.
+9) Upgrade and career path (how someone moves up Henry’s ladder)
+Agents who score well on quizzes and accumulate positive reviews get invite prompts to apply for Account Manager.
+Account Managers who show success (revenue/retention metrics) can apply to be Consultants or be promoted after review.
+Keep the path explicit: show progress bar on dashboard (Quiz score, Jobs completed, Avg rating) and an "Apply for upgrade" button.
+10) Example Questionnaire (copy into Canvas page) — 10 questions
+Role applying for: Agent / Account Manager / Consultant
+Pick top 2–3 skills (multi-select)
+Years experience in chosen skills: 0–1 / 1–3 / 3–5 / 5+
+Typical task turnaround: <24h / 24–72h / 3–7 days
+Do you accept fixed-price micro-tasks? Yes / No
+Are you available for paid assignments now? Yes / No
+Link to portfolio or sample work (URL)
+Rate preference: per-task / hourly / per-session
+Languages spoken fluently (multi-select)
+Do you agree to platform terms for paid assignments? Yes / No
+11) Example Quismatic Quiz structure (copy into Canvas page) — 12 sample questions
+Social post essentials (MCQ): Which 3 elements must every promotional social post include?
+Email subject (MCQ): Which subject line best increases open rate for a simple sale?
+Product blurb (choose best): Which sentence is the strongest product description?
+ChatGPT prompt (scenario): You need a 50-word product blurb. Which prompt gets the best result?
+Website check (scenario): You find a missing alt tag and slow image. What do you log to client?
+Timing (MCQ): Best times to post for local business targeting a local city?
+Formatting (MCQ): Best practice for email call-to-action phrasing?
+SEO basics (MCQ): Which title tag helps with search for a product page?
+Simple audit (scenario): How do you report top 3 issues for a slow landing page?
+Customer message (MCQ): Best reply to an unhappy customer about delivery?
+Task pricing (MCQ): How to estimate a 2-hour micro-task for platform listing?
+Ethics & AI (MCQ): What to disclose when content was generated/edited with ChatGPT?
+Scoring: each question weighted 1–5. Total score maps to bands described earlier.
+12) Verification & manual review flows
+Consultant: immediate profile creation; set consultant.profile_status = "pending_verification".
+Admin queue item: view uploaded docs, portfolio, run a short vetting interview or request a sample session.
+Paid Visibility: if checkbox checked, create paidVisibilityRequest record; admin can Approve / Deny with reason.
+Failed or suspicious quizzes: flag for manual review.
+13) UX copy and button labels (examples)
+"Apply to be an Agent"
+"Apply to be an Account Manager"
+"Create Consultant Profile (verification required)"
+"Start Questionnaire" / "Start Quismatic Quiz"
+"View role details" / "See full description"
+"Apply for paid visibility" / "Request verification"
+14) Edge cases & policies
+Users who lie on questionnaire: require random spot-checks and data matching.
+Multiple failed quizzes: lock paid-visibility until training completed.
+Appeals: allow one appeal per denial with human review.
+Transfer of earnings: require correct tax/payout info before first payout.
+15) Admin dashboard items
+Pending consultant verifications
+Paid-visibility requests (approve/deny)
+Recent quiz attempts and average band
+Provider performance metrics (jobs completed, avg rating)
+Revenue from paid-visibility placements
+16) Notes for designers & product teams
+Keep the skill selector short and visible — limit to 8–12 primary skills in first release.
+The short card must be scannable with 1–2 lines of key info (role, 1–2 benefits).
+Role-details modal should be readable and helpful — include responsibilities, example deliverables, and pricing hints.
+17) Next steps (implementation roadmap suggestions)
+Create Canvas blocks: role selection, skills selector, questionnaire, quiz, outcome page.
+Build quiz engine (Quismatic) or integrate a 3rd-party quiz system.
+Implement DB changes, RBAC, and search indexing.
+Build admin review flows for paid-visibility and consultant verification.
+Launch MVP with limited skill list and measurement tags.
+Iterate based on provider feedback and quality metrics.
+18) Quick reference checklist (short)
+ Role dropdown & short skill selector
+ Paid-assignment checkbox and review queue
+ Questionnaire (8–12 Qs)
+ Quismatic quiz (10–20 Qs) + scoring bands
+ Outcome page with badges and training links
+ Admin verification queue for consultants
+ Payment & payout plumbing
+You sent
+Roles, Onboarding & Qualification
+Goal
+
+
+=========================================================================================================
+Make it easy for people to sign up as an Agent, Account Manager, or Consultant, capture their skills, and route them into the right training and verification flows. The form must be made from small reusable blocks (components) so designers and developers can reuse them in different pages.
+Step 1 — Build the role hierarchy content
+Create three role descriptions in the CMS: Agent, Account Manager, Consultant.
+For each role add two content blocks:
+Short card (50–80 words) to use on listing pages and dropdowns.
+Full description (200–400 words) to use in a role-details modal or profile page.
+Add a simple ladder graphic showing: Agent → Account Manager → Consultant and place this on the provider dashboard and on the signup help page.
+Make sure the ladder text explains that people can grow from Agent up to Consultant and show example milestones (quiz score, jobs completed, ratings).
+Step 2 — Make the Role selection block (component)
+Create a dropdown component titled Which role are you applying for?
+Options: Agent, Account Manager, Consultant.
+When a user selects Consultant:
+Allow user to continue and create a basic profile immediately.
+Set a hidden field profile_status = "pending_verification" so admins can review later.
+On selection change, save the selection to the user profile draft so they can finish the form later.
+Reuse this component in signup, profile edit, and admin impersonation pages.
+Step 3 — Build the Short skills selector (component)
+Create a chip-based multi-select component labeled Pick your top 2–3 skills.
+Limit selection to 2–3 choices. If user tries to pick more, show a short helper message: "Pick up to 2–3 top skills."
+Use a default skill list that admins can edit in the CMS. Start with these skills:
+Social media setup & posting
+Email marketing basics
+Short product descriptions / copywriting
+ChatGPT / AI content generation
+Simple website checks (speed, links, SEO basics)
+Basic graphic design (banners, thumbnails)
+Customer messaging & support
+Local SEO / listings
+Google Ads basics
+Facebook ads basics
+When user picks skills, save them as tags on the profile. Also store a primary_skill (first chosen) for quick search boosts.
+Display the skills on the public profile as chips.
+Step 4 — Add the Paid-assignment visibility checkbox (component)
+Create a checkbox labeled I want to apply to be visible for paid assignments.
+If checked, create a paid_visibility_request record in the system and route the user to the verification flow.
+Show a small tooltip: "If approved, your profile will be shown to businesses hiring paid suppliers. Approval may include a short review."
+Save the checkbox state to the user draft and show status in the provider dashboard (Requested / Approved / Denied).
+Step 5 — Build Quick profile fields (component group)
+Create a reusable block with these short fields:
+Full name / Business name (single field or two fields)
+Email / Phone (validated)
+Short bio (50–120 characters) — show a character counter
+Hourly or per-session rate (optional) — currency selector
+Country / Timezone / Languages (multi-select)
+Portfolio link / sample work (URL)
+Upload ID / verification docs (file input) — hidden unless user starts verification or selects paid assignments
+Implementation notes:
+Keep the initial signup minimal — ask only name, email, role, and skills.
+Allow users to complete the rest of the quick profile after signup (profile completion flow).
+Use client-side validation for common errors (invalid URL, missing timezone).
+Step 6 — CTA buttons and routing
+Create three CTA buttons and wire them to the right flows:
+Apply to be an Agent: route to Questionnaire page (quick) then Quismatic quiz
+Apply to be an Account Manager: route to Questionnaire then Quismatic quiz
+Apply to be a Consultant: allow immediate profile creation (flag pending_verification) then route to Questionnaire + Quismatic quiz for verification
+UX tips:
+On each CTA, show a small progress bar: "Step 1 of 3: Role selection → Questionnaire → Quiz → Outcome"
+Allow users to save progress and return later.
+Step 7 — Why consultants are flagged
+Consultants can create a visible profile immediately so businesses can find and contact them.
+Set profile_status = "pending_verification" and prevent assignment matching until verification is complete.
+Admins must review consultant uploads: portfolio, credentials, and optionally request a sample session.
+Make the verification step a clear button in the admin queue: Approve / Request more info / Deny.
+Step 8 — Small copy & helper text for each block
+Add short helper text under each component explaining why it matters:
+Role dropdown: "Choose the role you will perform on the platform. This affects what work you can get."
+Skills selector: "Pick 2–3 skill areas you are best at. Keep it short so businesses see your strengths."
+Paid checkbox: "Apply to be visible for paid jobs — approval may take up to X days."
+Portfolio: "Add a link so businesses can see your previous work."
+Consultant flag: "Consultant profiles are checked by our team before offering paid jobs."
+Step 9 — Acceptance & validation rules
+Require role + at least 1 skill to proceed.
+Require email + name for account creation.
+If the paid-assignment checkbox is checked, require portfolio link or at least one sample upload before allowing submission.
+Limit the skills to 2–3 strictly on the client-side; enforce on the backend as well.
+Step 10 — Admin & developer notes
+Make skill list editable in admin UI and versioned.
+Store skill tags in a normalized table for fast search.
+Log all paid-visibility requests with timestamps and admin IDs who reviewed them.
+Add API endpoints for: create profile, update profile, submit paid-visibility, fetch skill list, submit verification docs.
+Step 11 — Testing checklist
+ Signup: role selection saves correctly for all three roles
+ Skills selector enforces 2–3 limit on client and server
+ Paid-assignment checkbox creates request and shows in admin queue
+ Consultant flag sets pending_verification and blocks paid assignment matching
+ CTA buttons route to correct flows
+ Form saves drafts and resumes
+ File uploads secured and accessible to admin only
+End of step-by-step note. Use these blocks to build the signup flow in Canvas. Designers can copy the short helper text and label copy directly into UI mockups. Developers can use the admin & developer notes to set up the backend and API endpoints.
+
+
