@@ -27,11 +27,14 @@ console.log('[BOOT] PORT:', process.env.PORT);
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const frontendUrl = process.env.FRONTEND_URL || 'https://247gbsaffiliates.centralhubsolution.com';
+
   app.enableCors({
     origin: [
       'http://localhost:3011',
       'http://localhost:3012',
       'http://192.168.1.67:3011',
+      frontendUrl,
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
