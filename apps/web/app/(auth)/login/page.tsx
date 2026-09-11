@@ -1,26 +1,44 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import AuthSidebar from "@/components/auth/AuthSidebar";
 import AuthInput from "@/components/auth/AuthInput";
 import { useAuth } from "@/hooks/useAuth";
+import { mcomService } from "@/services/mcom";
+
+const ERROR_MESSAGES: Record<string, string> = {
+  no_access: "Your account doesn't have an active subscription for this platform. Please purchase a package to continue.",
+  sso_callback_failed: "SSO login failed. Please try again.",
+  sso_no_token: "Authentication completed but no token was received. Please try again.",
+};
 
 export default function LoginPage() {
+    const searchParams = useSearchParams();
     const { login, isLoggingIn, loginError } = useAuth();
+    const [mcomError, setMcomError] = useState<string | null>(null);
+
+    useEffect(() => {
+      const error = searchParams.get('error');
+      if (error && ERROR_MESSAGES[error]) {
+        setMcomError(ERROR_MESSAGES[error]);
+      }
+    }, [searchParams]);
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setMcomError(null);
         const formData = new FormData(e.currentTarget);
         const email = formData.get("email") as string;
         const password = formData.get("password") as string;
-        
+
         try {
             await login({ email, password });
         } catch (error) {
             console.error("Login failed", error);
         }
     };
-
 
     return (
         <div className="min-h-screen flex bg-white font-display">
@@ -53,10 +71,44 @@ export default function LoginPage() {
                         <p className="text-text-secondary font-medium">Enter your credentials to access your professional account.</p>
                     </div>
 
+                    <div className="flex flex-col gap-4 mb-8">
+                        {mcomError && (
+                            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-medium">
+                                {mcomError}
+                            </div>
+                        )}
+                        <button
+                            onClick={async () => {
+                                setMcomError(null);
+                                try {
+                                    await mcomService.startLogin();
+                                } catch (err: any) {
+                                    setMcomError(err.message || 'Failed to connect to MCOM Solutions. Please try again.');
+                                }
+                            }}
+                            className="flex items-center justify-center gap-3 w-full py-3 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm"
+                        >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
+                            </svg>
+                            Login with MCOM Solutions
+                        </button>
+                    </div>
+
+                    <div className="relative mb-8">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-slate-100"></div>
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase tracking-widest font-bold font-display">
+                            <span className="bg-white px-4 text-slate-400">Or continue with email</span>
+                        </div>
+                    </div>
+
                     <form className="space-y-6" onSubmit={handleLogin}>
                         {loginError && (
                             <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-medium">
-                                {(loginError as any)?.response?.data?.message || "Invalid credentials"}
+                                {(loginError as any)?.response?.data?.message
+                                  || (!(loginError as any)?.response ? "Cannot connect to server. Is the backend running?" : "Invalid credentials")}
                             </div>
                         )}
                         <AuthInput
@@ -74,7 +126,7 @@ export default function LoginPage() {
                                 <label className="block text-sm font-semibold text-text-main uppercase tracking-wider font-display" htmlFor="password">
                                     Password
                                 </label>
-                                <Link href="/forgot-password" size-sm className="text-xs font-bold text-primary hover:underline underline-offset-4 transition-all">
+                                <Link href="/forgot-password" className="text-xs font-bold text-primary hover:underline underline-offset-4 transition-all">
                                     Forgot password?
                                 </Link>
                             </div>
@@ -126,7 +178,7 @@ export default function LoginPage() {
                         </div>
                     </div>
 
-                    <div className="mt-8 grid grid-cols-2 gap-4">
+                    <div className="mt-8 grid grid-cols-1 gap-4">
                         <button className="flex items-center justify-center gap-3 py-3 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm">
                             <svg className="w-5 h-5" viewBox="0 0 24 24">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
@@ -136,24 +188,18 @@ export default function LoginPage() {
                             </svg>
                             Google
                         </button>
-                        <button className="flex items-center justify-center gap-3 py-3 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm">
-                            <svg className="w-5 h-5 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"></path>
-                            </svg>
-                            Facebook
-                        </button>
                     </div>
 
 
                     <p className="mt-10 text-center text-text-secondary text-sm font-medium">
-                        Don't have an account?{" "}
+                        Don&apos;t have an account?{" "}
                         <Link href="/role-selection" className="text-primary font-bold hover:underline underline-offset-4 decoration-2">
                             Create an account
                         </Link>
                     </p>
 
                     <p className="mt-12 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
-                        © 2026 247gbs affiliate professional marketplace
+                        &copy; 2026 247gbs affiliate professional marketplace
                     </p>
                 </div>
             </div>

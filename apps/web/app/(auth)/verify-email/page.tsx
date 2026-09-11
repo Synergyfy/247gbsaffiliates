@@ -7,6 +7,7 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
 
 export default function VerifyEmailPage() {
     const [code, setCode] = useState(['', '', '', '', '', '']);
+    const [error, setError] = useState('');
     const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
     const router = useRouter();
     const { user } = useAuthStore();
@@ -24,6 +25,7 @@ export default function VerifyEmailPage() {
         const newCode = [...code];
         newCode[index] = value;
         setCode(newCode);
+        setError('');
 
         // Auto-advance focus
         if (value && index < 5 && inputsRef.current[index + 1]) {
@@ -42,7 +44,7 @@ export default function VerifyEmailPage() {
         if (fullCode === '123456') {
             router.replace('/onboarding');
         } else {
-            alert('Invalid verification code. Please try again.');
+            setError('Invalid verification code. Please try again.');
         }
     };
 
@@ -83,6 +85,12 @@ export default function VerifyEmailPage() {
                             />
                         ))}
                     </div>
+
+                    {error && (
+                        <div className="mb-6 p-3 bg-red-50 text-red-600 rounded-xl text-sm font-medium text-center">
+                            {error}
+                        </div>
+                    )}
 
                     <div className="mb-6 bg-slate-50 p-3 rounded-lg text-center text-sm text-slate-500">
                         Demo Code: <span className="font-bold text-primary tracking-widest">123456</span>

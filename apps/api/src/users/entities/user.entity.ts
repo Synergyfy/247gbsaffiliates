@@ -96,6 +96,36 @@ export class User {
   @Column({ default: false })
   isQuizPassed: boolean;
 
+  // MCOM Solutions Central Hub SSO
+  @Column({ name: 'mcom_user_id', type: 'varchar', nullable: true })
+  mcomUserId: string | null;
+
+  @Column({ name: 'mcom_membership_level', type: 'varchar', nullable: true })
+  mcomMembershipLevel: string | null;
+
+  @Column({ name: 'mcom_membership_tier', type: 'varchar', nullable: true })
+  mcomMembershipTier: string | null;
+
+  @Column({ name: 'mcom_membership_status', type: 'varchar', nullable: true })
+  mcomMembershipStatus: string | null;
+
+  @Column({ name: 'mcom_can_access_vcard', type: 'boolean', default: false })
+  mcomCanAccessVcard: boolean;
+
+  @Column({ name: 'mcom_access_token', type: 'text', nullable: true })
+  @Exclude()
+  mcomAccessToken: string | null;
+
+  @Column({ name: 'mcom_refresh_token', type: 'text', nullable: true })
+  @Exclude()
+  mcomRefreshToken: string | null;
+
+  @Column({ name: 'mcom_token_expires_at', type: 'timestamptz', nullable: true })
+  mcomTokenExpiresAt: Date | null;
+
+  @Column({ name: 'mcom_tokens_updated_at', type: 'timestamptz', nullable: true })
+  mcomTokensUpdatedAt: Date | null;
+
   // Auth tokens
   @Column({ nullable: true })
   @Exclude()

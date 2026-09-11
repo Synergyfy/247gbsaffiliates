@@ -18,12 +18,12 @@ import { SectorsModule } from './sectors/sectors.module';
 import { AccountManagerModule } from './account-manager/account-manager.module';
 import { AdminModule } from './admin/admin.module';
 import { LearningModule } from './learning/learning.module';
+import { McomModule } from './mcom/mcom.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -54,6 +54,7 @@ import { LearningModule } from './learning/learning.module';
     AccountManagerModule,
     AdminModule,
     LearningModule,
+    McomModule,
   ],
   controllers: [AppController],
   providers: [

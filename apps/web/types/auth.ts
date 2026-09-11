@@ -16,6 +16,11 @@ export interface User {
   assessmentSkipped?: boolean;
   isOnboarded?: boolean;
   isQuizPassed?: boolean;
+  mcomUserId?: string | null;
+  mcomMembershipLevel?: string | null;
+  mcomMembershipTier?: string | null;
+  mcomMembershipStatus?: string | null;
+  mcomCanAccessVcard?: boolean;
   stats?: {
     tasksCompleted?: number;
     rating?: number;
