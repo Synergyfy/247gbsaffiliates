@@ -1,13 +1,13 @@
-import { Controller, Post, Body, Req, Res, Logger } from '@nestjs/common';
+import { Controller, Post, Req, Res, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { createHash } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { McomService } from './mcom.service';
 import { UsersService } from '../users/users.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
-@ApiTags('mcom')
-@Controller('mcom')
+@ApiTags('webhooks')
+@Controller()
 export class WebhookController {
   private readonly logger = new Logger(WebhookController.name);
   private readonly processedHashes = new Set<string>();
@@ -18,18 +18,28 @@ export class WebhookController {
   ) {}
 
   @Public()
-  @Post('webhook')
+  @Post('webhooks')
   @ApiOperation({ summary: 'MCOM Central lifecycle webhook' })
   async webhook(@Req() req: Request, @Res() res: Response) {
     const rawBody = JSON.stringify(req.body);
-    const signature = req.headers['x-mcom-signature'] as string;
-    const timestamp = req.headers['x-mcom-timestamp'] as string;
+    const signatureHeader = req.headers['x-mcom-signature'] as string;
 
-    // Verify HMAC signature
-    if (signature && timestamp) {
-      if (!this.mcomService.verifyWebhookSignature(rawBody, signature, timestamp)) {
+    // Verify HMAC signature: "sha256=<hex>"
+    if (signatureHeader) {
+      const webhookSecret = this.mcomService['config'].get<string>('MCOM_WEBHOOK_SECRET')!;
+      const expectedSig = createHmac('sha256', webhookSecret)
+        .update(rawBody)
+        .digest('hex');
+      const receivedSig = signatureHeader.replace(/^sha256=/, '');
+
+      const isValid = timingSafeEqual(
+        Buffer.from(receivedSig, 'hex'),
+        Buffer.from(expectedSig, 'hex'),
+      );
+
+      if (!isValid) {
         this.logger.warn('Webhook signature verification failed');
-        return res.status(401).json({ error: 'Invalid signature' });
+        return res.status(401).json({ error: 'Invalid HMAC signature' });
       }
     }
 

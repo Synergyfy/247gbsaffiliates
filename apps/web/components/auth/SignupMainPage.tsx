@@ -13,6 +13,7 @@ export default function SignupPage() {
     const searchParams = useSearchParams();
     const { signup, isSigningUp } = useAuth();
     const [role, setRole] = useState<UserRole>('agent');
+    const [formError, setFormError] = useState<string | null>(null);
 
     useEffect(() => {
         const roleParam = searchParams.get("role");
@@ -26,6 +27,7 @@ export default function SignupPage() {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setFormError(null);
         const formData = new FormData(e.currentTarget);
         const firstName = formData.get('firstName') as string;
         const lastName = formData.get('lastName') as string;
@@ -37,9 +39,11 @@ export default function SignupPage() {
         } catch (error: any) {
             console.error("Signup failed", error);
             if (error.response?.status === 409) {
-                alert("This email is already registered. Please sign in or use a different email.");
+                setFormError("This email is already registered. Please sign in or use a different email.");
+            } else if (!error.response) {
+                setFormError("Cannot connect to server. Please make sure the backend is running on port 3012.");
             } else {
-                alert(error.response?.data?.message || "An error occurred during signup. Please try again.");
+                setFormError(error.response?.data?.message || `Signup failed (${error.response?.status}). Please try again.`);
             }
         }
     };
@@ -82,7 +86,14 @@ export default function SignupPage() {
 
                     <div className="flex flex-col gap-4 mb-8">
                         <button
-                            onClick={() => mcomService.startLogin()}
+                            onClick={async () => {
+                                setFormError(null);
+                                try {
+                                    await mcomService.startLogin();
+                                } catch (err: any) {
+                                    setFormError(err.message || 'Failed to connect to MCOM Solutions. Please try again.');
+                                }
+                            }}
                             className="flex items-center justify-center gap-3 w-full py-3 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm"
                         >
                             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -102,6 +113,11 @@ export default function SignupPage() {
                     </div>
 
                     <form className="space-y-5" onSubmit={handleSubmit}>
+                        {formError && (
+                            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-medium">
+                                {formError}
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 gap-4">
                             <AuthInput
                                 id="firstName"

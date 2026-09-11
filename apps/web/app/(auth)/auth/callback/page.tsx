@@ -2,13 +2,13 @@
 
 import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
-import { mcomService } from '@/services/mcom';
+import { useAuthStore } from '@/store/useAuthStore';
+import apiClient from '@/lib/apiClient';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setAuth } = useAuth();
+  const { setAuth } = useAuthStore();
   const firedRef = useRef(false);
 
   useEffect(() => {
@@ -21,59 +21,29 @@ export default function AuthCallbackPage() {
     const role = searchParams.get('role');
     const error = searchParams.get('error');
 
-    // Direct Handshake flow (token from Central dashboard)
-    if (token && role) {
-      try {
-        const response = mcomService.completeHandshake(token);
-        // The server redirects, but if we get here store the token
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('auth_token', token);
-        }
-        router.push(`/dashboard/${role.replace('_', '-')}`);
-        return;
-      } catch (err) {
-        console.error('SSO handshake failed', err);
-        router.push('/login?error=sso_failed');
-        return;
-      }
-    }
-
-    // OAuth flow
-    if (code && state) {
-      mcomService
-        .completeLogin(code, state)
-        .then((data) => {
-          if (data.token && data.user) {
-            setAuth(data.user, data.token);
-            if (data.return_to) {
-              router.push(data.return_to);
-            } else if (data.user.role) {
-              router.push(
-                `/dashboard/${data.user.role.toLowerCase().replace('_', '-')}`,
-              );
-            } else {
-              router.push('/dashboard/agent');
-            }
-          } else {
-            router.push('/login?error=sso_no_token');
-          }
-        })
-        .catch((err) => {
-          console.error('SSO callback failed', err);
-          router.push('/login?error=sso_callback_failed');
-        });
-      return;
-    }
-
     // Error from server
     if (error) {
       router.push(`/login?error=${error}`);
       return;
     }
 
+    // Direct Handshake flow — API already verified JWT and issued local token
+    if (token && role) {
+      localStorage.setItem('auth_token', token);
+      router.push(`/dashboard/${role.replace('_', '-')}`);
+      return;
+    }
+
+    // OAuth flow — redirect browser to backend callback (cookie-based state validation)
+    if (code && state) {
+      const backendUrl = apiClient.defaults.baseURL;
+      window.location.href = `${backendUrl}/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+      return;
+    }
+
     // No params — redirect to login
     router.push('/login');
-  }, [searchParams, router, setAuth]);
+  }, [searchParams, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">

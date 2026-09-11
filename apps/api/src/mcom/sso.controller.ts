@@ -6,7 +6,6 @@ import {
   Req,
   Res,
   Body,
-  UseGuards,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -57,66 +56,72 @@ export class SsoController {
     return res.redirect(authorizeUrl);
   }
 
-  // ── Step 2: Handle OAuth callback ──
+  // ── Step 2: Handle OAuth callback (browser navigates here directly) ──
 
   @Public()
-  @Post('callback')
+  @Get('callback')
   @ApiOperation({ summary: 'Complete MCOM OAuth callback' })
   async callback(
     @Req() req: Request,
     @Res() res: Response,
-    @Body('code') code: string,
-    @Body('state') state: string,
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Query('error') error: string,
   ) {
+    const frontendUrl = this.config.get<string>('MCOM_REDIRECT_URI')?.replace('/auth/callback', '') || 'http://localhost:3011';
+
+    if (error) {
+      return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
+    }
+
     const savedState = getOAuthStateCookie(req);
     clearOAuthStateCookie(res);
 
     if (!savedState || savedState !== state) {
-      throw new UnauthorizedException('Invalid or expired OAuth state');
+      return res.redirect(`${frontendUrl}/login?error=sso_state_mismatch`);
     }
 
-    // Exchange code for tokens
-    const tokens = await this.mcomService.exchangeCode(code);
+    try {
+      const tokenResponse = await this.mcomService.exchangeCode(code);
 
-    // Fetch user profile from Central
-    const centralUser = await this.mcomService.getUserInfo(tokens.access_token);
+      const hasAccess = tokenResponse.user?.permissions?.['canAccess_247gbs_affiliate_test'] === true;
 
-    // JIT-provision or update user
-    const user = await this.mcomService.jitProvision(centralUser);
+      const user = await this.mcomService.jitProvision({
+        sub: tokenResponse.user.id,
+        email: tokenResponse.user.email,
+        name: tokenResponse.user.name,
+        role: tokenResponse.user.role,
+        membership: {
+          level: tokenResponse.user.membershipLevel,
+          status: tokenResponse.user.membershipStatus,
+        },
+        permissions: tokenResponse.user.permissions,
+      });
 
-    // Encrypt and store Central tokens
-    await this.mcomService.storeTokens(
-      user.id,
-      tokens.access_token,
-      tokens.refresh_token,
-      tokens.expires_in,
-    );
+      await this.mcomService.storeTokens(
+        user.id,
+        tokenResponse.accessToken,
+        tokenResponse.refreshToken,
+      );
 
-    // Issue local session JWT
-    const payload = {
-      email: user.email,
-      sub: user.id,
-      role: user.role,
-      isOnboarded: user.isOnboarded,
-    };
-    const localToken = this.jwtService.sign(payload);
-
-    // Get return context (card, business, redirect)
-    const returnData = getReturnCookie(req);
-    clearReturnCookie(res);
-
-    return res.json({
-      token: localToken,
-      user: {
-        id: user.id,
+      const payload = {
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        sub: user.id,
         role: user.role,
         isOnboarded: user.isOnboarded,
-      },
-      return_to: returnData?.redirect || null,
-    });
+      };
+      const localToken = this.jwtService.sign(payload);
+
+      const returnData = getReturnCookie(req);
+      clearReturnCookie(res);
+
+      const role = user.role?.toLowerCase().replace('_', '-') || 'agent';
+      const redirectUrl = returnData?.redirect || `${frontendUrl}/auth/callback?token=${localToken}&role=${role}`;
+      return res.redirect(redirectUrl);
+    } catch (err: any) {
+      console.error('[SSO] Token exchange failed:', err.response?.data || err.message);
+      return res.redirect(`${frontendUrl}/login?error=sso_exchange_failed`);
+    }
   }
 
   // ── Refresh Central tokens ──
@@ -136,14 +141,23 @@ export class SsoController {
 
     await this.mcomService.storeTokens(
       user.id,
-      refreshed.access_token,
-      refreshed.refresh_token,
-      refreshed.expires_in,
+      refreshed.accessToken,
+      refreshed.refreshToken,
     );
 
     // Sync profile
-    const centralUser = await this.mcomService.getUserInfo(refreshed.access_token);
-    await this.mcomService.jitProvision(centralUser);
+    const centralUser = await this.mcomService.getUserInfo(refreshed.accessToken);
+    await this.mcomService.jitProvision({
+      sub: centralUser.id,
+      email: centralUser.email,
+      name: centralUser.name,
+      role: centralUser.role,
+      membership: {
+        level: centralUser.membershipLevel,
+        status: centralUser.membershipStatus,
+      },
+      permissions: centralUser.permissions,
+    });
 
     return { success: true };
   }
@@ -161,7 +175,17 @@ export class SsoController {
       if (tokens.accessToken) {
         try {
           const centralUser = await this.mcomService.getUserInfo(tokens.accessToken);
-          await this.mcomService.jitProvision(centralUser);
+          await this.mcomService.jitProvision({
+            sub: centralUser.id,
+            email: centralUser.email,
+            name: centralUser.name,
+            role: centralUser.role,
+            membership: {
+              level: centralUser.membershipLevel,
+              status: centralUser.membershipStatus,
+            },
+            permissions: centralUser.permissions,
+          });
         } catch {
           // Token may be expired, try refresh
           if (tokens.refreshToken) {
@@ -169,9 +193,8 @@ export class SsoController {
               const refreshed = await this.mcomService.refreshTokens(tokens.refreshToken);
               await this.mcomService.storeTokens(
                 user.id,
-                refreshed.access_token,
-                refreshed.refresh_token,
-                refreshed.expires_in,
+                refreshed.accessToken,
+                refreshed.refreshToken,
               );
             } catch {
               // Refresh failed
@@ -200,9 +223,14 @@ export class SsoController {
   @Get('config')
   @ApiOperation({ summary: 'Get MCOM SSO public config' })
   getConfig() {
+    const solutionsUrl = this.config.get<string>('MCOM_SOLUTIONS_URL');
+    const clientId = this.config.get<string>('MCOM_CLIENT_ID');
+    const redirectUri = this.config.get<string>('MCOM_REDIRECT_URI');
+
     return {
       membershipUrl: this.config.get<string>('MCOM_MEMBERSHIP_URL'),
       walletEnabled: this.config.get<string>('MCOM_WALLET_ENABLED') === 'true',
+      configured: !!(solutionsUrl && clientId),
     };
   }
 

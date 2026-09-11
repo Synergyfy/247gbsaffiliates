@@ -54,27 +54,38 @@ export class McomService {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
-      response_type: 'code',
       scope: this.scopes,
       state,
     });
-    return `${this.baseUrl}/authorize?${params.toString()}`;
+    return `${this.baseUrl}/api/v1/auth/sso/authorize?${params.toString()}`;
   }
 
   // ── Exchange code for tokens ──
 
   async exchangeCode(code: string): Promise<{
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
+    accessToken: string;
+    refreshToken: string;
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      membershipLevel: string;
+      membershipStatus: string;
+      permissions: Record<string, boolean>;
+    };
   }> {
+    const url = `${this.baseUrl}/api/v1/auth/sso/token`;
+    const body = {
+      code,
+      client_id: this.clientId,
+      redirect_uri: this.redirectUri,
+    };
+    // client_secret goes via Basic Auth, not in the body
+    const basicAuth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
     const { data } = await firstValueFrom(
-      this.http.post(`${this.baseUrl}/oauth/token`, {
-        grant_type: 'authorization_code',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        code,
-        redirect_uri: this.redirectUri,
+      this.http.post(url, body, {
+        headers: { Authorization: `Basic ${basicAuth}` },
       }),
     );
     return data;
@@ -83,16 +94,16 @@ export class McomService {
   // ── Refresh tokens ──
 
   async refreshTokens(refreshToken: string): Promise<{
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
+    accessToken: string;
+    refreshToken: string;
   }> {
+    const url = `${this.baseUrl}/api/v1/auth/sso/token/refresh`;
+    const basicAuth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
     const { data } = await firstValueFrom(
-      this.http.post(`${this.baseUrl}/oauth/token`, {
-        grant_type: 'refresh_token',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
+      this.http.post(url, {
         refresh_token: refreshToken,
+      }, {
+        headers: { Authorization: `Basic ${basicAuth}` },
       }),
     );
     return data;
@@ -101,19 +112,16 @@ export class McomService {
   // ── Fetch user info from Central ──
 
   async getUserInfo(accessToken: string): Promise<{
-    sub: string;
+    id: string;
     email: string;
-    firstName?: string;
-    lastName?: string;
-    membership?: {
-      level: string;
-      tier: string;
-      status: string;
-      canAccessVcard: boolean;
-    };
+    name: string;
+    role: string;
+    membershipLevel: string;
+    membershipStatus: string;
+    permissions: Record<string, boolean>;
   }> {
     const { data } = await firstValueFrom(
-      this.http.get(`${this.baseUrl}/api/userinfo`, {
+      this.http.get(`${this.baseUrl}/api/v1/auth/sso/userinfo`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       }),
     );
@@ -181,15 +189,12 @@ export class McomService {
     userId: string,
     accessToken: string,
     refreshToken: string,
-    expiresInSeconds: number,
   ) {
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + expiresInSeconds * 1000);
 
     await this.usersService.update(userId, {
       mcomAccessToken: encryptMcomToken(accessToken),
       mcomRefreshToken: encryptMcomToken(refreshToken),
-      mcomTokenExpiresAt: expiresAt,
       mcomTokensUpdatedAt: now,
     } as any);
   }
@@ -214,14 +219,13 @@ export class McomService {
   async jitProvision(centralUser: {
     sub: string;
     email: string;
-    firstName?: string;
-    lastName?: string;
+    name?: string;
+    role?: string;
     membership?: {
       level: string;
-      tier: string;
       status: string;
-      canAccessVcard: boolean;
     };
+    permissions?: Record<string, boolean>;
   }) {
     let user = await this.usersService.findByEmail(centralUser.email);
 
@@ -231,20 +235,20 @@ export class McomService {
         mcomUserId: centralUser.sub,
         ...(centralUser.membership && {
           mcomMembershipLevel: centralUser.membership.level,
-          mcomMembershipTier: centralUser.membership.tier,
           mcomMembershipStatus: centralUser.membership.status,
-          mcomCanAccessVcard: centralUser.membership.canAccessVcard,
+          mcomCanAccessVcard: centralUser.permissions?.['canAccess_247gbs_affiliate_test'] || false,
         }),
       } as any);
       return this.usersService.findOne(user.id);
     }
 
     // Create new user via JIT provisioning (no password needed for SSO)
+    const nameParts = (centralUser.name || '').split(' ');
     const newUser = await this.usersService.create({
       email: centralUser.email,
       password: Math.random().toString(36).slice(-16) + '!' + Date.now(),
-      firstName: centralUser.firstName || '',
-      lastName: centralUser.lastName || '',
+      firstName: nameParts[0] || '',
+      lastName: nameParts.slice(1).join(' ') || '',
       role: 'agent' as any,
     });
 
@@ -252,9 +256,8 @@ export class McomService {
     await this.usersService.update(newUser.id, {
       mcomUserId: centralUser.sub,
       mcomMembershipLevel: centralUser.membership?.level || null,
-      mcomMembershipTier: centralUser.membership?.tier || null,
       mcomMembershipStatus: centralUser.membership?.status || null,
-      mcomCanAccessVcard: centralUser.membership?.canAccessVcard || false,
+      mcomCanAccessVcard: centralUser.permissions?.['canAccess_247gbs_affiliate_test'] || false,
     } as any);
 
     return this.usersService.findOne(newUser.id);

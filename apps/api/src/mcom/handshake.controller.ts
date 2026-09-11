@@ -1,6 +1,7 @@
 import { Controller, Get, Query, Res, UnauthorizedException } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { McomService } from './mcom.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -11,6 +12,7 @@ export class HandshakeController {
   constructor(
     private mcomService: McomService,
     private jwtService: JwtService,
+    private config: ConfigService,
   ) {}
 
   // ── Direct Dashboard Handshake: Central redirects with JWT ──
@@ -34,9 +36,10 @@ export class HandshakeController {
       const centralUser = {
         sub: payload.sub || payload.email,
         email: payload.email,
-        firstName: payload.firstName || payload.given_name || '',
-        lastName: payload.lastName || payload.family_name || '',
+        name: payload.name || `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
+        role: payload.role,
         membership: payload.membership || undefined,
+        permissions: payload.permissions || undefined,
       };
       const user = await this.mcomService.jitProvision(centralUser);
 
@@ -50,7 +53,8 @@ export class HandshakeController {
       const localToken = this.jwtService.sign(localPayload);
 
       // Redirect to frontend with token
-      return res.redirect(`/auth/callback?token=${localToken}&role=${user.role}`);
+      const frontendUrl = this.config.get<string>('MCOM_REDIRECT_URI')?.replace('/auth/callback', '') || 'http://localhost:3011';
+      return res.redirect(`${frontendUrl}/auth/callback?token=${localToken}&role=${user.role}`);
     } catch (err) {
       return res.redirect('/login?error=sso_invalid_token');
     }
