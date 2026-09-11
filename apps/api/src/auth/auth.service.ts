@@ -33,7 +33,11 @@ export class AuthService {
   async register(createUserDto: CreateUserDto) {
     const user = await this.usersService.create(createUserDto);
     const { password, ...result } = user;
-    return result;
+    const payload = { email: user.email, sub: user.id, role: user.role, isOnboarded: user.isOnboarded };
+    return {
+      ...result,
+      access_token: this.jwtService.sign(payload),
+    };
   }
 
   async registerAdmin(createAdminDto: CreateAdminDto) {

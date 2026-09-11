@@ -28,18 +28,18 @@ export class CreateUserDto {
   @IsOptional()
   bio?: string;
 
-  @ApiProperty({ example: 'uuid-sector' })
+  @ApiProperty({ example: 'uuid-sector', required: false })
   @IsUUID()
-  @IsNotEmpty()
-  sectorId: string;
+  @IsOptional()
+  sectorId?: string;
 
-  @ApiProperty({ example: 'uuid-category' })
+  @ApiProperty({ example: 'uuid-category', required: false })
   @IsUUID()
-  @IsNotEmpty()
-  categoryId: string;
+  @IsOptional()
+  categoryId?: string;
 
-  @ApiProperty({ example: 'uuid-subcategory' })
+  @ApiProperty({ example: 'uuid-subcategory', required: false })
   @IsUUID()
-  @IsNotEmpty()
-  subCategoryId: string;
+  @IsOptional()
+  subCategoryId?: string;
 }
