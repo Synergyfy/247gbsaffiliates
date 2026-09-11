@@ -4,6 +4,7 @@ import Link from "next/link";
 import AuthSidebar from "@/components/auth/AuthSidebar";
 import AuthInput from "@/components/auth/AuthInput";
 import { useAuth } from "@/hooks/useAuth";
+import { mcomService } from "@/services/mcom";
 
 export default function LoginPage() {
     const { login, isLoggingIn, loginError } = useAuth();
@@ -13,14 +14,13 @@ export default function LoginPage() {
         const formData = new FormData(e.currentTarget);
         const email = formData.get("email") as string;
         const password = formData.get("password") as string;
-        
+
         try {
             await login({ email, password });
         } catch (error) {
             console.error("Login failed", error);
         }
     };
-
 
     return (
         <div className="min-h-screen flex bg-white font-display">
@@ -51,6 +51,27 @@ export default function LoginPage() {
                     <div className="mb-10">
                         <h1 className="text-3xl font-bold text-text-main mb-3 leading-tight tracking-tight font-display">Welcome back</h1>
                         <p className="text-text-secondary font-medium">Enter your credentials to access your professional account.</p>
+                    </div>
+
+                    <div className="flex flex-col gap-4 mb-8">
+                        <button
+                            onClick={() => mcomService.startLogin()}
+                            className="flex items-center justify-center gap-3 w-full py-3 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm"
+                        >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
+                            </svg>
+                            Login with MCOM Solutions
+                        </button>
+                    </div>
+
+                    <div className="relative mb-8">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-slate-100"></div>
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase tracking-widest font-bold font-display">
+                            <span className="bg-white px-4 text-slate-400">Or continue with email</span>
+                        </div>
                     </div>
 
                     <form className="space-y-6" onSubmit={handleLogin}>
@@ -146,14 +167,14 @@ export default function LoginPage() {
 
 
                     <p className="mt-10 text-center text-text-secondary text-sm font-medium">
-                        Don't have an account?{" "}
+                        Don&apos;t have an account?{" "}
                         <Link href="/role-selection" className="text-primary font-bold hover:underline underline-offset-4 decoration-2">
                             Create an account
                         </Link>
                     </p>
 
                     <p className="mt-12 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
-                        © 2026 247gbs affiliate professional marketplace
+                        &copy; 2026 247gbs affiliate professional marketplace
                     </p>
                 </div>
             </div>
