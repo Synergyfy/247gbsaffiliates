@@ -88,9 +88,9 @@ export default function HowItWorks() {
 
                 <FadeIn delay={0.5} direction="up">
                     <div className="text-center mt-12">
-                        <button className="bg-brand-green text-white px-8 py-3 rounded-xl font-semibold hover:bg-brand-green-hover transition-colors shadow-lg">
+                        <a href="https://centralhubsolution.com/register/affiliate" className="bg-brand-green text-white px-8 py-3 rounded-xl font-semibold hover:bg-brand-green-hover transition-colors shadow-lg inline-block">
                             Get Started Now
-                        </button>
+                        </a>
                     </div>
                 </FadeIn>
             </div>

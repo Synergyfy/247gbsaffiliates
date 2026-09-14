@@ -23,7 +23,7 @@ export default function ForAgentPage() {
                             <p className="max-w-2xl text-lg md:text-xl text-text-secondary mb-10 leading-relaxed font-body">
                                 Access high-volume workflows, level up your career, and get paid instantly. The platform built for elite performance.
                             </p>
-                            <Link href="/role-selection" className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary-hover text-white rounded-full font-display font-semibold transition-all hover:scale-105 shadow-lg shadow-primary/25">
+                            <Link href="https://centralhubsolution.com/register/affiliate" className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary-hover text-white rounded-full font-display font-semibold transition-all hover:scale-105 shadow-lg shadow-primary/25">
                                 Get Verified
                                 <span className="material-symbols-outlined ml-2">arrow_forward</span>
                             </Link>
@@ -96,7 +96,7 @@ export default function ForAgentPage() {
                         <p className="text-white/90 text-2xl font-medium max-w-[700px] mx-auto">The verification process takes less than 5 minutes. Join the elite network of agents today.</p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-8 relative z-10 pt-4">
-                        <Link href="/role-selection" className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Get Verified Now</Link>
+                        <Link href="https://centralhubsolution.com/register/affiliate" className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Get Verified Now</Link>
                     </div>
                 </div>
             </section>
