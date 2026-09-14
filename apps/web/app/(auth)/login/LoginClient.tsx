@@ -84,9 +84,9 @@ export function LoginClient() {
                     <div className="mt-10 text-center">
                         <p className="text-text-secondary text-sm font-medium">
                             Don&apos;t have an account?{" "}
-                            <Link href="/role-selection" className="text-primary font-bold hover:underline underline-offset-4 decoration-2">
+                            <a href="https://centralhubsolution.com/register/affiliate" className="text-primary font-bold hover:underline underline-offset-4 decoration-2">
                                 Create an account
-                            </Link>
+                            </a>
                         </p>
                     </div>
 

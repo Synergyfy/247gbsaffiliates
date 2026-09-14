@@ -23,7 +23,7 @@ export default function ForConsultantPage() {
                             <p className="max-w-2xl text-lg md:text-xl text-text-secondary mb-10 leading-relaxed font-body">
                                 Connect with high-value clients across legal, tech, and creative sectors. Set your rates, manage sessions, and grow your consulting practice.
                             </p>
-                            <Link href="/role-selection" className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary-hover text-white rounded-full font-display font-semibold transition-all hover:scale-105 shadow-lg shadow-primary/25">
+                            <Link href="https://centralhubsolution.com/register/affiliate" className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary-hover text-white rounded-full font-display font-semibold transition-all hover:scale-105 shadow-lg shadow-primary/25">
                                 Apply as Consultant
                                 <span className="material-symbols-outlined ml-2">arrow_forward</span>
                             </Link>
@@ -96,7 +96,7 @@ export default function ForConsultantPage() {
                         <p className="text-white/90 text-2xl font-medium max-w-[700px] mx-auto">Join the platform where professionals build thriving independent practices.</p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-8 relative z-10 pt-4">
-                        <Link href="/role-selection" className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Apply Now</Link>
+                        <Link href="https://centralhubsolution.com/register/affiliate" className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Apply Now</Link>
                     </div>
                 </div>
             </section>
