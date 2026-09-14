@@ -17,60 +17,6 @@ export const useAuth = () => {
     return response.data;
   };
 
-  const loginMutation = useMutation({
-    mutationFn: async (credentials: { email: string; password?: string }) => {
-      const response = await apiClient.post("/auth/login", credentials);
-      return response.data;
-    },
-    onSuccess: async (data) => {
-      const accessToken = data.access_token || data.accessToken;
-      if (!accessToken) {
-        router.push("/login");
-        return;
-      }
-
-      try {
-        const userData = await fetchUserProfile(accessToken);
-        setAuth(userData, accessToken);
-        if (userData?.role) {
-          router.push(`/dashboard/${userData.role.toLowerCase().replace('_', '-')}`);
-        } else {
-          router.push("/dashboard/agent");
-        }
-      } catch (e) {
-        console.error("Failed to fetch user profile", e);
-        router.push("/login");
-      }
-    },
-  });
-
-  const signupMutation = useMutation({
-    mutationFn: async (userData: any) => {
-      const response = await apiClient.post("/auth/register", userData);
-      return response.data;
-    },
-    onSuccess: async (data) => {
-      const accessToken = data.access_token || data.accessToken;
-      if (!accessToken) {
-        router.push("/login");
-        return;
-      }
-
-      try {
-        const userData = await fetchUserProfile(accessToken);
-        setAuth(userData, accessToken);
-        if (userData?.role) {
-          router.push(`/dashboard/${userData.role.toLowerCase().replace('_', '-')}`);
-        } else {
-          router.push("/dashboard/agent");
-        }
-      } catch (e) {
-        console.error("Failed to fetch user profile", e);
-        router.push("/login");
-      }
-    },
-  });
-
   const logoutMutation = useMutation({
     mutationFn: async () => {
       return Promise.resolve();
@@ -97,15 +43,10 @@ export const useAuth = () => {
   return {
     user,
     isAuthenticated,
-    login: loginMutation.mutateAsync,
-    isLoggingIn: loginMutation.isPending,
-    signup: signupMutation.mutateAsync,
-    isSigningUp: signupMutation.isPending,
+    fetchUserProfile,
     logout: logoutMutation.mutateAsync,
     isLoggingOut: logoutMutation.isPending,
     deleteAccount: deleteAccountMutation.mutateAsync,
     isDeletingAccount: deleteAccountMutation.isPending,
-    loginError: loginMutation.error,
-    signupError: signupMutation.error,
   };
 };
