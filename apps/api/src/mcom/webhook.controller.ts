@@ -1,10 +1,20 @@
-import { Controller, Post, Req, Res, Logger } from '@nestjs/common';
+import { Controller, Logger, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { createHash, createHmac, timingSafeEqual } from 'crypto';
+import { createHash } from 'crypto';
 import { McomService } from './mcom.service';
 import { UsersService } from '../users/users.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+
+interface CentralWebhookEvent {
+  event?: string;
+  type?: string;
+  user_id?: string;
+  mcomUserId?: string;
+  membership?: { level?: string; tier?: string; status?: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
 
 @ApiTags('webhooks')
 @Controller()
@@ -13,102 +23,114 @@ export class WebhookController {
   private readonly processedHashes = new Set<string>();
 
   constructor(
-    private mcomService: McomService,
-    private usersService: UsersService,
+    private readonly mcomService: McomService,
+    private readonly usersService: UsersService,
   ) {}
 
   @Public()
   @Post('webhooks')
-  @ApiOperation({ summary: 'MCOM Central lifecycle webhook' })
-  async webhook(@Req() req: Request, @Res() res: Response) {
-    const rawBody = JSON.stringify(req.body);
-    const signatureHeader = req.headers['x-mcom-signature'] as string;
+  @ApiOperation({ summary: 'Central Hub lifecycle webhook' })
+  async webhook(@Req() req: Request, @Res() res: Response): Promise<void> {
+    const rawBody = JSON.stringify(req.body ?? {});
+    const signatureHeader = req.headers['x-mcom-signature'] as
+      | string
+      | undefined;
+    const timestampHeader = req.headers['x-mcom-timestamp'] as
+      | string
+      | undefined;
 
-    // Verify HMAC signature: "sha256=<hex>"
-    if (signatureHeader) {
-      const webhookSecret = this.mcomService['config'].get<string>('MCOM_WEBHOOK_SECRET')!;
-      const expectedSig = createHmac('sha256', webhookSecret)
-        .update(rawBody)
-        .digest('hex');
-      const receivedSig = signatureHeader.replace(/^sha256=/, '');
-
-      const isValid = timingSafeEqual(
-        Buffer.from(receivedSig, 'hex'),
-        Buffer.from(expectedSig, 'hex'),
+    // Verify HMAC when Central signs the request.
+    if (signatureHeader && timestampHeader) {
+      const valid = this.mcomService.verifyWebhookSignature(
+        rawBody,
+        signatureHeader,
+        timestampHeader,
       );
-
-      if (!isValid) {
+      if (!valid) {
         this.logger.warn('Webhook signature verification failed');
-        return res.status(401).json({ error: 'Invalid HMAC signature' });
+        res.status(401).json({ error: 'Invalid HMAC signature' });
+        return;
       }
     }
 
-    // Idempotent dedup via SHA-256 body hashing
+    // Idempotent dedup via SHA-256 body hash (in-memory, last 1000).
     const bodyHash = createHash('sha256').update(rawBody).digest('hex');
     if (this.processedHashes.has(bodyHash)) {
-      return res.status(200).json({ ok: true, duplicate: true });
+      res.status(200).json({ ok: true, duplicate: true });
+      return;
     }
     this.processedHashes.add(bodyHash);
-
-    // Clean up old hashes periodically (keep last 1000)
     if (this.processedHashes.size > 1000) {
-      const arr = Array.from(this.processedHashes);
-      arr.slice(0, 500).forEach((h) => this.processedHashes.delete(h));
+      const oldest = Array.from(this.processedHashes).slice(0, 500);
+      oldest.forEach((h) => this.processedHashes.delete(h));
     }
 
-    const event = req.body;
-    const eventType: string = event.event || event.type || '';
-    const mcomUserId: string = event.user_id || event.mcomUserId || '';
+    const event = req.body as CentralWebhookEvent;
+    const eventType = event.event || event.type || '';
+    const mcomUserId = event.user_id || event.mcomUserId || '';
 
     this.logger.log(`Webhook received: ${eventType} for user ${mcomUserId}`);
 
     try {
-      // Find user by mcomUserId
+      if (!mcomUserId) {
+        res.status(200).json({ ok: true, noUser: true });
+        return;
+      }
+
       const users = await this.usersService['usersRepository'].find({
         where: { mcomUserId },
       });
       const user = users[0];
 
       if (!user) {
-        this.logger.warn(`No local user found for mcomUserId: ${mcomUserId}`);
-        return res.status(200).json({ ok: true, noUser: true });
+        this.logger.warn(`No local user for mcomUserId: ${mcomUserId}`);
+        res.status(200).json({ ok: true, noUser: true });
+        return;
       }
 
+      // No plan gating on 247gbs affiliate: webhooks only sync
+      // membership metadata for display. Access is never revoked here.
       switch (eventType) {
         case 'package.created':
         case 'package.renewed':
+        case 'membership.updated':
+        case 'user.updated':
           await this.usersService.update(user.id, {
-            mcomMembershipStatus: 'active',
-            mcomCanAccessVcard: true,
-          } as any);
-          if (event.membership) {
-            await this.usersService.update(user.id, {
+            ...(event.membership?.status && {
+              mcomMembershipStatus: event.membership.status,
+            }),
+            ...(event.membership?.level && {
               mcomMembershipLevel: event.membership.level,
+            }),
+            ...(event.membership?.tier && {
               mcomMembershipTier: event.membership.tier,
-            } as any);
-          }
+            }),
+          } as never);
           break;
 
         case 'package.cancelled':
         case 'package.expired':
+          // Sync status metadata only — do NOT revoke affiliate access.
           await this.usersService.update(user.id, {
-            mcomMembershipStatus: eventType === 'package.expired' ? 'expired' : 'cancelled',
-            mcomCanAccessVcard: false,
-          } as any);
+            mcomMembershipStatus:
+              eventType === 'package.expired' ? 'expired' : 'cancelled',
+          } as never);
           break;
 
         case 'payment.failed':
-          this.logger.warn(`Payment failed for user ${user.id} (${user.email})`);
+          this.logger.warn(`Payment failed for ${user.id} (${user.email})`);
           break;
 
         default:
           this.logger.log(`Unhandled webhook event: ${eventType}`);
       }
 
-      return res.status(200).json({ ok: true });
+      res.status(200).json({ ok: true });
     } catch (err) {
-      this.logger.error(`Webhook processing error: ${err.message}`);
-      return res.status(200).json({ ok: true, error: err.message });
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Webhook processing error: ${message}`);
+      // Return 200 so Central does not retry a poisoned event endlessly.
+      res.status(200).json({ ok: true, error: message });
     }
   }
 }

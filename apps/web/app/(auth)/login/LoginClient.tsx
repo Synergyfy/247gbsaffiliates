@@ -4,15 +4,16 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthSidebar from "@/components/auth/AuthSidebar";
+import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 import { mcomService } from "@/services/mcom";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  no_access: "Your account doesn't have an active subscription for this platform. Please purchase a package to continue.",
-  sso_callback_failed: "SSO login failed. Please try again.",
+  sso_callback_failed: "Sign in failed. Please try again.",
   sso_no_token: "Authentication completed but no token was received. Please try again.",
-  sso_missing_token: "SSO login failed. Please try again.",
-  sso_state_mismatch: "SSO login failed due to security mismatch. Please try again.",
-  sso_exchange_failed: "SSO login failed during token exchange. Please try again.",
+  sso_missing_token: "Sign in failed. Please try again.",
+  sso_state_mismatch: "Sign in failed due to security mismatch. Please try again.",
+  sso_exchange_failed: "Sign in failed during token exchange. Please try again.",
+  sso_invalid_token: "Sign in failed. Please try again.",
 };
 
 export function LoginClient() {
@@ -22,7 +23,12 @@ export function LoginClient() {
     useEffect(() => {
       const error = searchParams.get('error');
       if (error && ERROR_MESSAGES[error]) {
-        setMcomError(ERROR_MESSAGES[error]);
+        const detail = searchParams.get('detail');
+        setMcomError(
+          detail && process.env.NODE_ENV !== 'production'
+            ? `${ERROR_MESSAGES[error]} (Central: ${detail})`
+            : ERROR_MESSAGES[error],
+        );
       }
     }, [searchParams]);
 
@@ -54,7 +60,7 @@ export function LoginClient() {
 
                     <div className="mb-10">
                         <h1 className="text-3xl font-bold text-text-main mb-3 leading-tight tracking-tight font-display">Welcome back</h1>
-                        <p className="text-text-secondary font-medium">Sign in with your MCOM Solutions account to continue.</p>
+                        <p className="text-text-secondary font-medium">Sign in with your Central Hub Solutions account to continue.</p>
                     </div>
 
                     <div className="flex flex-col gap-4">
@@ -68,8 +74,8 @@ export function LoginClient() {
                                 setMcomError(null);
                                 try {
                                     await mcomService.startLogin();
-                                } catch (err: any) {
-                                    setMcomError(err.message || 'Failed to connect to MCOM Solutions. Please try again.');
+                                } catch (err: unknown) {
+                                    setMcomError(err instanceof Error ? err.message : 'Failed to connect to Central Hub Solutions. Please try again.');
                                 }
                             }}
                             className="flex items-center justify-center gap-3 w-full py-4 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm text-lg"
@@ -77,14 +83,14 @@ export function LoginClient() {
                             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
                             </svg>
-                            Sign in with MCOM Solutions
+                            Sign in with Central Hub Solutions
                         </button>
                     </div>
 
                     <div className="mt-10 text-center">
                         <p className="text-text-secondary text-sm font-medium">
                             Don&apos;t have an account?{" "}
-                            <a href="https://centralhubsolution.com/register/affiliate" className="text-primary font-bold hover:underline underline-offset-4 decoration-2">
+                            <a href={getAffiliateRegisterUrl()} className="text-primary font-bold hover:underline underline-offset-4 decoration-2">
                                 Create an account
                             </a>
                         </p>

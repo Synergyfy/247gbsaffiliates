@@ -1,11 +1,28 @@
 import apiClient from '@/lib/apiClient';
 
+export interface McomSsoConfig {
+  membershipUrl?: string;
+  walletEnabled: boolean;
+  configured: boolean;
+}
+
+export interface McomSsoStatus {
+  connected: boolean;
+  mcomUserId: string | null;
+  membership: {
+    level: string | null;
+    tier: string | null;
+    status: string | null;
+    canAccessAffiliate: boolean;
+  };
+}
+
 export const mcomService = {
-  async startLogin(card?: string, business?: string, redirect?: string) {
-    const { data } = await apiClient.get('/auth/sso/config');
+  async startLogin(card?: string, business?: string, redirect?: string): Promise<void> {
+    const { data } = await apiClient.get<McomSsoConfig>('/auth/sso/config');
     if (!data.configured) {
       throw new Error(
-        'MCOM Solutions is not configured on the backend. Please set MCOM_SOLUTIONS_URL and MCOM_CLIENT_ID.'
+        'Central Hub Solutions is not configured on the backend. Please set MCOM_SOLUTIONS_URL and MCOM_CLIENT_ID.',
       );
     }
     const params = new URLSearchParams();
@@ -16,25 +33,15 @@ export const mcomService = {
     window.location.href = `${apiClient.defaults.baseURL}/auth/sso/login${qs}`;
   },
 
-  async completeLogin(code: string, state: string) {
-    const response = await apiClient.post('/auth/sso/callback', { code, state });
-    return response.data;
-  },
-
-  async refreshSession(userId: string) {
+  async refreshSession(userId: string): Promise<{ success: boolean }> {
     const response = await apiClient.post('/auth/sso/refresh', { userId });
     return response.data;
   },
 
-  async getStatus(userId: string, sync?: boolean) {
+  async getStatus(userId: string, sync?: boolean): Promise<McomSsoStatus> {
     const params = new URLSearchParams({ userId });
     if (sync) params.set('sync', '1');
     const response = await apiClient.get(`/auth/sso/status?${params.toString()}`);
-    return response.data;
-  },
-
-  async completeHandshake(token: string) {
-    const response = await apiClient.get(`/auth/sso-login?token=${token}`);
     return response.data;
   },
 };

@@ -2,53 +2,102 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { createHash, createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
+import { verify as verifyJwt } from 'jsonwebtoken';
 import { UsersService } from '../users/users.service';
 import { encryptMcomToken, decryptMcomToken } from './mcom-crypto.util';
+import {
+  JitProvisionInput,
+  McomCentralUser,
+  McomRefreshResponse,
+  McomSsoConfig,
+  McomTokenResponse,
+  MCOM_PERMISSION_KEY,
+  MCOM_PERMISSION_KEY_LEGACY,
+} from './mcom.types';
+
+interface HandshakeJwtPayload {
+  sub?: string;
+  email: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+  membership?: { level?: string | null; status?: string | null };
+  permissions?: Record<string, boolean>;
+}
 
 @Injectable()
 export class McomService {
   private readonly logger = new Logger(McomService.name);
 
   constructor(
-    private config: ConfigService,
-    private http: HttpService,
-    private usersService: UsersService,
+    private readonly config: ConfigService,
+    private readonly http: HttpService,
+    private readonly usersService: UsersService,
   ) {}
 
-  private get baseUrl() {
-    return this.config.get<string>('MCOM_SOLUTIONS_URL')!;
+  // ── Typed config access ──────────────────────────────────────────
+
+  get ssoConfig(): McomSsoConfig {
+    return {
+      solutionsUrl: this.requireEnv('MCOM_SOLUTIONS_URL'),
+      clientId: this.requireEnv('MCOM_CLIENT_ID'),
+      clientSecret: this.requireEnv('MCOM_CLIENT_SECRET'),
+      redirectUri: this.requireEnv('MCOM_REDIRECT_URI'),
+      scopes:
+        this.config.get<string>('MCOM_SCOPES') || 'profile email business',
+      platformSlug:
+        this.config.get<string>('MCOM_PLATFORM_SLUG') || '247gbs_affiliate',
+      frontendUrl:
+        this.config.get<string>('FRONTEND_URL') || 'http://localhost:7089',
+    };
   }
 
-  private get clientId() {
-    return this.config.get<string>('MCOM_CLIENT_ID')!;
+  private requireEnv(key: string): string {
+    const value = this.config.get<string>(key);
+    if (!value) throw new Error(`Missing required env var: ${key}`);
+    return value;
   }
 
-  private get clientSecret() {
-    return this.config.get<string>('MCOM_CLIENT_SECRET')!;
+  private get baseUrl(): string {
+    return this.ssoConfig.solutionsUrl.replace(/\/$/, '');
   }
 
-  private get hmacSecret() {
-    return this.config.get<string>('MCOM_HMAC_SECRET')!;
+  private get clientId(): string {
+    return this.ssoConfig.clientId;
   }
 
-  private get apiKey() {
-    return this.config.get<string>('MCOM_SOLUTION_API_KEY')!;
+  private get clientSecret(): string {
+    return this.ssoConfig.clientSecret;
   }
 
-  private get redirectUri() {
-    return this.config.get<string>('MCOM_REDIRECT_URI')!;
+  private get redirectUri(): string {
+    return this.ssoConfig.redirectUri;
   }
 
-  private get scopes() {
-    return this.config.get<string>('MCOM_SCOPES') || 'profile email';
+  private get scopes(): string {
+    return this.ssoConfig.scopes;
   }
 
-  private get platformSlug() {
-    return this.config.get<string>('MCOM_PLATFORM_SLUG')!;
+  private get hmacSecret(): string {
+    return this.config.get<string>('MCOM_HMAC_SECRET') ?? '';
   }
 
-  // ── Build authorize URL ──
+  /** Supports both the new `MCOM_API_KEY` name and the legacy `MCOM_SOLUTION_API_KEY`. */
+  private get apiKey(): string {
+    return (
+      this.config.get<string>('MCOM_API_KEY') ??
+      this.config.get<string>('MCOM_SOLUTION_API_KEY') ??
+      ''
+    );
+  }
+
+  private basicAuthHeader(): string {
+    return `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`;
+  }
+
+  // ── Step 1: Build Central authorize URL (32-byte state passed in) ──
 
   getAuthorizeUrl(state: string): string {
     const params = new URLSearchParams({
@@ -60,77 +109,84 @@ export class McomService {
     return `${this.baseUrl}/api/v1/auth/sso/authorize?${params.toString()}`;
   }
 
-  // ── Exchange code for tokens ──
+  // ── Step 2: Exchange authorization code for tokens + user profile ──
+  // Central authenticates the client via Basic auth (clientId:clientSecret)
+  // and rejects unknown body properties, so the body carries only
+  // code + client_id + redirect_uri.
 
-  async exchangeCode(code: string): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    user: {
-      id: string;
-      email: string;
-      name: string;
-      role: string;
-      membershipLevel: string;
-      membershipStatus: string;
-      permissions: Record<string, boolean>;
-    };
-  }> {
+  async exchangeCode(code: string): Promise<McomTokenResponse> {
     const url = `${this.baseUrl}/api/v1/auth/sso/token`;
     const body = {
-      code,
       client_id: this.clientId,
+      code,
       redirect_uri: this.redirectUri,
     };
-    // client_secret goes via Basic Auth, not in the body
-    const basicAuth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
     const { data } = await firstValueFrom(
-      this.http.post(url, body, {
-        headers: { Authorization: `Basic ${basicAuth}` },
+      this.http.post<McomTokenResponse>(url, body, {
+        headers: { Authorization: this.basicAuthHeader() },
+        timeout: 15000,
       }),
     );
     return data;
   }
 
-  // ── Refresh tokens ──
+  // ── Refresh an expired access token ──
 
-  async refreshTokens(refreshToken: string): Promise<{
-    accessToken: string;
-    refreshToken: string;
-  }> {
+  async refreshTokens(refreshToken: string): Promise<McomRefreshResponse> {
     const url = `${this.baseUrl}/api/v1/auth/sso/token/refresh`;
-    const basicAuth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
     const { data } = await firstValueFrom(
-      this.http.post(url, {
-        refresh_token: refreshToken,
-      }, {
-        headers: { Authorization: `Basic ${basicAuth}` },
+      this.http.post<McomRefreshResponse>(
+        url,
+        { refresh_token: refreshToken },
+        { headers: { Authorization: this.basicAuthHeader() }, timeout: 15000 },
+      ),
+    );
+    return data;
+  }
+
+  // ── Re-verify profile / entitlements without a full re-login ──
+
+  async getUserInfo(accessToken: string): Promise<McomCentralUser> {
+    const { data } = await firstValueFrom(
+      this.http.get<McomCentralUser>(
+        `${this.baseUrl}/api/v1/auth/sso/userinfo`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          timeout: 15000,
+        },
+      ),
+    );
+    return data;
+  }
+
+  // ── Server-to-server check (spec Task 7 format) ──
+  // GET /api/v1/data/user?userId=... with X-Service-Id / X-Timestamp / X-Signature
+  // where signature = HMAC_SHA256(secret, `${serviceId}:${timestamp}`).
+
+  async checkUserMembership(userId: string): Promise<unknown> {
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const serviceId = this.clientId;
+    const signature = createHmac('sha256', this.hmacSecret)
+      .update(`${serviceId}:${timestamp}`)
+      .digest('hex');
+
+    const { data } = await firstValueFrom(
+      this.http.get(`${this.baseUrl}/api/v1/data/user`, {
+        params: { userId },
+        headers: {
+          'X-Service-Id': serviceId,
+          'X-Timestamp': timestamp,
+          'X-Signature': signature,
+        },
+        timeout: 15000,
       }),
     );
     return data;
   }
 
-  // ── Fetch user info from Central ──
+  // ── Legacy HMAC-signed permissions lookup (kept for compatibility) ──
 
-  async getUserInfo(accessToken: string): Promise<{
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-    membershipLevel: string;
-    membershipStatus: string;
-    permissions: Record<string, boolean>;
-  }> {
-    const { data } = await firstValueFrom(
-      this.http.get(`${this.baseUrl}/api/v1/auth/sso/userinfo`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }),
-    );
-    return data;
-  }
-
-  // ── HMAC-signed server-to-server permissions ──
-
-  async fetchPermissions(mcomUserId: string): Promise<any> {
+  async fetchPermissions(mcomUserId: string): Promise<unknown> {
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const path = `/api/v1/data/permissions`;
     const signature = createHmac('sha256', this.hmacSecret)
@@ -146,129 +202,121 @@ export class McomService {
           'X-Mcom-User-ID': mcomUserId,
           Authorization: `Bearer ${this.apiKey}`,
         },
+        timeout: 15000,
       }),
     );
     return data;
   }
 
-  // ── Get user packages from Central ──
+  // ── Verify shared-secret JWT (Central → dashboard handshake) ──
 
-  async getUserPackages(mcomUserId: string): Promise<any[]> {
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const path = `/api/v1/users/${mcomUserId}/packages`;
-    const signature = createHmac('sha256', this.hmacSecret)
-      .update(`${timestamp}:${path}`)
-      .digest('hex');
-
-    const { data } = await firstValueFrom(
-      this.http.get(`${this.baseUrl}${path}`, {
-        headers: {
-          'X-Mcom-Client-ID': this.clientId,
-          'X-Mcom-Signature': signature,
-          'X-Mcom-Timestamp': timestamp,
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-      }),
-    );
-    return data;
-  }
-
-  // ── Verify shared-secret JWT (Direct Dashboard Handshake) ──
-
-  verifyHandshakeJwt(token: string): any {
-    const { verify } = require('jsonwebtoken');
-    return verify(token, this.config.get<string>('SSO_SECRET')!, {
+  verifyHandshakeJwt(token: string): HandshakeJwtPayload {
+    const secret = this.config.get<string>('SSO_SECRET');
+    if (!secret) throw new Error('Missing SSO_SECRET env var');
+    return verifyJwt(token, secret, {
       issuer: 'mcom-central',
       algorithms: ['HS256'],
-    });
+    }) as HandshakeJwtPayload;
   }
 
-  // ── Encrypt and store tokens on user ──
+  // ── Encrypt and store Central tokens on the local user ──
 
   async storeTokens(
     userId: string,
     accessToken: string,
     refreshToken: string,
-  ) {
-    const now = new Date();
-
+  ): Promise<void> {
     await this.usersService.update(userId, {
       mcomAccessToken: encryptMcomToken(accessToken),
       mcomRefreshToken: encryptMcomToken(refreshToken),
-      mcomTokensUpdatedAt: now,
-    } as any);
+      mcomTokensUpdatedAt: new Date(),
+    } as never);
   }
 
-  // ── Decrypt stored tokens ──
-
-  getDecryptedTokens(user: any): {
-    accessToken: string | null;
-    refreshToken: string | null;
-  } {
+  getDecryptedTokens(user: {
+    mcomAccessToken?: string | null;
+    mcomRefreshToken?: string | null;
+  }): { accessToken: string | null; refreshToken: string | null } {
     if (!user.mcomAccessToken || !user.mcomRefreshToken) {
       return { accessToken: null, refreshToken: null };
     }
-    return {
-      accessToken: decryptMcomToken(user.mcomAccessToken),
-      refreshToken: decryptMcomToken(user.mcomRefreshToken),
-    };
+    try {
+      return {
+        accessToken: decryptMcomToken(user.mcomAccessToken),
+        refreshToken: decryptMcomToken(user.mcomRefreshToken),
+      };
+    } catch (err) {
+      this.logger.warn(`Failed to decrypt stored MCOM tokens: ${err}`);
+      return { accessToken: null, refreshToken: null };
+    }
   }
 
-  // ── JIT provision or update user from Central userinfo ──
+  // ── JIT provision / update local user from Central identity ──
+  // NOTE: no plan gating — any authenticated Central user gets access.
+  // Membership + permission metadata is synced for display only.
 
-  async jitProvision(centralUser: {
-    sub: string;
-    email: string;
-    name?: string;
-    role?: string;
-    membership?: {
-      level: string;
-      status: string;
-    };
-    permissions?: Record<string, boolean>;
-  }) {
-    let user = await this.usersService.findByEmail(centralUser.email);
+  async jitProvision(input: JitProvisionInput) {
+    const permissions = input.permissions ?? {};
+    const canAccess =
+      permissions[MCOM_PERMISSION_KEY] ??
+      permissions[MCOM_PERMISSION_KEY_LEGACY] ??
+      true;
 
-    if (user) {
-      // Update existing user
-      await this.usersService.update(user.id, {
-        mcomUserId: centralUser.sub,
-        ...(centralUser.membership && {
-          mcomMembershipLevel: centralUser.membership.level,
-          mcomMembershipStatus: centralUser.membership.status,
-          mcomCanAccessVcard: centralUser.permissions?.['canAccess_247gbs_affiliate_test'] || false,
+    const existing = await this.usersService.findByEmail(input.email);
+    if (existing) {
+      await this.usersService.update(existing.id, {
+        mcomUserId: input.sub,
+        ...(input.membership && {
+          mcomMembershipLevel: input.membership.level ?? null,
+          mcomMembershipStatus: input.membership.status ?? null,
         }),
-      } as any);
-      return this.usersService.findOne(user.id);
+        mcomCanAccessVcard: Boolean(canAccess),
+      } as never);
+      return this.usersService.findOne(existing.id);
     }
 
-    // Create new user via JIT provisioning (no password needed for SSO)
-    const nameParts = (centralUser.name || '').split(' ');
-    const newUser = await this.usersService.create({
-      email: centralUser.email,
-      password: Math.random().toString(36).slice(-16) + '!' + Date.now(),
-      firstName: nameParts[0] || '',
-      lastName: nameParts.slice(1).join(' ') || '',
+    const nameParts = (input.name ?? '').trim().split(/\s+/).filter(Boolean);
+    const created = await this.usersService.create({
+      email: input.email,
+      password: `sso-${Date.now()}-${Math.random().toString(36).slice(2, 14)}!A9`,
+      firstName: nameParts[0] ?? '',
+      lastName: nameParts.slice(1).join(' ') ?? '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       role: 'agent' as any,
     });
 
-    // Update with MCOM fields
-    await this.usersService.update(newUser.id, {
-      mcomUserId: centralUser.sub,
-      mcomMembershipLevel: centralUser.membership?.level || null,
-      mcomMembershipStatus: centralUser.membership?.status || null,
-      mcomCanAccessVcard: centralUser.permissions?.['canAccess_247gbs_affiliate_test'] || false,
-    } as any);
+    await this.usersService.update(created.id, {
+      mcomUserId: input.sub,
+      mcomMembershipLevel: input.membership?.level ?? null,
+      mcomMembershipStatus: input.membership?.status ?? null,
+      mcomCanAccessVcard: Boolean(canAccess),
+    } as never);
 
-    return this.usersService.findOne(newUser.id);
+    return this.usersService.findOne(created.id);
   }
 
-  // ── HMAC signature verification for webhooks ──
+  /** Extract display name from the various Central user shapes. */
+  resolveDisplayName(user: McomCentralUser): string {
+    if (user.name?.trim()) return user.name.trim();
+    const full = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
+    if (full) return full;
+    return user.email;
+  }
 
-  verifyWebhookSignature(payload: string, signature: string, timestamp: string): boolean {
-    const expected = createHmac('sha256', this.config.get<string>('MCOM_WEBHOOK_SECRET')!)
+  // ── Webhook HMAC verification (constant-time compare) ──
+
+  verifyWebhookSignature(
+    payload: string,
+    signature: string,
+    timestamp: string,
+  ): boolean {
+    const secret = this.config.get<string>('MCOM_WEBHOOK_SECRET');
+    if (!secret || !signature || !timestamp) return false;
+    const expected = createHmac('sha256', secret)
       .update(`${timestamp}.${payload}`)
       .digest('hex');
-    return expected === signature;
+    const a = Buffer.from(expected, 'hex');
+    const b = Buffer.from(signature.replace(/^sha256=/, ''), 'hex');
+    return a.length === b.length && timingSafeEqual(a, b);
   }
 }

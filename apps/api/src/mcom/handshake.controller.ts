@@ -1,4 +1,10 @@
-import { Controller, Get, Query, Res, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Logger,
+  Query,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -9,54 +15,68 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 @ApiTags('auth/sso')
 @Controller()
 export class HandshakeController {
+  private readonly logger = new Logger(HandshakeController.name);
+
   constructor(
-    private mcomService: McomService,
-    private jwtService: JwtService,
-    private config: ConfigService,
+    private readonly mcomService: McomService,
+    private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
   ) {}
 
-  // ── Direct Dashboard Handshake: Central redirects with JWT ──
+  // ── Direct dashboard handshake: Central redirects with a
+  // shared-secret JWT (?token=). JIT-provision, issue local JWT,
+  // redirect to the web app. No plan gating. ──
 
   @Public()
   @Get('auth/sso-login')
-  @ApiOperation({ summary: 'Direct Dashboard Handshake from MCOM Central' })
+  @ApiOperation({ summary: 'Direct dashboard handshake from Central Hub' })
   async ssoLogin(
     @Query('token') token: string,
     @Res() res: Response,
-  ) {
+  ): Promise<void> {
+    const frontendUrl = (
+      this.config.get<string>('FRONTEND_URL') || 'http://localhost:7089'
+    ).replace(/\/$/, '');
+
     if (!token) {
-      return res.redirect('/login?error=sso_missing_token');
+      res.redirect(`${frontendUrl}/login?error=sso_missing_token`);
+      return;
     }
 
     try {
-      // Verify shared-secret JWT
       const payload = this.mcomService.verifyHandshakeJwt(token);
 
-      // JIT-provision user
-      const centralUser = {
-        sub: payload.sub || payload.email,
-        email: payload.email,
-        name: payload.name || `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
-        role: payload.role,
-        membership: payload.membership || undefined,
-        permissions: payload.permissions || undefined,
-      };
-      const user = await this.mcomService.jitProvision(centralUser);
+      if (!payload.email) {
+        throw new Error('Handshake JWT missing email');
+      }
 
-      // Issue local session JWT
-      const localPayload = {
+      const name =
+        payload.name ??
+        `${payload.firstName ?? ''} ${payload.lastName ?? ''}`.trim();
+
+      const user = await this.mcomService.jitProvision({
+        sub: payload.sub || payload.email,
+        email: payload.email.toLowerCase(),
+        name: name || payload.email,
+        role: payload.role,
+        membership: payload.membership,
+        permissions: payload.permissions,
+      });
+
+      const localToken = this.jwtService.sign({
         email: user.email,
         sub: user.id,
         role: user.role,
         isOnboarded: user.isOnboarded,
-      };
-      const localToken = this.jwtService.sign(localPayload);
+      });
 
-      // Redirect to frontend with token
-      const frontendUrl = this.config.get<string>('MCOM_REDIRECT_URI')?.replace('/auth/callback', '') || 'http://localhost:3011';
-      return res.redirect(`${frontendUrl}/auth/callback?token=${localToken}&role=${user.role}`);
+      const role = (user.role ?? 'agent').toLowerCase().replace('_', '-');
+      res.redirect(
+        `${frontendUrl}/auth/callback?token=${encodeURIComponent(localToken)}&role=${encodeURIComponent(role)}`,
+      );
     } catch (err) {
-      return res.redirect('/login?error=sso_invalid_token');
+      this.logger.warn(`Handshake verification failed: ${err}`);
+      res.redirect(`${frontendUrl}/login?error=sso_invalid_token`);
     }
   }
 }

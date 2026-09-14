@@ -1,11 +1,12 @@
 import {
+  Body,
   Controller,
   Get,
+  Logger,
   Post,
   Query,
   Req,
   Res,
-  Body,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -23,79 +24,134 @@ import {
   clearReturnCookie,
 } from './oauth-state.util';
 import { randomBytes } from 'crypto';
+import { UsersService } from '../users/users.service';
+import {
+  MCOM_PERMISSION_KEY,
+  MCOM_PERMISSION_KEY_LEGACY,
+} from './mcom.types';
+
+function sanitizeRole(role: unknown): string {
+  const raw = typeof role === 'string' && role ? role : 'agent';
+  return raw.toLowerCase().replace(/[^a-z-]/g, '').replace('_', '-') || 'agent';
+}
 
 @ApiTags('auth/sso')
 @Controller('auth/sso')
 export class SsoController {
+  private readonly logger = new Logger(SsoController.name);
+
   constructor(
-    private mcomService: McomService,
-    private jwtService: JwtService,
-    private config: ConfigService,
+    private readonly mcomService: McomService,
+    private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
+    private readonly usersService: UsersService,
   ) {}
 
-  // ── Step 1: Generate CSRF state, return Central authorize URL ──
+  private frontendUrl(): string {
+    return (
+      this.config.get<string>('FRONTEND_URL') || 'http://localhost:7089'
+    ).replace(/\/$/, '');
+  }
+
+  // ── Step 1: set 32-byte CSRF state cookie, redirect to Central ──
 
   @Public()
   @Get('login')
-  @ApiOperation({ summary: 'Initiate MCOM OAuth login' })
+  @ApiOperation({ summary: 'Initiate Central Hub OAuth login' })
   async login(
-    @Req() req: Request,
+    @Req() _req: Request,
     @Res() res: Response,
     @Query('card') card?: string,
     @Query('business') business?: string,
     @Query('redirect') redirect?: string,
-  ) {
+  ): Promise<void> {
     const state = randomBytes(32).toString('hex');
     setOAuthStateCookie(res, state);
 
     if (card || business || redirect) {
-      setReturnCookie(res, { card: card || '', business: business || '', redirect: redirect || '' });
+      setReturnCookie(res, {
+        card: card ?? '',
+        business: business ?? '',
+        redirect: redirect ?? '',
+      });
     }
 
-    const authorizeUrl = this.mcomService.getAuthorizeUrl(state);
-    return res.redirect(authorizeUrl);
+    res.redirect(this.mcomService.getAuthorizeUrl(state));
   }
 
-  // ── Step 2: Handle OAuth callback (browser navigates here directly) ──
+  // ── Step 2: Central redirects here (MCOM_REDIRECT_URI). Exchange
+  // code server-side, JIT-provision (no plan gating), issue local JWT,
+  // then redirect to the web app with token+role. ──
 
   @Public()
   @Get('callback')
-  @ApiOperation({ summary: 'Complete MCOM OAuth callback' })
+  @ApiOperation({ summary: 'Complete Central Hub OAuth callback' })
   async callback(
     @Req() req: Request,
     @Res() res: Response,
-    @Query('code') code: string,
-    @Query('state') state: string,
-    @Query('error') error: string,
-  ) {
-    const frontendUrl = this.config.get<string>('MCOM_REDIRECT_URI')?.replace('/auth/callback', '') || 'http://localhost:3011';
+    @Query('code') code?: string,
+    @Query('state') state?: string,
+    @Query('error') error?: string,
+  ): Promise<void> {
+    const frontendUrl = this.frontendUrl();
 
     if (error) {
-      return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
+      this.logger.warn(`Central SSO error: ${error}`);
+      res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(error)}`);
+      return;
+    }
+
+    if (!code || !state) {
+      res.redirect(`${frontendUrl}/login?error=sso_callback_failed`);
+      return;
     }
 
     const savedState = getOAuthStateCookie(req);
     clearOAuthStateCookie(res);
 
     if (!savedState || savedState !== state) {
-      return res.redirect(`${frontendUrl}/login?error=sso_state_mismatch`);
+      this.logger.warn('SSO state mismatch (possible CSRF)');
+      res.redirect(`${frontendUrl}/login?error=sso_state_mismatch`);
+      return;
     }
 
     try {
       const tokenResponse = await this.mcomService.exchangeCode(code);
+      const centralUser = tokenResponse.user;
 
-      const hasAccess = tokenResponse.user?.permissions?.['canAccess_247gbs_affiliate_test'] === true;
+      if (!centralUser?.email || !tokenResponse.accessToken) {
+        throw new Error('Central token response missing email/accessToken');
+      }
+
+      // Log access flag for observability only — never blocks login.
+      const canAccess =
+        centralUser.permissions?.[MCOM_PERMISSION_KEY] ??
+        centralUser.permissions?.[MCOM_PERMISSION_KEY_LEGACY];
+      this.logger.log(
+        `SSO login ${centralUser.email} canAccess=${String(canAccess)} ` +
+          `plan=${centralUser.businessProfile?.appPlan?.planName ?? 'n/a'}`,
+      );
+
+      const fullName =
+        centralUser.name ??
+        `${centralUser.firstName ?? ''} ${centralUser.lastName ?? ''}`.trim();
 
       const user = await this.mcomService.jitProvision({
-        sub: tokenResponse.user.id,
-        email: tokenResponse.user.email,
-        name: tokenResponse.user.name,
-        role: tokenResponse.user.role,
+        sub: centralUser.id,
+        email: centralUser.email.toLowerCase(),
+        name: fullName || centralUser.email,
+        role: centralUser.role,
         membership: {
-          level: tokenResponse.user.membershipLevel,
-          status: tokenResponse.user.membershipStatus,
+          level:
+            centralUser.membershipLevel ??
+            centralUser.businessProfile?.membershipLevel ??
+            null,
+          status:
+            centralUser.membershipStatus ??
+            centralUser.businessProfile?.membershipStatus ??
+            null,
         },
-        permissions: tokenResponse.user.permissions,
+        permissions: centralUser.permissions,
       });
 
       await this.mcomService.storeTokens(
@@ -104,33 +160,52 @@ export class SsoController {
         tokenResponse.refreshToken,
       );
 
-      const payload = {
+      const localToken = this.jwtService.sign({
         email: user.email,
         sub: user.id,
         role: user.role,
         isOnboarded: user.isOnboarded,
-      };
-      const localToken = this.jwtService.sign(payload);
+      });
 
       const returnData = getReturnCookie(req);
       clearReturnCookie(res);
 
-      const role = user.role?.toLowerCase().replace('_', '-') || 'agent';
-      const redirectUrl = returnData?.redirect || `${frontendUrl}/auth/callback?token=${localToken}&role=${role}`;
-      return res.redirect(redirectUrl);
-    } catch (err: any) {
-      console.error('[SSO] Token exchange failed:', err.response?.data || err.message);
-      return res.redirect(`${frontendUrl}/login?error=sso_exchange_failed`);
+      const role = sanitizeRole(user.role);
+      const redirectUrl =
+        returnData?.redirect ||
+        `${frontendUrl}/auth/callback?token=${encodeURIComponent(localToken)}&role=${encodeURIComponent(role)}`;
+      res.redirect(redirectUrl);
+    } catch (err: unknown) {
+      const axiosData = (err as { response?: { data?: unknown; status?: number } })
+        ?.response;
+      const detail =
+        (axiosData?.data as { message?: unknown } | undefined)?.message ??
+        axiosData?.data ??
+        (err as Error)?.message ??
+        'unknown error';
+      this.logger.error(
+        `SSO token exchange failed (status ${axiosData?.status ?? 'n/a'}): ${JSON.stringify(detail)}`,
+      );
+      // In development, forward Central's message so the login page can
+      // show it; in production keep the generic error code.
+      const isProd = this.config.get<string>('NODE_ENV') === 'production';
+      const detailStr = String(
+        Array.isArray(detail) ? detail.join(', ') : detail,
+      ).slice(0, 200);
+      const suffix =
+        !isProd && detailStr ? `&detail=${encodeURIComponent(detailStr)}` : '';
+      res.redirect(`${frontendUrl}/login?error=sso_exchange_failed${suffix}`);
     }
   }
 
-  // ── Refresh Central tokens ──
+  // ── Refresh Central tokens + re-sync profile ──
 
   @Public()
   @Post('refresh')
-  @ApiOperation({ summary: 'Refresh MCOM Central tokens' })
-  async refresh(@Body('userId') userId: string) {
-    const user = await this.mcomService['usersService'].findOne(userId);
+  @ApiOperation({ summary: 'Refresh Central Hub tokens' })
+  async refresh(@Body('userId') userId: string): Promise<{ success: true }> {
+    if (!userId) throw new UnauthorizedException('userId is required');
+    const user = await this.usersService.findOne(userId);
     const tokens = this.mcomService.getDecryptedTokens(user);
 
     if (!tokens.refreshToken) {
@@ -138,111 +213,134 @@ export class SsoController {
     }
 
     const refreshed = await this.mcomService.refreshTokens(tokens.refreshToken);
-
     await this.mcomService.storeTokens(
       user.id,
       refreshed.accessToken,
       refreshed.refreshToken,
     );
 
-    // Sync profile
-    const centralUser = await this.mcomService.getUserInfo(refreshed.accessToken);
-    await this.mcomService.jitProvision({
-      sub: centralUser.id,
-      email: centralUser.email,
-      name: centralUser.name,
-      role: centralUser.role,
-      membership: {
-        level: centralUser.membershipLevel,
-        status: centralUser.membershipStatus,
-      },
-      permissions: centralUser.permissions,
-    });
+    try {
+      const centralUser = await this.mcomService.getUserInfo(
+        refreshed.accessToken,
+      );
+      await this.mcomService.jitProvision({
+        sub: centralUser.id,
+        email: centralUser.email.toLowerCase(),
+        name: this.mcomService.resolveDisplayName(centralUser),
+        role: centralUser.role,
+        membership: {
+          level: centralUser.membershipLevel ?? null,
+          status: centralUser.membershipStatus ?? null,
+        },
+        permissions: centralUser.permissions,
+      });
+    } catch (err) {
+      this.logger.warn(`Post-refresh userinfo sync failed: ${err}`);
+    }
 
     return { success: true };
   }
 
-  // ── Current access status ──
+  // ── Access status (membership metadata for display only) ──
 
   @Public()
   @Get('status')
-  @ApiOperation({ summary: 'Get MCOM SSO access status' })
-  async status(@Query('userId') userId: string, @Query('sync') sync?: string) {
-    const user = await this.mcomService['usersService'].findOne(userId);
+  @ApiOperation({ summary: 'Get Central Hub SSO status' })
+  async status(
+    @Query('userId') userId: string,
+    @Query('sync') sync?: string,
+  ): Promise<{
+    connected: boolean;
+    mcomUserId: string | null;
+    membership: {
+      level: string | null;
+      tier: string | null;
+      status: string | null;
+      canAccessAffiliate: boolean;
+    };
+  }> {
+    if (!userId) throw new UnauthorizedException('userId is required');
+    let user = await this.usersService.findOne(userId);
 
     if (sync === '1' && user.mcomAccessToken) {
       const tokens = this.mcomService.getDecryptedTokens(user);
       if (tokens.accessToken) {
         try {
-          const centralUser = await this.mcomService.getUserInfo(tokens.accessToken);
+          const centralUser = await this.mcomService.getUserInfo(
+            tokens.accessToken,
+          );
           await this.mcomService.jitProvision({
             sub: centralUser.id,
-            email: centralUser.email,
-            name: centralUser.name,
+            email: centralUser.email.toLowerCase(),
+            name: this.mcomService.resolveDisplayName(centralUser),
             role: centralUser.role,
             membership: {
-              level: centralUser.membershipLevel,
-              status: centralUser.membershipStatus,
+              level: centralUser.membershipLevel ?? null,
+              status: centralUser.membershipStatus ?? null,
             },
             permissions: centralUser.permissions,
           });
         } catch {
-          // Token may be expired, try refresh
           if (tokens.refreshToken) {
             try {
-              const refreshed = await this.mcomService.refreshTokens(tokens.refreshToken);
+              const refreshed = await this.mcomService.refreshTokens(
+                tokens.refreshToken,
+              );
               await this.mcomService.storeTokens(
                 user.id,
                 refreshed.accessToken,
                 refreshed.refreshToken,
               );
             } catch {
-              // Refresh failed
+              // Refresh failed — status below still reflects stored state.
             }
           }
         }
+        user = await this.usersService.findOne(userId);
       }
     }
 
-    const updated = await this.mcomService['usersService'].findOne(userId);
     return {
-      connected: !!updated.mcomUserId,
-      mcomUserId: updated.mcomUserId,
+      connected: Boolean(user.mcomUserId),
+      mcomUserId: user.mcomUserId ?? null,
       membership: {
-        level: updated.mcomMembershipLevel,
-        tier: updated.mcomMembershipTier,
-        status: updated.mcomMembershipStatus,
-        canAccessVcard: updated.mcomCanAccessVcard,
+        level: user.mcomMembershipLevel ?? null,
+        tier: user.mcomMembershipTier ?? null,
+        status: user.mcomMembershipStatus ?? null,
+        canAccessAffiliate: user.mcomCanAccessVcard ?? false,
       },
     };
   }
 
-  // ── Public config ──
+  // ── Public config for the web app ──
 
   @Public()
   @Get('config')
-  @ApiOperation({ summary: 'Get MCOM SSO public config' })
-  getConfig() {
-    const solutionsUrl = this.config.get<string>('MCOM_SOLUTIONS_URL');
-    const clientId = this.config.get<string>('MCOM_CLIENT_ID');
-    const redirectUri = this.config.get<string>('MCOM_REDIRECT_URI');
-
+  @ApiOperation({ summary: 'Get Central Hub SSO public config' })
+  getConfig(): {
+    membershipUrl: string | undefined;
+    walletEnabled: boolean;
+    configured: boolean;
+  } {
+    const { solutionsUrl, clientId } = this.mcomService.ssoConfig;
     return {
       membershipUrl: this.config.get<string>('MCOM_MEMBERSHIP_URL'),
-      walletEnabled: this.config.get<string>('MCOM_WALLET_ENABLED') === 'true',
-      configured: !!(solutionsUrl && clientId),
+      walletEnabled:
+        this.config.get<string>('MCOM_WALLET_ENABLED') === 'true',
+      configured: Boolean(solutionsUrl && clientId),
     };
   }
 
-  // ── HMAC-signed permissions ──
+  // ── HMAC-signed permissions lookup ──
 
   @Public()
   @Get('data/permissions')
-  @ApiOperation({ summary: 'Fetch permissions from MCOM Central' })
-  async permissions(@Query('userId') userId: string) {
-    const user = await this.mcomService['usersService'].findOne(userId);
+  @ApiOperation({ summary: 'Fetch permissions from Central Hub' })
+  async permissions(@Query('userId') userId: string): Promise<unknown> {
+    if (!userId) throw new UnauthorizedException('userId is required');
+    const user = await this.usersService.findOne(userId);
     if (!user.mcomUserId) {
-      throw new UnauthorizedException('Not connected to MCOM Central');
+      throw new UnauthorizedException('Not connected to Central Hub');
     }
     return this.mcomService.fetchPermissions(user.mcomUserId);
   }

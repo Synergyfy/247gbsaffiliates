@@ -27,18 +27,24 @@ import { McomModule } from './mcom/mcom.module';
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_NAME'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: configService.get<boolean>('DB_SYNC'), // Set to false in production
-        logging: configService.get<string>('NODE_ENV') === 'development',
-        ssl: configService.get<boolean>('DB_SSL') ? { rejectUnauthorized: false } : false,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const isSsl = String(configService.get('DB_SSL')).toLowerCase() === 'true';
+        const isSync = String(configService.get('DB_SYNC')).toLowerCase() === 'true';
+        const port = Number(configService.get('DB_PORT') ?? 5432);
+
+        return {
+          type: 'postgres',
+          host: configService.get<string>('DB_HOST') ?? 'localhost',
+          port,
+          username: configService.get<string>('DB_USERNAME') ?? 'postgres',
+          password: configService.get<string>('DB_PASSWORD'),
+          database: configService.get<string>('DB_NAME') ?? '247gbs-affiliate',
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize: isSync, // Set to false in production
+          logging: configService.get<string>('NODE_ENV') === 'development',
+          ssl: isSsl ? { rejectUnauthorized: false } : false,
+        };
+      },
       inject: [ConfigService],
     }),
     AuthModule,

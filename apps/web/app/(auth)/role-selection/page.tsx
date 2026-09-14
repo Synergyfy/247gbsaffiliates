@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 
 const roles = [
     {
@@ -8,14 +9,14 @@ const roles = [
         title: "Agent",
         description: "Entry-level specialists who complete focused micro-tasks like social post setup, basic email templates, short product descriptions, quick website checks, or small audits. Agents take a short qualification test to appear in listings.",
         icon: "person_search",
-                        href: "https://centralhubsolution.com/register/affiliate",
+                        href: getAffiliateRegisterUrl(),
     },
     {
         id: "account-manager",
         title: "Account Manager",
         description: "Mid-level professionals who coordinate onboarding, manage teams of agents, plan and run campaigns, and match businesses to services. Account Managers handle client communications and deliver measurable results.",
         icon: "business_center",
-                        href: "https://centralhubsolution.com/register/affiliate",
+                        href: getAffiliateRegisterUrl(),
         popular: true,
     },
     {
@@ -23,7 +24,7 @@ const roles = [
         title: "Consultant",
         description: "Senior experts who provide business advice, audits, strategic plans, and deep coaching. Consultants can be visible immediately after signup but are flagged for verification. They charge per session or project.",
         icon: "insights",
-                        href: "https://centralhubsolution.com/register/affiliate",
+                        href: getAffiliateRegisterUrl(),
     },
 ];
 

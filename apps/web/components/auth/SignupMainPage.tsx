@@ -40,7 +40,7 @@ export default function SignupPage() {
 
                     <div className="mb-10">
                         <h1 className="text-3xl font-bold tracking-tight text-text-main mb-3 font-display">Create an account</h1>
-                        <p className="text-text-secondary font-medium">Sign up with your MCOM Solutions account to get started.</p>
+                        <p className="text-text-secondary font-medium">Sign up with your Central Hub Solutions account to get started.</p>
                     </div>
 
                     <div className="flex flex-col gap-4">
@@ -54,8 +54,8 @@ export default function SignupPage() {
                                 setFormError(null);
                                 try {
                                     await mcomService.startLogin();
-                                } catch (err: any) {
-                                    setFormError(err.message || 'Failed to connect to MCOM Solutions. Please try again.');
+                                } catch (err: unknown) {
+                                    setFormError(err instanceof Error ? err.message : 'Failed to connect to Central Hub Solutions. Please try again.');
                                 }
                             }}
                             className="flex items-center justify-center gap-3 w-full py-4 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm text-lg"
@@ -63,7 +63,7 @@ export default function SignupPage() {
                             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
                             </svg>
-                            Sign up with MCOM Solutions
+                            Sign in with Central Hub Solutions
                         </button>
                     </div>
 

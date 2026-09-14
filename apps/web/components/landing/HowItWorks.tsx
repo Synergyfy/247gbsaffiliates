@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { FaSearch, FaHandshake, FaTools, FaCheckCircle } from "react-icons/fa";
 import FadeIn from '../FadeIn';
+import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 
 const steps = [
     {
@@ -88,7 +89,7 @@ export default function HowItWorks() {
 
                 <FadeIn delay={0.5} direction="up">
                     <div className="text-center mt-12">
-                        <a href="https://centralhubsolution.com/register/affiliate" className="bg-brand-green text-white px-8 py-3 rounded-xl font-semibold hover:bg-brand-green-hover transition-colors shadow-lg inline-block">
+                        <a href={getAffiliateRegisterUrl()} className="bg-brand-green text-white px-8 py-3 rounded-xl font-semibold hover:bg-brand-green-hover transition-colors shadow-lg inline-block">
                             Get Started Now
                         </a>
                     </div>

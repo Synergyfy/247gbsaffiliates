@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 import Image from "next/image";
 import LandingHeader from "@/components/landing/Header";
 import LandingFooter from "@/components/landing/Footer";
@@ -23,7 +24,7 @@ export default function ForAccountManagerPage() {
                             <p className="max-w-2xl text-lg md:text-xl text-text-secondary mb-10 leading-relaxed font-body">
                                 The all-in-one workspace designed for Account Managers to oversee teams, track performance, and grow revenue without the burnout.
                             </p>
-                            <a href="https://centralhubsolution.com/register/affiliate" className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary-hover text-white rounded-full font-display font-semibold transition-all hover:scale-105 shadow-lg shadow-primary/25">
+                            <a href={getAffiliateRegisterUrl()} className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary-hover text-white rounded-full font-display font-semibold transition-all hover:scale-105 shadow-lg shadow-primary/25">
                                 Get Started Now
                                 <span className="material-symbols-outlined ml-2">arrow_forward</span>
                             </a>
@@ -96,7 +97,7 @@ export default function ForAccountManagerPage() {
                         <p className="text-white/90 text-2xl font-medium max-w-[700px] mx-auto">Join 500+ top-tier marketing managers who have scaled their operations with 247gbs affiliate.</p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-8 relative z-10 pt-4">
-                        <Link href="https://centralhubsolution.com/register/affiliate" className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Start Your Free Trial</Link>
+                        <Link href={getAffiliateRegisterUrl()} className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Start Your Free Trial</Link>
                     </div>
                 </div>
             </section>
