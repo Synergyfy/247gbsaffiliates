@@ -58,7 +58,7 @@ export default function VerifyEmailPage() {
 
                 <div className="max-w-md w-full mx-auto">
                     <div className="mb-8">
-                        <a href="/signup" className="inline-flex items-center text-primary text-sm font-bold hover:underline transition-all duration-200 tracking-widest gap-2 group font-display">
+                        <a href="/login" className="inline-flex items-center text-primary text-sm font-bold hover:underline transition-all duration-200 tracking-widest gap-2 group font-display">
                             <span className="material-symbols-outlined group-hover:-translate-x-1 transition-transform">arrow_back</span>
                             Back to Signup
                         </a>
