@@ -123,14 +123,33 @@ export class SsoController {
         throw new Error('Central token response missing email/accessToken');
       }
 
-      // Log access flag for observability only — never blocks login.
+      // Log access flag for observability.
       const canAccess =
         centralUser.permissions?.[MCOM_PERMISSION_KEY] ??
         centralUser.permissions?.[MCOM_PERMISSION_KEY_LEGACY];
       this.logger.log(
-        `SSO login ${centralUser.email} canAccess=${String(canAccess)} ` +
+        `SSO login ${centralUser.email} role=${centralUser.role ?? 'n/a'} canAccess=${String(canAccess)} ` +
           `plan=${centralUser.businessProfile?.appPlan?.planName ?? 'n/a'}`,
       );
+
+      // Verify role eligibility: only agent, account manager, consultant (and admin) are permitted.
+      const existingUser = await this.usersService.findByEmail(
+        centralUser.email.toLowerCase(),
+      );
+      const roleToCheck = centralUser.role || existingUser?.role;
+      let normalizedRole = this.mcomService.normalizeAffiliateRole(roleToCheck);
+
+      if (!normalizedRole && !centralUser.role && canAccess) {
+        normalizedRole = this.mcomService.normalizeAffiliateRole(existingUser?.role) ?? null;
+      }
+
+      if (!normalizedRole) {
+        this.logger.warn(
+          `SSO login denied for ${centralUser.email}: role '${roleToCheck ?? 'none'}' is not authorized for 247gbs affiliate`,
+        );
+        res.redirect(`${frontendUrl}/login?error=sso_unauthorized_role`);
+        return;
+      }
 
       const fullName =
         centralUser.name ??
@@ -140,7 +159,7 @@ export class SsoController {
         sub: centralUser.id,
         email: centralUser.email.toLowerCase(),
         name: fullName || centralUser.email,
-        role: centralUser.role,
+        role: normalizedRole,
         membership: {
           level:
             centralUser.membershipLevel ??

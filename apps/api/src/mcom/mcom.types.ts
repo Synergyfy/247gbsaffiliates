@@ -1,9 +1,18 @@
 /**
  * Central Hub Solutions (MCOM) SSO — shared typed contracts.
- * No plan/entitlement enforcement: 247gbs affiliate grants access
- * to any successfully authenticated Central user. Membership metadata
- * is synced for display only.
+ * 247gbs affiliate portal is restricted to Agent, Account Manager, Consultant, and Admin roles.
  */
+
+/** Roles permitted to access the 247GBS Affiliate portal. */
+export const ALLOWED_AFFILIATE_ROLES = [
+  'agent',
+  'account_manager',
+  'account-manager',
+  'account manager',
+  'consultant',
+  'admin',
+  'administrator',
+] as const;
 
 /** Permission flag issued by Central for this app (new registration). */
 export const MCOM_PERMISSION_KEY = 'canAccess_247gbs_affiliate';

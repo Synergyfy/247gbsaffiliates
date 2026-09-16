@@ -12,6 +12,8 @@ import { McomService } from './mcom.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
+import { UsersService } from '../users/users.service';
+
 @ApiTags('auth/sso')
 @Controller()
 export class HandshakeController {
@@ -21,11 +23,12 @@ export class HandshakeController {
     private readonly mcomService: McomService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly usersService: UsersService,
   ) {}
 
   // ── Direct dashboard handshake: Central redirects with a
   // shared-secret JWT (?token=). JIT-provision, issue local JWT,
-  // redirect to the web app. No plan gating. ──
+  // redirect to the web app. Access restricted to affiliate roles. ──
 
   @Public()
   @Get('auth/sso-login')
@@ -50,6 +53,25 @@ export class HandshakeController {
         throw new Error('Handshake JWT missing email');
       }
 
+      // Verify role eligibility: only agent, account manager, consultant (and admin) are permitted.
+      const existingUser = await this.usersService.findByEmail(
+        payload.email.toLowerCase(),
+      );
+      const roleToCheck = payload.role || existingUser?.role;
+      let normalizedRole = this.mcomService.normalizeAffiliateRole(roleToCheck);
+
+      if (!normalizedRole && !payload.role) {
+        normalizedRole = this.mcomService.normalizeAffiliateRole(existingUser?.role) ?? null;
+      }
+
+      if (!normalizedRole) {
+        this.logger.warn(
+          `SSO handshake denied for ${payload.email}: role '${roleToCheck ?? 'none'}' is not authorized for 247gbs affiliate`,
+        );
+        res.redirect(`${frontendUrl}/login?error=sso_unauthorized_role`);
+        return;
+      }
+
       const name =
         payload.name ??
         `${payload.firstName ?? ''} ${payload.lastName ?? ''}`.trim();
@@ -58,7 +80,7 @@ export class HandshakeController {
         sub: payload.sub || payload.email,
         email: payload.email.toLowerCase(),
         name: name || payload.email,
-        role: payload.role,
+        role: normalizedRole,
         membership: payload.membership,
         permissions: payload.permissions,
       });

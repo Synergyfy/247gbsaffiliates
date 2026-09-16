@@ -5,8 +5,10 @@ import { firstValueFrom } from 'rxjs';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { verify as verifyJwt } from 'jsonwebtoken';
 import { UsersService } from '../users/users.service';
+import { UserRole } from '../users/entities/user.entity';
 import { encryptMcomToken, decryptMcomToken } from './mcom-crypto.util';
 import {
+  ALLOWED_AFFILIATE_ROLES,
   JitProvisionInput,
   McomCentralUser,
   McomRefreshResponse,
@@ -251,9 +253,23 @@ export class McomService {
     }
   }
 
+  /**
+   * Normalize an incoming role string to a valid UserRole.
+   * Returns null if the role is not permitted to access 247gbs affiliate portal
+   * (e.g. customers, consumers, clients, generic users).
+   */
+  normalizeAffiliateRole(role?: string | null): UserRole | null {
+    if (!role) return null;
+    const normalized = role.toLowerCase().trim().replace(/[\s-]+/g, '_');
+    if (normalized === 'agent') return UserRole.AGENT;
+    if (normalized === 'account_manager') return UserRole.ACCOUNT_MANAGER;
+    if (normalized === 'consultant') return UserRole.CONSULTANT;
+    if (normalized === 'admin' || normalized === 'administrator') return UserRole.ADMIN;
+    return null;
+  }
+
   // ── JIT provision / update local user from Central identity ──
-  // NOTE: no plan gating — any authenticated Central user gets access.
-  // Membership + permission metadata is synced for display only.
+  // 247GBS Affiliate access is restricted to agent, account_manager, consultant, and admin.
 
   async jitProvision(input: JitProvisionInput) {
     const permissions = input.permissions ?? {};
@@ -264,8 +280,10 @@ export class McomService {
 
     const existing = await this.usersService.findByEmail(input.email);
     if (existing) {
+      const normalizedRole = this.normalizeAffiliateRole(input.role);
       await this.usersService.update(existing.id, {
         mcomUserId: input.sub,
+        ...(normalizedRole && { role: normalizedRole }),
         ...(input.membership && {
           mcomMembershipLevel: input.membership.level ?? null,
           mcomMembershipStatus: input.membership.status ?? null,
@@ -275,14 +293,14 @@ export class McomService {
       return this.usersService.findOne(existing.id);
     }
 
+    const assignedRole = this.normalizeAffiliateRole(input.role) || UserRole.AGENT;
     const nameParts = (input.name ?? '').trim().split(/\s+/).filter(Boolean);
     const created = await this.usersService.create({
       email: input.email,
       password: `sso-${Date.now()}-${Math.random().toString(36).slice(2, 14)}!A9`,
       firstName: nameParts[0] ?? '',
       lastName: nameParts.slice(1).join(' ') ?? '',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      role: 'agent' as any,
+      role: assignedRole,
     });
 
     await this.usersService.update(created.id, {

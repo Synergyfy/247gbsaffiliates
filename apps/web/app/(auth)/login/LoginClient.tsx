@@ -14,6 +14,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   sso_state_mismatch: "Sign in failed due to security mismatch. Please try again.",
   sso_exchange_failed: "Sign in failed during token exchange. Please try again.",
   sso_invalid_token: "Sign in failed. Please try again.",
+  sso_unauthorized_role: "Access Denied: 247GBS Affiliate is restricted to Agents, Account Managers, and Consultants. Customer/Consumer accounts are not authorized.",
 };
 
 export function LoginClient() {

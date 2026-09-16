@@ -6,12 +6,14 @@ import { useAuthStore } from '@/store/useAuthStore';
 import apiClient from '@/lib/apiClient';
 import type { UserRole } from '@/types/auth';
 
-function sanitizeRole(role: string | null): UserRole {
-  const r = (role ?? 'agent').toLowerCase();
+function sanitizeRole(role: string | null): UserRole | null {
+  if (!role) return null;
+  const r = role.toLowerCase().replace(/[\s-]+/g, '_');
   if (r === 'admin') return 'admin';
-  if (r === 'account-manager' || r === 'account_manager') return 'account_manager';
+  if (r === 'account_manager') return 'account_manager';
   if (r === 'consultant') return 'consultant';
-  return 'agent';
+  if (r === 'agent') return 'agent';
+  return null;
 }
 
 export function AuthCallbackClient() {
@@ -42,9 +44,12 @@ export function AuthCallbackClient() {
           const profile = await apiClient.get('/auth/profile', {
             headers: { Authorization: `Bearer ${token}` },
           });
-          const role = sanitizeRole(
-            roleParam ?? profile.data?.role ?? 'agent',
-          );
+          const rawRole = roleParam ?? profile.data?.role;
+          const role = sanitizeRole(rawRole);
+          if (!role) {
+            router.push('/login?error=sso_unauthorized_role');
+            return;
+          }
           setAuth(
             {
               id: profile.data?.userId ?? profile.data?.sub ?? '',
@@ -57,22 +62,30 @@ export function AuthCallbackClient() {
           );
           router.push(`/dashboard/${role.replace('_', '-')}`);
         } catch {
-          // Profile fetch failed (e.g. clock skew) — still store the
-          // token so the API client can retry; dashboards re-fetch.
-          const role = sanitizeRole(roleParam);
+          // Profile fetch failed (e.g. clock skew) — parse token payload
+          let role = sanitizeRole(roleParam);
           try {
             const payload = JSON.parse(atob(token.split('.')[1]));
+            role = sanitizeRole(payload.role ?? role);
+            if (!role) {
+              router.push('/login?error=sso_unauthorized_role');
+              return;
+            }
             setAuth(
               {
                 id: payload.sub ?? '',
                 email: payload.email ?? '',
                 name: payload.email ?? '',
-                role: sanitizeRole(payload.role ?? role),
+                role,
                 isOnboarded: payload.isOnboarded,
               },
               token,
             );
           } catch {
+            if (!role) {
+              router.push('/login?error=sso_unauthorized_role');
+              return;
+            }
             localStorage.setItem('auth_token', token);
           }
           router.push(`/dashboard/${role.replace('_', '-')}`);
