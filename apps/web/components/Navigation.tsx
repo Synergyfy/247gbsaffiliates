@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 import { useAuthStore } from "@/store/useAuthStore";
 
 export default function Navigation() {
@@ -61,7 +62,7 @@ export default function Navigation() {
                                 <Link href="/login" className="text-sm font-bold text-gray-600 hover:text-green-600 transition-colors hidden sm:block">
                                     Log in
                                 </Link>
-                                <Link href="https://centralhubsolution.com/register/affiliate" className="hidden sm:inline-flex items-center justify-center px-6 py-2.5 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded-full transition-all shadow-lg shadow-green-500/30 hover:shadow-green-500/40 transform hover:-translate-y-0.5">
+                                <Link href={getAffiliateRegisterUrl()} className="hidden sm:inline-flex items-center justify-center px-6 py-2.5 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded-full transition-all shadow-lg shadow-green-500/30 hover:shadow-green-500/40 transform hover:-translate-y-0.5">
                                     Get Started
                                 </Link>
                             </>

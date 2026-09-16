@@ -1,55 +1,43 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { ConfigService } from '@nestjs/config';
-import { CreateUserDto } from '../users/dto/create-user.dto';
-import { CreateAdminDto } from '../users/dto/create-admin.dto';
+import { User } from '../users/entities/user.entity';
+
+type SafeUser = Omit<User, 'password' | 'mcomAccessToken' | 'mcomRefreshToken' | 'currentHashedRefreshToken'>;
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
-    private configService: ConfigService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
   ) {}
 
-  async validateUser(email: string, pass: string): Promise<any> {
-    const user = await this.usersService.findByEmail(email);
-    if (user && (await bcrypt.compare(pass, user.password))) {
-      const { password, ...result } = user;
-      return result;
-    }
-    return null;
+  /** Validate email/password. Returns user without secrets, or null. */
+  async validateUser(email: string, pass: string): Promise<SafeUser | null> {
+    const normalized = email?.toLowerCase().trim();
+    if (!normalized || !pass) return null;
+    const user = await this.usersService.findByEmail(normalized);
+    if (!user?.password) return null;
+    const ok = await bcrypt.compare(pass, user.password);
+    if (!ok) return null;
+    const {
+      password: _password,
+      mcomAccessToken: _a,
+      mcomRefreshToken: _r,
+      currentHashedRefreshToken: _c,
+      ...result
+    } = user;
+    return result as SafeUser;
   }
 
-  async login(user: any) {
-    const payload = { email: user.email, sub: user.id, role: user.role, isOnboarded: user.isOnboarded }; // Added isOnboarded to payload if needed
-    return {
-      access_token: this.jwtService.sign(payload),
+  async login(user: SafeUser): Promise<{ access_token: string; user: SafeUser }> {
+    const payload = {
+      email: user.email,
+      sub: user.id,
+      role: user.role,
+      isOnboarded: user.isOnboarded,
     };
-  }
-
-  async register(createUserDto: CreateUserDto) {
-    const user = await this.usersService.create(createUserDto);
-    const { password, ...result } = user;
-    const payload = { email: user.email, sub: user.id, role: user.role, isOnboarded: user.isOnboarded };
-    return {
-      ...result,
-      access_token: this.jwtService.sign(payload),
-    };
-  }
-
-  async registerAdmin(createAdminDto: CreateAdminDto) {
-    const expectedSecret = this.configService.get<string>('ADMIN_REGISTRATION_SECRET');
-    if (!expectedSecret || createAdminDto.adminSecret !== expectedSecret) {
-      throw new ForbiddenException('Invalid admin registration secret.');
-    }
-    
-    const { adminSecret, ...userData } = createAdminDto;
-    const user = await this.usersService.createAdmin(userData as any);
-    const { password, ...result } = user;
-    return result;
+    return { access_token: this.jwtService.sign(payload), user };
   }
 }
-

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 
@@ -91,7 +92,7 @@ export default function LandingHeader() {
                             Login
                         </Link>
                         <Link
-                            href="https://centralhubsolution.com/register/affiliate"
+                            href={getAffiliateRegisterUrl()}
                             className="flex min-w-[110px] items-center justify-center rounded-xl h-11 px-6 bg-primary text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all font-display"
                         >
                             Get Started
@@ -147,7 +148,7 @@ export default function LandingHeader() {
                             Login
                         </Link>
                         <Link
-                            href="https://centralhubsolution.com/register/affiliate"
+                            href={getAffiliateRegisterUrl()}
                             className="flex w-full items-center justify-center rounded-xl h-12 px-6 bg-primary text-white text-base font-bold shadow-lg shadow-primary/20 hover:brightness-105 transition-all font-display"
                         >
                             Get Started

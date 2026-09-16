@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 import Image from "next/image";
 import { HeroCarousel } from "@/components/landing/HeroCarousel";
 import { FaNairaSign } from "react-icons/fa6";
@@ -27,7 +28,7 @@ export default function LandingPage() {
             <Link href="/login" className="hidden sm:flex min-w-[100px] items-center justify-center rounded-xl h-11 px-6 bg-white text-text-main text-sm font-semibold border border-primary/10 hover:bg-slate-50 transition-all font-display">
               Login
             </Link>
-            <Link href="https://centralhubsolution.com/register/affiliate" className="flex min-w-[110px] items-center justify-center rounded-xl h-11 px-6 bg-primary text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all font-display">
+            <Link href={getAffiliateRegisterUrl()} className="flex min-w-[110px] items-center justify-center rounded-xl h-11 px-6 bg-primary text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all font-display">
               Get Started
             </Link>
           </div>
@@ -271,7 +272,7 @@ export default function LandingPage() {
             <p className="text-white/90 text-2xl font-medium max-w-[700px] mx-auto">Join hundreds of leading companies already scaling through verified elite talent on 247gbs affiliate.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-8 relative z-10 pt-4">
-            <Link href="https://centralhubsolution.com/register/affiliate" className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Get Started Now</Link>
+            <Link href={getAffiliateRegisterUrl()} className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Get Started Now</Link>
             <Link href="#" className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-14 py-6 rounded-2xl text-xl font-bold hover:bg-white/20 transition-all text-center font-display">Contact Sales</Link>
           </div>
         </div>
