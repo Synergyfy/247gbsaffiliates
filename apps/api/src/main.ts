@@ -21,7 +21,7 @@ console.log('[BOOT] CWD:', process.cwd());
 console.log('[BOOT] env file found:', envFile);
 console.log('[BOOT] MCOM_SOLUTIONS_URL:', process.env.MCOM_SOLUTIONS_URL);
 console.log('[BOOT] JWT_ACCESS_SECRET:', process.env.JWT_ACCESS_SECRET ? 'SET' : 'MISSING');
-console.log('[BOOT] DB_HOST:', process.env.DB_HOST);
+console.log('[BOOT] POSTGRES_HOST:', process.env.POSTGRES_HOST);
 console.log('[BOOT] PORT:', process.env.PORT);
 
 async function bootstrap() {
