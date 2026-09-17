@@ -27,24 +27,21 @@ import { McomModule } from './mcom/mcom.module';
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => {
-        const isSsl = String(configService.get('DB_SSL')).toLowerCase() === 'true';
-        const isSync = String(configService.get('DB_SYNC')).toLowerCase() === 'true';
-        const port = Number(configService.get('DB_PORT') ?? 5432);
-
-        return {
-          type: 'postgres',
-          host: configService.get<string>('DB_HOST') ?? 'localhost',
-          port,
-          username: configService.get<string>('DB_USERNAME') ?? 'postgres',
-          password: configService.get<string>('DB_PASSWORD'),
-          database: configService.get<string>('DB_NAME') ?? '247gbs-affiliate',
-          entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          synchronize: isSync, // Set to false in production
-          logging: configService.get<string>('NODE_ENV') === 'development',
-          ssl: isSsl ? { rejectUnauthorized: false } : false,
-        };
-      },
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get<string>('POSTGRES_HOST'),
+        port: configService.get<number>('POSTGRES_PORT'),
+        username: configService.get<string>('POSTGRES_USERNAME'),
+        password: configService.get<string>('POSTGRES_PASSWORD'),
+        database: configService.get<string>('POSTGRES_NAME'),
+        extra: {
+          options: configService.get<string>('PGOPTIONS'),
+        },
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        synchronize: false,
+        logging: configService.get<string>('NODE_ENV') === 'development',
+        ssl: { rejectUnauthorized: false },
+      }),
       inject: [ConfigService],
     }),
     AuthModule,
