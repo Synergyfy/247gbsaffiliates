@@ -26,11 +26,19 @@ export default function DashboardPage() {
             case 'agent':
                 return <AgentDashboard />;
             case 'account-manager':
+            case 'account_manager':
                 return <AccountManagerDashboard />;
             case 'consultant':
                 return <ConsultantDashboard />;
             default:
-                return <AgentDashboard />;
+                return (
+                    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Access Denied</h2>
+                        <p className="text-slate-600 max-w-md">
+                            Your account role ({user.role}) is not authorized to access this dashboard. This portal is restricted to Agents, Account Managers, and Consultants.
+                        </p>
+                    </div>
+                );
         }
     };
 

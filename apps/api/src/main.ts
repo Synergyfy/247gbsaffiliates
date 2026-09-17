@@ -22,19 +22,31 @@ console.log('[BOOT] env file found:', envFile);
 console.log('[BOOT] MCOM_SOLUTIONS_URL:', process.env.MCOM_SOLUTIONS_URL);
 console.log('[BOOT] JWT_ACCESS_SECRET:', process.env.JWT_ACCESS_SECRET ? 'SET' : 'MISSING');
 console.log('[BOOT] POSTGRES_HOST:', process.env.POSTGRES_HOST);
-console.log('[BOOT] PORT:', process.env.PORT);
+console.log('[BOOT] PORT:', process.env.PORT ?? '7088 (default)');
+console.log('[BOOT] API_PREFIX:', process.env.API_PREFIX ?? 'api/v1 (default)');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const frontendUrl = process.env.FRONTEND_URL || 'https://247gbsaffiliates.centralhubsolution.com';
+  // All configurable via apps/api/.env — change ports/paths there, no code edit needed.
+  const port = Number(process.env.PORT ?? 7088);
+  const host = process.env.HOST ?? '0.0.0.0';
+  const apiPrefix = (process.env.API_PREFIX ?? 'api/v1').replace(/^\/+|\/+$/g, '');
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:7089';
+  // Comma-separated extra origins, e.g. CORS_ORIGINS=https://app.example.com,http://192.168.1.67:7089
+  const extraOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   app.enableCors({
     origin: [
-      'http://localhost:3011',
-      'http://localhost:3012',
-      'http://192.168.1.67:3011',
+      'http://localhost:7089',
+      'http://127.0.0.1:7089',
+      'http://localhost:3011', // legacy dev port, kept for backward compat
+      'http://192.168.1.67:7089',
       frontendUrl,
+      ...extraOrigins,
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
@@ -42,8 +54,8 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  // Global Prefix
-  app.setGlobalPrefix('api/v1');
+  // Global Prefix (configurable path)
+  app.setGlobalPrefix(apiPrefix);
 
   // Global Validation Pipe
   app.useGlobalPipes(
@@ -62,8 +74,9 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/v1/docs', app, document);
+  SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
 
-  await app.listen(process.env.PORT ?? 3001);
+  await app.listen(port, host);
+  console.log(`[BOOT] API listening on http://${host}:${port}/${apiPrefix}`);
 }
 bootstrap();

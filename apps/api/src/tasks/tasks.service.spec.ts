@@ -6,7 +6,12 @@ import { UsersService } from '../users/users.service';
 import { UserRole } from '../users/entities/user.entity';
 import { ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
 
-const mockTask = {
+const mockTask: {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  assignedAgentId: string | null;
+} = {
   id: 'uuid-task-1',
   title: 'Affiliate Task',
   status: TaskStatus.OPEN,
@@ -41,6 +46,17 @@ const mockUsersService = {
   }),
 };
 
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+
+const mockHttpService = {
+  patch: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
+};
+
+const mockConfigService = {
+  get: jest.fn().mockReturnValue('http://localhost:3010/api/v1'),
+};
+
 describe('TasksService (AffiliateBackend)', () => {
   let service: TasksService;
 
@@ -50,6 +66,8 @@ describe('TasksService (AffiliateBackend)', () => {
         TasksService,
         { provide: getRepositoryToken(Task), useValue: mockRepo },
         { provide: UsersService, useValue: mockUsersService },
+        { provide: HttpService, useValue: mockHttpService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
