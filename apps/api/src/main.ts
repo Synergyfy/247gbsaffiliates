@@ -43,6 +43,7 @@ async function bootstrap() {
     origin: [
       'http://localhost:7089',
       'http://127.0.0.1:7089',
+      'http://0.0.0.0:7089',
       'http://localhost:3011', // legacy dev port, kept for backward compat
       'http://192.168.1.67:7089',
       frontendUrl,
