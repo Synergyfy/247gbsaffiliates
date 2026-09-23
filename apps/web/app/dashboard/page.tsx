@@ -14,10 +14,14 @@ export default function DashboardPage() {
     React.useEffect(() => {
         if (!isAuthenticated) {
             router.push('/login');
+            return;
         }
-    }, [isAuthenticated, router]);
+        if (user && user.role !== 'admin' && !user.isOnboarded) {
+            router.push('/onboarding');
+        }
+    }, [isAuthenticated, user, router]);
 
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user || (user.role !== 'admin' && !user.isOnboarded)) {
         return null;
     }
 

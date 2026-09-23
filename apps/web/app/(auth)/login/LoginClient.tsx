@@ -20,6 +20,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 export function LoginClient() {
     const searchParams = useSearchParams();
     const [mcomError, setMcomError] = useState<string | null>(null);
+    const [isRedirecting, setIsRedirecting] = useState(false);
 
     useEffect(() => {
       const error = searchParams.get('error');
@@ -30,8 +31,30 @@ export function LoginClient() {
             ? `${ERROR_MESSAGES[error]} (Central: ${detail})`
             : ERROR_MESSAGES[error],
         );
+      } else if (!error) {
+        setIsRedirecting(true);
+        mcomService.startLogin().catch((err: unknown) => {
+          setIsRedirecting(false);
+          setMcomError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to connect to Central Hub Solutions. Please try again.',
+          );
+        });
       }
     }, [searchParams]);
+
+    if (isRedirecting) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-white font-display">
+          <div className="text-center p-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-text-main mb-1">Redirecting to Central Hub Solutions…</h2>
+            <p className="text-sm text-text-secondary">Taking you to Central Hub to sign in</p>
+          </div>
+        </div>
+      );
+    }
 
     return (
         <div className="min-h-screen flex bg-white font-display">
@@ -66,7 +89,7 @@ export function LoginClient() {
 
                     <div className="flex flex-col gap-4">
                         {mcomError && (
-                            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm font-medium">
+                            <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-medium border border-red-100 leading-relaxed">
                                 {mcomError}
                             </div>
                         )}
@@ -74,12 +97,12 @@ export function LoginClient() {
                             onClick={async () => {
                                 setMcomError(null);
                                 try {
-                                    await mcomService.startLogin();
+                                    await mcomService.startLogin(undefined, undefined, undefined, 'login');
                                 } catch (err: unknown) {
                                     setMcomError(err instanceof Error ? err.message : 'Failed to connect to Central Hub Solutions. Please try again.');
                                 }
                             }}
-                            className="flex items-center justify-center gap-3 w-full py-4 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm text-lg"
+                            className="flex items-center justify-center gap-3 w-full py-4 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm text-lg cursor-pointer"
                         >
                             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />

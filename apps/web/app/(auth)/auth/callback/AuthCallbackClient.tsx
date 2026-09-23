@@ -10,7 +10,7 @@ function sanitizeRole(role: string | null): UserRole | null {
   if (!role) return null;
   const r = role.toLowerCase().replace(/[\s-]+/g, '_');
   if (r === 'admin') return 'admin';
-  if (r === 'account_manager') return 'account_manager';
+  if (r === 'account_manager' || r === 'accountmanager') return 'account_manager';
   if (r === 'consultant') return 'consultant';
   if (r === 'agent') return 'agent';
   return null;
@@ -27,6 +27,11 @@ export function AuthCallbackClient() {
     if (firedRef.current) return;
     firedRef.current = true;
 
+    // Immediately scrub any legacy auth token from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+    }
+
     const complete = async () => {
       const error = searchParams.get('error');
       if (error) {
@@ -34,63 +39,66 @@ export function AuthCallbackClient() {
         return;
       }
 
-      const token = searchParams.get('token');
       const roleParam = searchParams.get('role');
+      const token = searchParams.get('token');
 
-      // Backend (proper flow) redirects here with token+role.
-      if (token) {
-        try {
-          // Hydrate the store so dashboard guards see an authenticated user.
-          const profile = await apiClient.get('/auth/profile', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const rawRole = roleParam ?? profile.data?.role;
-          const role = sanitizeRole(rawRole);
-          if (!role) {
-            router.push('/login?error=sso_unauthorized_role');
-            return;
-          }
-          setAuth(
-            {
-              id: profile.data?.userId ?? profile.data?.sub ?? '',
-              email: profile.data?.email ?? '',
-              name: profile.data?.email ?? '',
-              role,
-              isOnboarded: profile.data?.isOnboarded,
-            },
-            token,
-          );
-          router.push(`/dashboard/${role.replace('_', '-')}`);
-        } catch {
-          // Profile fetch failed (e.g. clock skew) — parse token payload
-          let role = sanitizeRole(roleParam);
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            role = sanitizeRole(payload.role ?? role);
-            if (!role) {
-              router.push('/login?error=sso_unauthorized_role');
-              return;
-            }
-            setAuth(
-              {
-                id: payload.sub ?? '',
-                email: payload.email ?? '',
-                name: payload.email ?? '',
-                role,
-                isOnboarded: payload.isOnboarded,
-              },
-              token,
-            );
-          } catch {
-            if (!role) {
-              router.push('/login?error=sso_unauthorized_role');
-              return;
-            }
-            localStorage.setItem('auth_token', token);
-          }
+      // The backend sets the HttpOnly auth_token cookie and redirects here.
+      // We fetch /auth/profile via apiClient (which sends the HttpOnly cookie via withCredentials: true).
+      try {
+        const profile = await apiClient.get('/auth/profile', token ? {
+          headers: { Authorization: `Bearer ${token}` },
+        } : undefined);
+
+        const rawRole = roleParam ?? profile.data?.role;
+        const role = sanitizeRole(rawRole);
+        if (!role) {
+          router.push('/login?error=sso_unauthorized_role');
+          return;
+        }
+
+        const isOnboarded = Boolean(profile.data?.isOnboarded);
+        setAuth({
+          id: profile.data?.id ?? profile.data?.userId ?? profile.data?.sub ?? '',
+          email: profile.data?.email ?? '',
+          name: profile.data?.name ?? profile.data?.email ?? '',
+          role,
+          isOnboarded,
+        });
+
+        if (role !== 'admin' && !isOnboarded) {
+          router.push('/onboarding');
+        } else {
           router.push(`/dashboard/${role.replace('_', '-')}`);
         }
         return;
+      } catch {
+        // Fallback: If profile request failed but token param exists in URL
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const role = sanitizeRole(payload.role ?? roleParam);
+            if (!role) {
+              router.push('/login?error=sso_unauthorized_role');
+              return;
+            }
+            const isOnboarded = Boolean(payload.isOnboarded);
+            setAuth({
+              id: payload.sub ?? '',
+              email: payload.email ?? '',
+              name: payload.email ?? '',
+              role,
+              isOnboarded,
+            });
+            if (role !== 'admin' && !isOnboarded) {
+              router.push('/onboarding');
+            } else {
+              router.push(`/dashboard/${role.replace('_', '-')}`);
+            }
+            return;
+          } catch {
+            // ignore token parse error
+          }
+        }
       }
 
       // Legacy flow: Central redirected to the web app with code+state.

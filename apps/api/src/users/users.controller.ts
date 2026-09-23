@@ -29,4 +29,11 @@ export class UsersController {
   async updateSkills(@Request() req, @Body() body: { skills: string[] }) {
     return this.usersService.updateSkills(req.user.userId, body.skills);
   }
+
+  @Patch('complete-onboarding')
+  @ApiOperation({ summary: 'Complete onboarding', description: 'Marks onboarding as completed for the authenticated user.' })
+  @ApiResponse({ status: 200, description: 'Onboarding completed' })
+  async completeOnboarding(@Request() req) {
+    return this.usersService.completeOnboarding(req.user.userId);
+  }
 }

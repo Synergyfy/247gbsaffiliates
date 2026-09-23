@@ -6,6 +6,7 @@ import apiClient from '@/lib/apiClient';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useRouter } from 'next/navigation';
 import { CertificationModal } from './CertificationModal';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export const QuizStep: React.FC = () => {
     const {
@@ -17,6 +18,7 @@ export const QuizStep: React.FC = () => {
         setRetakeAvailableAt,
         resetOnboarding
     } = useOnboardingStore();
+    const { updateUser } = useAuthStore();
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [timeLeft, setTimeLeft] = useState(30);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,8 +68,11 @@ export const QuizStep: React.FC = () => {
                 setRetakeAvailableAt(retakeTime);
                 router.push('/learning');
             } else {
-                // Passed or Partition: Show modal
-                resetOnboarding();
+                // Passed or Partial: Mark onboarding complete and show modal
+                apiClient.patch('/users/complete-onboarding').catch((err) => {
+                    console.warn('Failed to complete onboarding on backend:', err);
+                });
+                updateUser({ isOnboarded: true, isQuizPassed: true, score: data.score });
                 setShowModal(true);
             }
         },
@@ -100,7 +105,7 @@ export const QuizStep: React.FC = () => {
         }
     };
 
-    if (isLoading || !questions) {
+    if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center py-24 text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary mb-6"></div>
@@ -109,7 +114,33 @@ export const QuizStep: React.FC = () => {
         );
     }
 
-    const currentQuestion = questions[currentQuestionIndex];
+    if (!questions || questions.length === 0) {
+        return (
+            <div className="max-w-xl mx-auto py-16 text-center bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+                <div className="size-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
+                    <span className="material-symbols-outlined text-3xl">verified</span>
+                </div>
+                <h2 className="text-xl font-bold font-display text-text-main mb-2">No Assessment Required</h2>
+                <p className="text-slate-500 mb-6 text-sm">
+                    No preliminary assessment questions are required for your selected track at this time. You can complete your onboarding to access the dashboard.
+                </p>
+                <button
+                    onClick={() => {
+                        setIsSubmitting(true);
+                        submitMutation.mutate();
+                    }}
+                    disabled={isSubmitting}
+                    className="px-8 h-12 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:opacity-90 transition-all font-display uppercase tracking-widest text-[10px]"
+                >
+                    {isSubmitting ? 'Finalizing...' : 'Complete Onboarding'}
+                </button>
+            </div>
+        );
+    }
+
+    const currentQuestion = questions[currentQuestionIndex] || questions[0];
+    if (!currentQuestion) return null;
+
     const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
 
     return (
@@ -134,7 +165,7 @@ export const QuizStep: React.FC = () => {
             <div className="mb-8 flex items-center justify-between">
                 <div>
                     <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-full uppercase tracking-widest font-display">
-                        {currentQuestion.type === 'scenario' ? 'Scenario Analysis' : 'Competency Quiz'}
+                        {currentQuestion?.type === 'scenario' ? 'Scenario Analysis' : 'Competency Quiz'}
                     </span>
                     <h1 className="text-2xl font-bold text-text-main mt-3 font-display tracking-tight">
                         Question {currentQuestionIndex + 1} of {questions.length}
@@ -181,7 +212,7 @@ export const QuizStep: React.FC = () => {
                 </div>
 
                 <div className="p-8 lg:px-12 space-y-4">
-                    {currentQuestion.options.map((optionText, index) => {
+                    {(currentQuestion.options || []).map((optionText, index) => {
                         const optionId = index.toString();
                         return (
                             <button

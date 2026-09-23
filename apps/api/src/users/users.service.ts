@@ -71,6 +71,12 @@ export class UsersService {
     return user;
   }
 
+  async completeOnboarding(id: string) {
+    const user = await this.findOne(id);
+    user.isOnboarded = true;
+    return this.usersRepository.save(user);
+  }
+
   private async checkAndSetOnboarding(userId: string) {
     const user = await this.findOne(userId);
     // Check if user is already onboarded to avoid redundant updates

@@ -15,6 +15,10 @@ export function SsoLoginClient() {
     if (firedRef.current) return;
     firedRef.current = true;
 
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+    }
+
     const complete = async () => {
       const token = searchParams.get('token');
       if (!token) {
@@ -28,35 +32,44 @@ export function SsoLoginClient() {
         });
         const rawRole = (profile.data?.role ?? 'agent') as string;
         const role = rawRole.toLowerCase().replace('_', '-');
+        const isOnboarded = Boolean(profile.data?.isOnboarded);
         setAuth(
           {
             id: profile.data?.userId ?? '',
             email: profile.data?.email ?? '',
             name: profile.data?.email ?? '',
             role: rawRole as never,
-            isOnboarded: profile.data?.isOnboarded,
+            isOnboarded,
           },
           token,
         );
-        router.push(`/dashboard/${role}`);
+        if (rawRole !== 'admin' && !isOnboarded) {
+          router.push('/onboarding');
+        } else {
+          router.push(`/dashboard/${role}`);
+        }
       } catch {
         try {
           const payload = JSON.parse(atob(token.split('.')[1]));
           const role = (payload.role || 'agent') as string;
+          const isOnboarded = Boolean(payload.isOnboarded);
           setAuth(
             {
               id: payload.sub ?? '',
               email: payload.email ?? '',
               name: payload.email ?? '',
               role: role as never,
-              isOnboarded: payload.isOnboarded,
+              isOnboarded,
             },
             token,
           );
-          router.push(`/dashboard/${role.replace('_', '-')}`);
+          if (role !== 'admin' && !isOnboarded) {
+            router.push('/onboarding');
+          } else {
+            router.push(`/dashboard/${role.replace('_', '-')}`);
+          }
         } catch {
-          localStorage.setItem('auth_token', token);
-          router.push('/dashboard/agent');
+          router.push('/login?error=sso_unauthorized');
         }
       }
     };
