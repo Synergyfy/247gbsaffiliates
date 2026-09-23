@@ -5,11 +5,25 @@ import { useOnboardingStore } from '@/store/useOnboardingStore';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AssessmentModal } from '@/components/onboarding/AssessmentModal';
+import apiClient from '@/lib/apiClient';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export const OutcomeStep: React.FC = () => {
     const { quizResult, role, resetOnboarding, isPaidVisibilityRequested } = useOnboardingStore();
+    const { updateUser } = useAuthStore();
     const [showModal, setShowModal] = React.useState(false);
     const router = useRouter();
+
+    const handleEnterDashboard = async () => {
+        try {
+            await apiClient.patch('/users/complete-onboarding');
+        } catch (err) {
+            console.warn('Failed to complete onboarding on backend:', err);
+        }
+        updateUser({ isOnboarded: true, isQuizPassed: Boolean(quizResult && quizResult.score >= 50) });
+        resetOnboarding();
+        router.push('/dashboard');
+    };
 
     React.useEffect(() => {
         if (quizResult) {
@@ -139,14 +153,13 @@ export const OutcomeStep: React.FC = () => {
 
                 <div className="p-8 lg:p-12 text-center flex flex-col items-center gap-6">
                     <div className="w-full max-w-md">
-                        <Link
-                            href="/dashboard"
-                            onClick={resetOnboarding}
-                            className={`w-full h-16 text-white text-lg font-bold rounded-2xl hover:brightness-105 shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-3 font-display tracking-widest ${isPendingVerification ? 'bg-amber-500 shadow-amber-500/25' : 'bg-primary shadow-primary/25'}`}
+                        <button
+                            onClick={handleEnterDashboard}
+                            className={`w-full h-16 text-white text-lg font-bold rounded-2xl hover:brightness-105 shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-3 font-display tracking-widest cursor-pointer ${isPendingVerification ? 'bg-amber-500 shadow-amber-500/25' : 'bg-primary shadow-primary/25'}`}
                         >
                             Enter My Dashboard
                             <span className="material-symbols-outlined font-bold">dashboard</span>
-                        </Link>
+                        </button>
                         <p className="mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest font-display">Dashboard Access Enabled</p>
                     </div>
                     {!isPendingVerification && (

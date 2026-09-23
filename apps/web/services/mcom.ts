@@ -18,7 +18,7 @@ export interface McomSsoStatus {
 }
 
 export const mcomService = {
-  async startLogin(card?: string, business?: string, redirect?: string): Promise<void> {
+  async startLogin(card?: string, business?: string, redirect?: string, prompt?: string): Promise<void> {
     const { data } = await apiClient.get<McomSsoConfig>('/auth/sso/config');
     if (!data.configured) {
       throw new Error(
@@ -29,6 +29,7 @@ export const mcomService = {
     if (card) params.set('card', card);
     if (business) params.set('business', business);
     if (redirect) params.set('redirect', redirect);
+    if (prompt) params.set('prompt', prompt);
     const qs = params.toString() ? `?${params.toString()}` : '';
     window.location.href = `${apiClient.defaults.baseURL}/auth/sso/login${qs}`;
   },

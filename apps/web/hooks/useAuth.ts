@@ -10,16 +10,20 @@ export const useAuth = () => {
   const queryClient = useQueryClient();
   const { setAuth, clearAuth, user, isAuthenticated } = useAuthStore();
 
-  const fetchUserProfile = async (accessToken: string) => {
-    const response = await apiClient.get("/auth/profile", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+  const fetchUserProfile = async (token?: string) => {
+    const response = await apiClient.get("/auth/profile", token ? {
+      headers: { Authorization: `Bearer ${token}` },
+    } : undefined);
     return response.data;
   };
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      return Promise.resolve();
+      try {
+        await apiClient.post("/auth/logout");
+      } catch {
+        // ignore network error
+      }
     },
     onSuccess: () => {
       clearAuth();

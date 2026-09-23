@@ -3,6 +3,8 @@
 import React from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useRouter } from 'next/navigation';
+import apiClient from '@/lib/apiClient';
+import { useAuthStore } from '@/store/useAuthStore';
 
 interface CertificationModalProps {
     isOpen: boolean;
@@ -16,6 +18,7 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({ isOpen, 
         resetOnboarding,
         isPaidVisibilityRequested
     } = useOnboardingStore();
+    const { updateUser } = useAuthStore();
     const router = useRouter();
 
     if (!isOpen || !quizResult) return null;
@@ -24,7 +27,13 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({ isOpen, 
     // We only show this modal on success (>=50%), failed attempts redirect to learning dashboard
     const score = quizResult.score;
 
-    const handleNavigate = () => {
+    const handleNavigate = async () => {
+        try {
+            await apiClient.patch('/users/complete-onboarding');
+        } catch (err) {
+            console.warn('Failed to complete onboarding on backend:', err);
+        }
+        updateUser({ isOnboarded: true, isQuizPassed: true });
         resetOnboarding();
         router.push('/dashboard');
         onClose();

@@ -101,12 +101,13 @@ export class McomService {
 
   // ── Step 1: Build Central authorize URL (32-byte state passed in) ──
 
-  getAuthorizeUrl(state: string): string {
+  getAuthorizeUrl(state: string, prompt?: string): string {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
       scope: this.scopes,
       state,
+      ...(prompt ? { prompt } : {}),
     });
     return `${this.baseUrl}/api/v1/auth/sso/authorize?${params.toString()}`;
   }
@@ -261,7 +262,7 @@ export class McomService {
   normalizeAffiliateRole(role?: string | null): UserRole | null {
     if (!role) return null;
     const normalized = role.toLowerCase().trim().replace(/[\s-]+/g, '_');
-    if (normalized === 'agent') return UserRole.AGENT;
+    if (normalized === 'agent' || normalized === 'affiliate') return UserRole.AGENT;
     if (normalized === 'account_manager') return UserRole.ACCOUNT_MANAGER;
     if (normalized === 'consultant') return UserRole.CONSULTANT;
     if (normalized === 'admin' || normalized === 'administrator') return UserRole.ADMIN;

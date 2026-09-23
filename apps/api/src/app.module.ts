@@ -27,21 +27,48 @@ import { McomModule } from './mcom/mcom.module';
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('POSTGRES_HOST'),
-        port: configService.get<number>('POSTGRES_PORT'),
-        username: configService.get<string>('POSTGRES_USERNAME'),
-        password: configService.get<string>('POSTGRES_PASSWORD'),
-        database: configService.get<string>('POSTGRES_NAME'),
-        extra: {
-          options: configService.get<string>('PGOPTIONS'),
-        },
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false,
-        logging: configService.get<string>('NODE_ENV') === 'development',
-        ssl: { rejectUnauthorized: false },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const host =
+          configService.get<string>('POSTGRES_HOST') ??
+          configService.get<string>('DB_HOST') ??
+          'localhost';
+        const rawSsl =
+          configService.get<string>('POSTGRES_SSL') ??
+          configService.get<string>('DB_SSL');
+        const isSsl =
+          rawSsl !== undefined
+            ? String(rawSsl).toLowerCase() === 'true'
+            : host.includes('supabase');
+
+        return {
+          type: 'postgres',
+          host,
+          port: Number(
+            configService.get<number>('POSTGRES_PORT') ??
+              configService.get<number>('DB_PORT') ??
+              5432,
+          ),
+          username:
+            configService.get<string>('POSTGRES_USERNAME') ??
+            configService.get<string>('DB_USERNAME') ??
+            'postgres',
+          password:
+            configService.get<string>('POSTGRES_PASSWORD') ??
+            configService.get<string>('DB_PASSWORD'),
+          database:
+            configService.get<string>('POSTGRES_NAME') ??
+            configService.get<string>('DB_NAME') ??
+            '247gbs-affiliate',
+          extra: configService.get<string>('PGOPTIONS')
+            ? { options: configService.get<string>('PGOPTIONS') }
+            : undefined,
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize:
+            String(configService.get('DB_SYNC')).toLowerCase() === 'true',
+          logging: configService.get<string>('NODE_ENV') === 'development',
+          ssl: isSsl ? { rejectUnauthorized: false } : false,
+        };
+      },
       inject: [ConfigService],
     }),
     AuthModule,

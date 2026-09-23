@@ -23,6 +23,7 @@ import {
   getReturnCookie,
   clearReturnCookie,
 } from './oauth-state.util';
+import { setAuthCookie } from '../auth/auth-cookie.util';
 import { randomBytes } from 'crypto';
 import { UsersService } from '../users/users.service';
 import {
@@ -32,7 +33,7 @@ import {
 
 function sanitizeRole(role: unknown): string {
   const raw = typeof role === 'string' && role ? role : 'agent';
-  return raw.toLowerCase().replace(/[^a-z-]/g, '').replace('_', '-') || 'agent';
+  return raw.toLowerCase().replace(/_/g, '-').replace(/[^a-z-]/g, '') || 'agent';
 }
 
 @ApiTags('auth/sso')
@@ -64,6 +65,7 @@ export class SsoController {
     @Query('card') card?: string,
     @Query('business') business?: string,
     @Query('redirect') redirect?: string,
+    @Query('prompt') prompt?: string,
   ): Promise<void> {
     const state = randomBytes(32).toString('hex');
     setOAuthStateCookie(res, state);
@@ -76,7 +78,7 @@ export class SsoController {
       });
     }
 
-    res.redirect(this.mcomService.getAuthorizeUrl(state));
+    res.redirect(this.mcomService.getAuthorizeUrl(state, prompt));
   }
 
   // ── Step 2: Central redirects here (MCOM_REDIRECT_URI). Exchange
@@ -136,16 +138,19 @@ export class SsoController {
       const existingUser = await this.usersService.findByEmail(
         centralUser.email.toLowerCase(),
       );
-      const roleToCheck = centralUser.role || existingUser?.role;
-      let normalizedRole = this.mcomService.normalizeAffiliateRole(roleToCheck);
+      const normalizedCentralRole = this.mcomService.normalizeAffiliateRole(centralUser.role);
+      const normalizedExistingRole = existingUser?.role
+        ? this.mcomService.normalizeAffiliateRole(existingUser.role)
+        : null;
+      let normalizedRole = normalizedCentralRole || normalizedExistingRole;
 
-      if (!normalizedRole && !centralUser.role && canAccess) {
-        normalizedRole = this.mcomService.normalizeAffiliateRole(existingUser?.role) ?? null;
+      if (!normalizedRole && canAccess) {
+        normalizedRole = normalizedExistingRole ?? null;
       }
 
       if (!normalizedRole) {
         this.logger.warn(
-          `SSO login denied for ${centralUser.email}: role '${roleToCheck ?? 'none'}' is not authorized for 247gbs affiliate`,
+          `SSO login denied for ${centralUser.email}: role '${centralUser.role ?? existingUser?.role ?? 'none'}' is not authorized for 247gbs affiliate`,
         );
         res.redirect(`${frontendUrl}/login?error=sso_unauthorized_role`);
         return;
@@ -186,13 +191,16 @@ export class SsoController {
         isOnboarded: user.isOnboarded,
       });
 
+      // Set HttpOnly cookie for auth_token
+      setAuthCookie(res, localToken);
+
       const returnData = getReturnCookie(req);
       clearReturnCookie(res);
 
       const role = sanitizeRole(user.role);
       const redirectUrl =
         returnData?.redirect ||
-        `${frontendUrl}/auth/callback?token=${encodeURIComponent(localToken)}&role=${encodeURIComponent(role)}`;
+        `${frontendUrl}/auth/callback?role=${encodeURIComponent(role)}`;
       res.redirect(redirectUrl);
     } catch (err: unknown) {
       const axiosData = (err as { response?: { data?: unknown; status?: number } })

@@ -43,10 +43,18 @@ export const SkillSelectionStep: React.FC = () => {
         toggleSkill(id);
     };
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (selectedSkills.length < 1) {
             toast.error("Please select at least 1 skill.");
             return;
+        }
+        try {
+            const skillNames = selectedSkills.map(
+                (id) => skills?.find((s: { id: string; name: string }) => s.id === id)?.name || id
+            );
+            await apiClient.patch('/users/skills', { skills: skillNames });
+        } catch (err) {
+            console.warn('Could not save skills to API:', err);
         }
         setStep('quiz');
     };
