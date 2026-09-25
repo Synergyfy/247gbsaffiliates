@@ -31,16 +31,6 @@ export function LoginClient() {
             ? `${ERROR_MESSAGES[error]} (Central: ${detail})`
             : ERROR_MESSAGES[error],
         );
-      } else if (!error) {
-        setIsRedirecting(true);
-        mcomService.startLogin().catch((err: unknown) => {
-          setIsRedirecting(false);
-          setMcomError(
-            err instanceof Error
-              ? err.message
-              : 'Failed to connect to Central Hub Solutions. Please try again.',
-          );
-        });
       }
     }, [searchParams]);
 
@@ -94,20 +84,23 @@ export function LoginClient() {
                             </div>
                         )}
                         <button
+                            disabled={isRedirecting}
                             onClick={async () => {
                                 setMcomError(null);
+                                setIsRedirecting(true);
                                 try {
                                     await mcomService.startLogin(undefined, undefined, undefined, 'login');
                                 } catch (err: unknown) {
+                                    setIsRedirecting(false);
                                     setMcomError(err instanceof Error ? err.message : 'Failed to connect to Central Hub Solutions. Please try again.');
                                 }
                             }}
-                            className="flex items-center justify-center gap-3 w-full py-4 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm text-lg cursor-pointer"
+                            className="flex items-center justify-center gap-3 w-full py-4 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm text-lg cursor-pointer disabled:opacity-50"
                         >
                             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
                             </svg>
-                            Sign in with Central Hub Solutions
+                            {isRedirecting ? 'Connecting to Central Hub…' : 'Sign in with Central Hub Solutions'}
                         </button>
                     </div>
 

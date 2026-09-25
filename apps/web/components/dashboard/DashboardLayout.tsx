@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 
 interface DashboardLayoutProps {
@@ -12,13 +13,14 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, roleTitle }) => {
-    const { user, clearAuth } = useAuthStore();
-    const { assessmentSkipped, quizResult } = useOnboardingStore();
+    const { user } = useAuthStore();
+    const { logout, isLoggingOut } = useAuth();
+    const { assessmentSkipped, quizResult, resetOnboarding } = useOnboardingStore();
     const router = useRouter();
 
-    const handleLogout = () => {
-        clearAuth();
-        router.push('/login');
+    const handleLogout = async () => {
+        resetOnboarding();
+        await logout();
     };
 
     const navItems = [
@@ -50,9 +52,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
                             </button>
                             <button
                                 onClick={handleLogout}
-                                className="w-full py-3 px-6 bg-slate-50 text-slate-500 font-bold rounded-xl hover:bg-slate-100 transition-colors font-display uppercase tracking-wider text-xs"
+                                disabled={isLoggingOut}
+                                className="w-full py-3 px-6 bg-slate-50 text-slate-500 font-bold rounded-xl hover:bg-slate-100 transition-colors font-display uppercase tracking-wider text-xs disabled:opacity-50"
                             >
-                                Logout
+                                {isLoggingOut ? 'Logging out...' : 'Logout'}
                             </button>
                         </div>
                     </div>
@@ -99,10 +102,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
                     </div>
                     <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                        disabled={isLoggingOut}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
                     >
                         <span className="material-symbols-outlined">logout</span>
-                        Logout
+                        {isLoggingOut ? 'Logging out...' : 'Logout'}
                     </button>
                 </div>
             </aside>
