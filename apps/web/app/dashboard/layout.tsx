@@ -3,12 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 import apiClient from '@/lib/apiClient';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { user, isAuthenticated, updateUser } = useAuthStore();
     const router = useRouter();
-    const [isChecking, setIsChecking] = useState(true);
+    const [isChecking, setIsChecking] = useState(!user);
 
     useEffect(() => {
         // Scrub legacy auth_token from localStorage
@@ -31,7 +32,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         role: profile.role || user?.role,
                     });
 
-                    if (profile.role !== 'admin' && !isOnboarded) {
+                    const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
+                    if (profile.role !== 'admin' && !isOnboarded && !isSkipped) {
                         router.push('/onboarding');
                         return;
                     }
@@ -46,7 +48,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             }
 
             if (user) {
-                if (user.role !== 'admin' && !user.isOnboarded) {
+                const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
+                if (user.role !== 'admin' && !user.isOnboarded && !isSkipped) {
                     router.push('/onboarding');
                     return;
                 }

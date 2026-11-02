@@ -27,7 +27,7 @@ export interface TaskFilters {
 export const useTasks = (filters: TaskFilters = {}) => {
   const queryClient = useQueryClient();
 
-  const { data: tasks, isLoading } = useQuery({
+  const { data: tasks, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['tasks', filters],
     queryFn: async () => {
       const response = await apiClient.get('/tasks', { params: filters });
@@ -62,6 +62,9 @@ export const useTasks = (filters: TaskFilters = {}) => {
   return {
     tasks,
     isLoading,
+    isError,
+    error,
+    refetch,
     acceptTask: acceptTaskMutation.mutateAsync,
     isAccepting: acceptTaskMutation.isPending,
     createTask: createTaskMutation.mutateAsync,

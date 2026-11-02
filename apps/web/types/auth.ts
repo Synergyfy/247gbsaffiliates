@@ -8,6 +8,8 @@ export interface User {
   email: string;
   role: UserRole;
   roles?: string[];
+  status?: string;
+  verificationStatus?: string;
   avatar?: string;
   image?: string;
   score?: number;
