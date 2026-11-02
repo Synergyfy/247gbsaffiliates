@@ -20,13 +20,13 @@ export const FormInput: React.FC<FormInputProps> = ({
     ...props
 }) => {
     return (
-        <div className="space-y-2">
-            <label className="text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">
+        <div className="space-y-1 md:space-y-2">
+            <label className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">
                 {label}
-                {required && <span className="text-red-500 ml-1 text-lg leading-3">*</span>}
+                {required && <span className="text-red-500 ml-1 text-sm md:text-lg leading-3">*</span>}
             </label>
             <input
-                className={`w-full bg-white border rounded-xl px-5 py-4 text-text-main placeholder-slate-400 outline-none transition-all font-medium ${error
+                className={`w-full bg-white border rounded-xl px-3.5 py-2.5 md:px-5 md:py-4 text-xs md:text-base text-text-main placeholder-slate-400 outline-none transition-all font-medium ${error
                         ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
                         : 'border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10'
                     } ${className}`}
@@ -34,10 +34,10 @@ export const FormInput: React.FC<FormInputProps> = ({
                 {...props}
             />
             {helperText && !error && (
-                <p className="text-xs text-slate-400 ml-1">{helperText}</p>
+                <p className="text-[10px] md:text-xs text-slate-400 ml-1">{helperText}</p>
             )}
             {error && (
-                <p className="text-xs text-red-500 font-bold ml-1 flex items-center gap-1 animate-in slide-in-from-top-1">
+                <p className="text-[10px] md:text-xs text-red-500 font-bold ml-1 flex items-center gap-1 animate-in slide-in-from-top-1">
                     <span className="material-symbols-outlined text-[14px]">error</span>
                     {error.message}
                 </p>
@@ -64,14 +64,14 @@ export const FormSelect: React.FC<FormSelectProps> = ({
     ...props
 }) => {
     return (
-        <div className="space-y-2">
-            <label className="text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">
+        <div className="space-y-1 md:space-y-2">
+            <label className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">
                 {label}
-                {required && <span className="text-red-500 ml-1 text-lg leading-3">*</span>}
+                {required && <span className="text-red-500 ml-1 text-sm md:text-lg leading-3">*</span>}
             </label>
             <div className="relative">
                 <select
-                    className={`w-full bg-white border rounded-xl px-5 py-4 text-text-main outline-none transition-all font-medium appearance-none ${error
+                    className={`w-full bg-white border rounded-xl px-3.5 py-2.5 md:px-5 md:py-4 text-xs md:text-base text-text-main outline-none transition-all font-medium appearance-none ${error
                             ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
                             : 'border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10'
                         }`}

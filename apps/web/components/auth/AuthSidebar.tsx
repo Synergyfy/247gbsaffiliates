@@ -18,6 +18,7 @@ export default function AuthSidebar({ title, description, imageSrc, features }: 
                     fill
                     className="object-cover"
                     priority
+                    unoptimized
                 />
             </div>
 

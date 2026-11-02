@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthSidebar from "@/components/auth/AuthSidebar";
-import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 import { mcomService } from "@/services/mcom";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -28,11 +27,23 @@ export function LoginClient() {
         const detail = searchParams.get('detail');
         setMcomError(
           detail && process.env.NODE_ENV !== 'production'
-            ? `${ERROR_MESSAGES[error]} (Central: ${detail})`
+            ? `${ERROR_MESSAGES[error]} (Details: ${detail})`
             : ERROR_MESSAGES[error],
         );
       }
     }, [searchParams]);
+
+    const continueToCentral = async () => {
+        setMcomError(null);
+        setIsRedirecting(true);
+        try {
+            // Start at 247GBS so its state cookie is established before CHS registration.
+            await mcomService.startLogin(undefined, undefined, undefined, 'login');
+        } catch (err: unknown) {
+            setIsRedirecting(false);
+            setMcomError(err instanceof Error ? err.message : 'Failed to connect to Central Hub Solutions. Please try again.');
+        }
+    };
 
     if (isRedirecting) {
       return (
@@ -85,16 +96,7 @@ export function LoginClient() {
                         )}
                         <button
                             disabled={isRedirecting}
-                            onClick={async () => {
-                                setMcomError(null);
-                                setIsRedirecting(true);
-                                try {
-                                    await mcomService.startLogin(undefined, undefined, undefined, 'login');
-                                } catch (err: unknown) {
-                                    setIsRedirecting(false);
-                                    setMcomError(err instanceof Error ? err.message : 'Failed to connect to Central Hub Solutions. Please try again.');
-                                }
-                            }}
+                            onClick={continueToCentral}
                             className="flex items-center justify-center gap-3 w-full py-4 px-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-text-main shadow-sm text-lg cursor-pointer disabled:opacity-50"
                         >
                             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -107,9 +109,9 @@ export function LoginClient() {
                     <div className="mt-10 text-center">
                         <p className="text-text-secondary text-sm font-medium">
                             Don&apos;t have an account?{" "}
-                            <a href={getAffiliateRegisterUrl()} className="text-primary font-bold hover:underline underline-offset-4 decoration-2">
+                            <button type="button" onClick={continueToCentral} disabled={isRedirecting} className="text-primary font-bold hover:underline underline-offset-4 decoration-2 disabled:opacity-50">
                                 Create an account
-                            </a>
+                            </button>
                         </p>
                     </div>
 

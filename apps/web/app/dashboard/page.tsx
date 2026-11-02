@@ -2,9 +2,7 @@
 
 import React from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
-import { AgentDashboard } from '@/components/dashboard/AgentDashboard';
-import { AccountManagerDashboard } from '@/components/dashboard/AccountManagerDashboard';
-import { ConsultantDashboard } from '@/components/dashboard/ConsultantDashboard';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
@@ -16,39 +14,36 @@ export default function DashboardPage() {
             router.push('/login');
             return;
         }
-        if (user && user.role !== 'admin' && !user.isOnboarded) {
+        const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
+        if (user && user.role !== 'admin' && !user.isOnboarded && !isSkipped) {
             router.push('/onboarding');
+            return;
+        }
+        if (user?.role) {
+            switch (user.role) {
+                case 'agent':
+                    router.replace('/dashboard/agent');
+                    break;
+                case 'account-manager':
+                case 'account_manager':
+                    router.replace('/dashboard/account-manager');
+                    break;
+                case 'consultant':
+                    router.replace('/dashboard/consultant');
+                    break;
+                case 'admin':
+                    router.replace('/dashboard/admin');
+                    break;
+                default:
+                    router.replace('/dashboard/agent');
+                    break;
+            }
         }
     }, [isAuthenticated, user, router]);
 
-    if (!isAuthenticated || !user || (user.role !== 'admin' && !user.isOnboarded)) {
-        return null;
-    }
-
-    const renderDashboard = () => {
-        switch (user.role) {
-            case 'agent':
-                return <AgentDashboard />;
-            case 'account-manager':
-            case 'account_manager':
-                return <AccountManagerDashboard />;
-            case 'consultant':
-                return <ConsultantDashboard />;
-            default:
-                return (
-                    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Access Denied</h2>
-                        <p className="text-slate-600 max-w-md">
-                            Your account role ({user.role}) is not authorized to access this dashboard. This portal is restricted to Agents, Account Managers, and Consultants.
-                        </p>
-                    </div>
-                );
-        }
-    };
-
     return (
-        <div className="min-h-screen bg-background-light">
-            {renderDashboard()}
+        <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary/20 border-b-primary"></div>
         </div>
     );
 }

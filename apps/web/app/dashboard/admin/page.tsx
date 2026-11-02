@@ -97,27 +97,35 @@ export default function AdminDashboard() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {stats?.recentUsers.map((u) => (
-                                    <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-8 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-text-main">{u.name}</span>
-                                                <span className="text-[10px] text-text-secondary">{u.email}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-4">
-                                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 bg-slate-100 rounded">
-                                                {u.role}
-                                            </span>
-                                        </td>
-                                        <td className="px-8 py-4">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className={`size-1.5 rounded-full ${u.status === 'active' ? 'bg-green-500' : 'bg-slate-400'}`}></span>
-                                                <span className="text-[10px] font-bold capitalize">{u.status}</span>
-                                            </div>
+                                {stats?.recentUsers && stats.recentUsers.length > 0 ? (
+                                    stats.recentUsers.map((u) => (
+                                        <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-8 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-text-main">{u.name}</span>
+                                                    <span className="text-[10px] text-text-secondary">{u.email}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-4">
+                                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 bg-slate-100 rounded">
+                                                    {u.role}
+                                                </span>
+                                            </td>
+                                            <td className="px-8 py-4">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={`size-1.5 rounded-full ${u.status === 'active' ? 'bg-green-500' : 'bg-slate-400'}`}></span>
+                                                    <span className="text-[10px] font-bold capitalize">{u.status}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan={3} className="px-8 py-8 text-center text-xs text-slate-400 font-medium">
+                                            No recent registrations found
                                         </td>
                                     </tr>
-                                ))}
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -127,33 +135,43 @@ export default function AdminDashboard() {
                 <div className="bg-surface-light rounded-3xl border border-slate-200 shadow-sm p-8">
                     <h3 className="font-bold text-text-main mb-6">System Health</h3>
                     <div className="space-y-4">
-                        {stats?.systemAlerts.map((alert, idx) => (
-                            <div key={idx} className={`p-4 rounded-2xl flex items-start gap-4 ${
-                                alert.severity === 'error' ? 'bg-red-50 border border-red-100' : 
-                                alert.severity === 'warning' ? 'bg-amber-50 border border-amber-100' : 
-                                'bg-blue-50 border border-blue-100'
-                            }`}>
-                                <span className={`material-symbols-outlined ${
-                                    alert.severity === 'error' ? 'text-red-500' : 
-                                    alert.severity === 'warning' ? 'text-amber-500' : 
-                                    'text-blue-500'
+                        {stats?.systemAlerts && stats.systemAlerts.length > 0 ? (
+                            stats.systemAlerts.map((alert, idx) => (
+                                <div key={idx} className={`p-4 rounded-2xl flex items-start gap-4 ${
+                                    alert.severity === 'error' ? 'bg-red-50 border border-red-100' :
+                                    alert.severity === 'warning' ? 'bg-amber-50 border border-amber-100' :
+                                    'bg-blue-50 border border-blue-100'
                                 }`}>
-                                    {alert.severity === 'error' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info'}
-                                </span>
-                                <div>
-                                    <p className={`text-xs font-bold ${
-                                        alert.severity === 'error' ? 'text-red-900' : 
-                                        alert.severity === 'warning' ? 'text-amber-900' : 
-                                        'text-blue-900'
+                                    <span className={`material-symbols-outlined ${
+                                        alert.severity === 'error' ? 'text-red-500' :
+                                        alert.severity === 'warning' ? 'text-amber-500' :
+                                        'text-blue-500'
                                     }`}>
-                                        System Notification
-                                    </p>
-                                    <p className="text-[10px] font-medium text-slate-600 mt-0.5">
-                                        {alert.message}
-                                    </p>
+                                        {alert.severity === 'error' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info'}
+                                    </span>
+                                    <div>
+                                        <p className={`text-xs font-bold ${
+                                            alert.severity === 'error' ? 'text-red-900' :
+                                            alert.severity === 'warning' ? 'text-amber-900' :
+                                            'text-blue-900'
+                                        }`}>
+                                            System Notification
+                                        </p>
+                                        <p className="text-[10px] font-medium text-slate-600 mt-0.5">
+                                            {alert.message}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center gap-3">
+                                <span className="material-symbols-outlined text-emerald-600">check_circle</span>
+                                <div>
+                                    <p className="text-xs font-bold text-emerald-900">All Systems Operational</p>
+                                    <p className="text-[10px] font-medium text-emerald-700 mt-0.5">No critical issues or warnings detected.</p>
                                 </div>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
             </div>

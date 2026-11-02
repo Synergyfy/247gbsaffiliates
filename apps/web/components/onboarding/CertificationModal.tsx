@@ -25,7 +25,11 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({ isOpen, 
 
     const isPendingVerification = role === 'consultant' || isPaidVisibilityRequested;
     // We only show this modal on success (>=50%), failed attempts redirect to learning dashboard
-    const score = quizResult.score;
+    const score = typeof quizResult.percentage === 'number'
+        ? quizResult.percentage
+        : quizResult.maxScore
+            ? Math.round((quizResult.score / quizResult.maxScore) * 100)
+            : quizResult.score;
 
     const handleNavigate = async () => {
         try {
@@ -34,8 +38,17 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({ isOpen, 
             console.warn('Failed to complete onboarding on backend:', err);
         }
         updateUser({ isOnboarded: true, isQuizPassed: true });
+        const targetRole = role;
         resetOnboarding();
-        router.push('/dashboard');
+        if (targetRole === 'agent') {
+            router.push('/dashboard/agent');
+        } else if (targetRole === 'account-manager' || targetRole === 'account_manager') {
+            router.push('/dashboard/account-manager');
+        } else if (targetRole === 'consultant') {
+            router.push('/dashboard/consultant');
+        } else {
+            router.push('/dashboard');
+        }
         onClose();
     };
 
