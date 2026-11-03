@@ -10,6 +10,9 @@ export interface User {
   roles?: string[];
   status?: string;
   verificationStatus?: string;
+  verificationNotes?: string | null;
+  verificationSubmission?: Record<string, unknown> | null;
+  verificationReviewedAt?: string | null;
   avatar?: string;
   image?: string;
   score?: number;

@@ -8,15 +8,13 @@ import { useRouter } from 'next/navigation';
 import { CertificationModal } from './CertificationModal';
 import { useAuthStore } from '@/store/useAuthStore';
 
-export const QuizStep: React.FC = () => {
+export const QuizStep: React.FC<{ isRetake?: boolean }> = ({ isRetake = false }) => {
     const {
-        role,
         quizAnswers,
         setQuizAnswer,
         setQuizResult,
         setStep,
         setRetakeAvailableAt,
-        resetOnboarding
     } = useOnboardingStore();
     const { updateUser } = useAuthStore();
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -133,7 +131,7 @@ export const QuizStep: React.FC = () => {
             const response = await apiClient.post('/assessment/submit', { answers: formattedAnswers });
             return response.data;
         },
-        onSuccess: (data) => {
+        onSuccess: async (data) => {
             setQuizResult({
                 score: data.score,
                 maxScore: data.maxScore,
@@ -144,16 +142,69 @@ export const QuizStep: React.FC = () => {
             if (data.band === 'Fail') {
                 const retakeTime = Date.now() + (24 * 60 * 60 * 1000);
                 setRetakeAvailableAt(retakeTime);
+                if (isRetake) {
+                    setStep('quiz');
+                    try {
+                        const profileResponse = await apiClient.get('/auth/profile');
+                        updateUser({ isOnboarded: Boolean(profileResponse.data.isOnboarded), isQuizPassed: Boolean(profileResponse.data.isQuizPassed) });
+                    } catch (err) {
+                        console.warn('Could not refresh profile after assessment:', err);
+                    }
+                    router.replace('/dashboard/agent/assessment');
+                    return;
+                }
                 setStep('outcome');
             } else {
-                apiClient.patch('/users/complete-onboarding').catch((err) => {
-                    console.warn('Failed to complete onboarding on backend:', err);
-                });
-                updateUser({ isOnboarded: true, isQuizPassed: true, score: data.score });
+                if (isRetake) {
+                    setRetakeAvailableAt(null);
+                    setStep('quiz');
+                    try {
+                        const profileResponse = await apiClient.get('/auth/profile');
+                        const profile = profileResponse.data;
+                        updateUser({
+                            isOnboarded: Boolean(profile.isOnboarded),
+                            isQuizPassed: Boolean(profile.isQuizPassed),
+                            skills: profile.skills,
+                            score: profile.score,
+                        });
+                    } catch (err) {
+                        // The assessment result is persisted by /assessment/submit;
+                        // the status page reloads the authoritative profile on return.
+                        console.warn('Could not refresh profile after assessment:', err);
+                    }
+                    router.replace('/dashboard/agent/assessment');
+                    return;
+                }
+                try {
+                    const profileResponse = await apiClient.get('/auth/profile');
+                    const profile = profileResponse.data;
+                    updateUser({
+                        isOnboarded: Boolean(profile.isOnboarded),
+                        isQuizPassed: Boolean(profile.isQuizPassed),
+                        verificationStatus: profile.verificationStatus,
+                        verificationNotes: profile.verificationNotes,
+                        verificationSubmission: profile.verificationSubmission,
+                        score: data.score,
+                    });
+                } catch (err) {
+                    console.warn('Could not refresh profile after assessment:', err);
+                    updateUser({ isQuizPassed: true, score: data.score });
+                }
                 setStep('outcome');
             }
         },
     });
+
+    function handleNext() {
+        if (!questions) return;
+        if (currentQuestionIndex < questions.length - 1) {
+            setCurrentQuestionIndex(currentQuestionIndex + 1);
+            setTimeLeft(30);
+        } else {
+            setIsSubmitting(true);
+            submitMutation.mutate();
+        }
+    }
 
     useEffect(() => {
         if (isSubmitting && submissionStep < submissionSteps.length - 1) {
@@ -173,20 +224,10 @@ export const QuizStep: React.FC = () => {
             return () => clearTimeout(timer);
         } else if (timeLeft === 0 && !isSubmitting) {
             playTimesUp();
-            handleNext();
+            const timer = setTimeout(handleNext, 0);
+            return () => clearTimeout(timer);
         }
     }, [timeLeft, isSubmitting, isMuted]);
-
-    const handleNext = () => {
-        if (!questions) return;
-        if (currentQuestionIndex < questions.length - 1) {
-            setCurrentQuestionIndex(currentQuestionIndex + 1);
-            setTimeLeft(30);
-        } else {
-            setIsSubmitting(true);
-            submitMutation.mutate();
-        }
-    };
 
     if (isLoading) {
         return (
@@ -203,20 +244,30 @@ export const QuizStep: React.FC = () => {
                 <div className="size-12 md:size-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3 md:mb-4 text-primary">
                     <span className="material-symbols-outlined text-2xl md:text-3xl">verified</span>
                 </div>
-                <h2 className="text-lg md:text-xl font-bold font-display text-text-main mb-2">No Assessment Required</h2>
+                <h2 className="text-lg md:text-xl font-bold font-display text-text-main mb-2">
+                    {isRetake ? 'No Assessment Questions Available' : 'No Assessment Required'}
+                </h2>
                 <p className="text-slate-500 mb-6 text-xs md:text-sm">
-                    No preliminary assessment questions are required for your selected track at this time. You can complete your onboarding to access the dashboard.
+                    {isRetake
+                        ? 'There are no questions available to retake right now. Your qualification status has not been changed.'
+                        : 'No preliminary assessment questions are required for your selected track at this time. You can complete your onboarding to access the dashboard.'}
                 </p>
-                <button
-                    onClick={() => {
-                        setIsSubmitting(true);
-                        submitMutation.mutate();
-                    }}
-                    disabled={isSubmitting}
-                    className="px-6 md:px-8 h-10 md:h-12 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:opacity-90 transition-all font-display uppercase tracking-widest text-[10px]"
-                >
-                    {isSubmitting ? 'Finalizing...' : 'Complete Onboarding'}
-                </button>
+                {isRetake ? (
+                    <button onClick={() => router.replace('/dashboard/agent/assessment')} className="px-6 md:px-8 h-10 md:h-12 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:opacity-90 transition-all font-display uppercase tracking-widest text-[10px]">
+                        Return to assessment status
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => {
+                            setIsSubmitting(true);
+                            submitMutation.mutate();
+                        }}
+                        disabled={isSubmitting}
+                        className="px-6 md:px-8 h-10 md:h-12 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:opacity-90 transition-all font-display uppercase tracking-widest text-[10px]"
+                    >
+                        {isSubmitting ? 'Finalizing...' : 'Complete Onboarding'}
+                    </button>
+                )}
             </div>
         );
     }
@@ -308,7 +359,7 @@ export const QuizStep: React.FC = () => {
                 {/* Question Prompt */}
                 <div className={`p-4 sm:p-6 md:p-8 lg:p-12 pr-14 md:pr-20`}>
                     <p className={`text-xs sm:text-base md:text-xl lg:text-2xl font-medium leading-relaxed font-display text-text-main`}>
-                        "{currentQuestion.text}"
+                        &quot;{currentQuestion.text}&quot;
                     </p>
                 </div>
 

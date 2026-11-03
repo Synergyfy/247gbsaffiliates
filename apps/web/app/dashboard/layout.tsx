@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import apiClient from '@/lib/apiClient';
@@ -9,6 +9,9 @@ import apiClient from '@/lib/apiClient';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { user, isAuthenticated, updateUser } = useAuthStore();
     const router = useRouter();
+    const pathname = usePathname();
+    const isAssessmentStatusPage = pathname === '/dashboard/agent/assessment';
+    const isAgentDashboard = pathname.startsWith('/dashboard/agent');
     const [isChecking, setIsChecking] = useState(!user);
 
     useEffect(() => {
@@ -30,18 +33,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         isOnboarded,
                         isQuizPassed,
                         role: profile.role || user?.role,
+                        verificationStatus: profile.verificationStatus,
+                        verificationNotes: profile.verificationNotes,
+                        verificationSubmission: profile.verificationSubmission,
+                        verificationReviewedAt: profile.verificationReviewedAt,
                     });
 
                     const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
-                    if (profile.role !== 'admin' && !isOnboarded && !isSkipped) {
+                    const hasSubmittedVerification = Boolean(profile.verificationSubmission);
+                    const isAwaitingVerification = ['pending', 'rejected'].includes(profile.verificationStatus);
+                    if (profile.role !== 'admin' && !isOnboarded && !isSkipped && !isAssessmentStatusPage && !(isAwaitingVerification && hasSubmittedVerification)) {
                         router.push('/onboarding');
                         return;
                     }
                     setIsChecking(false);
                     return;
                 }
-            } catch (err: any) {
-                if (err.response?.status === 401) {
+            } catch (err: unknown) {
+                const responseStatus = (err as { response?: { status?: number } } | null)?.response?.status;
+                if (responseStatus === 401) {
                     router.push('/login');
                     return;
                 }
@@ -49,7 +59,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             if (user) {
                 const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
-                if (user.role !== 'admin' && !user.isOnboarded && !isSkipped) {
+                const hasSubmittedVerification = Boolean(user.verificationSubmission);
+                const isAwaitingVerification = ['pending', 'rejected'].includes(user.verificationStatus || '');
+                if (user.role !== 'admin' && !user.isOnboarded && !isSkipped && !isAssessmentStatusPage && !(isAwaitingVerification && hasSubmittedVerification)) {
                     router.push('/onboarding');
                     return;
                 }
@@ -60,7 +72,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         };
 
         checkStatus();
-    }, [isAuthenticated, user, router, updateUser]);
+    }, [isAuthenticated, user, router, updateUser, isAssessmentStatusPage]);
 
     if (isChecking) {
         return (
@@ -73,8 +85,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         );
     }
 
+    const needsOnboardingSteps = Boolean(user && (
+        !user.verificationSubmission || !user.isQuizPassed || !user.skills?.length
+    ));
+
     return (
         <div className="min-h-screen bg-slate-50 font-display">
+            {user && user.role !== 'admin' && !isAgentDashboard && (
+                <section className="mx-auto w-full max-w-7xl px-4 pt-3 sm:px-6 lg:px-8" aria-live="polite">
+                    <div className={`flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between ${user.verificationStatus === 'verified' ? 'border-emerald-200 bg-emerald-50' : user.verificationStatus === 'rejected' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+                        <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900">Account verification: <span className="capitalize">{(user.verificationStatus || 'unverified').replace(/_/g, ' ')}</span></p>
+                            <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
+                                {user.verificationStatus === 'verified'
+                                    ? 'Your identity has been verified by an administrator.'
+                                    : user.verificationStatus === 'rejected'
+                                        ? user.verificationNotes || 'Update your profile and identity document, then submit them again for review.'
+                                        : user.verificationSubmission
+                                            ? needsOnboardingSteps
+                                                ? 'Your verification submission is pending. Continue the remaining onboarding steps while an administrator reviews your account.'
+                                                : 'Your profile and identity document are awaiting administrator review. No action is needed right now.'
+                                            : 'Complete your onboarding profile and submit an identity document for administrator review.'}
+                            </p>
+                        </div>
+                        {user.verificationStatus === 'rejected' && (
+                            <a href="/onboarding?edit-profile=1" className="shrink-0 rounded-md bg-red-700 px-3 py-2 text-center text-[10px] font-bold text-white hover:bg-red-800">Update submission</a>
+                        )}
+                        {needsOnboardingSteps && user.verificationStatus !== 'rejected' && user.verificationStatus !== 'verified' && (
+                            <a href="/onboarding" className="shrink-0 rounded-md bg-amber-700 px-3 py-2 text-center text-[10px] font-bold text-white hover:bg-amber-800">Continue onboarding</a>
+                        )}
+                    </div>
+                </section>
+            )}
             {children}
         </div>
     );

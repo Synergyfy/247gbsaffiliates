@@ -15,7 +15,9 @@ export default function DashboardPage() {
             return;
         }
         const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
-        if (user && user.role !== 'admin' && !user.isOnboarded && !isSkipped) {
+        const hasSubmittedVerification = Boolean(user?.verificationSubmission);
+        const isAwaitingVerification = ['pending', 'rejected'].includes(user?.verificationStatus || '');
+        if (user && user.role !== 'admin' && !user.isOnboarded && !isSkipped && !(isAwaitingVerification && hasSubmittedVerification)) {
             router.push('/onboarding');
             return;
         }

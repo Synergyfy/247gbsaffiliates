@@ -33,6 +33,8 @@ export function SsoLoginClient() {
         const rawRole = (profile.data?.role ?? 'agent') as string;
         const role = rawRole.toLowerCase().replace('_', '-');
         const isOnboarded = Boolean(profile.data?.isOnboarded);
+        const verificationStatus = profile.data?.verificationStatus;
+        const verificationSubmission = profile.data?.verificationSubmission;
         setAuth(
           {
             id: profile.data?.userId ?? '',
@@ -40,10 +42,14 @@ export function SsoLoginClient() {
             name: profile.data?.email ?? '',
             role: rawRole as never,
             isOnboarded,
+            verificationStatus,
+            verificationNotes: profile.data?.verificationNotes,
+            verificationSubmission,
+            verificationReviewedAt: profile.data?.verificationReviewedAt,
           },
           token,
         );
-        if (rawRole !== 'admin' && !isOnboarded) {
+        if (rawRole !== 'admin' && !isOnboarded && !(verificationSubmission && ['pending', 'rejected'].includes(verificationStatus))) {
           router.push('/onboarding');
         } else {
           router.push(`/dashboard/${role}`);

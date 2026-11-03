@@ -8,7 +8,7 @@ interface CountdownTimerProps {
 }
 
 export const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetTimestamp, onComplete }) => {
-    const [timeLeft, setTimeLeft] = useState(0);
+    const [timeLeft, setTimeLeft] = useState(() => Math.max(0, targetTimestamp - Date.now()));
 
     useEffect(() => {
         const calculateTimeLeft = () => {
@@ -16,8 +16,6 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetTimestamp,
             const difference = targetTimestamp - now;
             return Math.max(0, difference);
         };
-
-        setTimeLeft(calculateTimeLeft());
 
         const timer = setInterval(() => {
             const remaining = calculateTimeLeft();

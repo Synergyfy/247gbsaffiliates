@@ -52,6 +52,7 @@ interface OnboardingState {
   setProfileStatus: (status: OnboardingState['profileStatus']) => void;
   toggleSkill: (skillId: string) => void;
   setQuizAnswer: (questionId: string, answerId: string) => void;
+  clearQuizAnswers: () => void;
   setQuizResult: (result: OnboardingState['quizResult']) => void;
   setRetakeAvailableAt: (timestamp: number | null) => void;
   setAssessmentSkipped: (skipped: boolean) => void; 
@@ -113,6 +114,8 @@ export const useOnboardingStore = create<OnboardingState>()(
       setQuizAnswer: (questionId, answerId) => set((state) => ({
         quizAnswers: { ...state.quizAnswers, [questionId]: answerId }
       })),
+
+      clearQuizAnswers: () => set({ quizAnswers: {} }),
 
       setQuizResult: (result) => set({ quizResult: result, currentStep: 'outcome' }),
 

@@ -84,11 +84,26 @@ export class User {
   @Column({ default: false })
   isPaidVisible: boolean;
 
-  @Column({ type: 'enum', enum: VerificationStatus, default: VerificationStatus.UNVERIFIED })
+  @Column({ type: 'enum', enum: VerificationStatus, default: VerificationStatus.PENDING })
   verificationStatus: VerificationStatus;
 
   @Column('text', { nullable: true })
-  verificationNotes: string; // Admin notes on verification
+  verificationNotes: string | null; // Admin notes on verification
+
+  @Column({ type: 'jsonb', nullable: true })
+  verificationSubmission: Record<string, unknown> | null;
+
+  @Column({ type: 'bytea', nullable: true, select: false })
+  verificationDocument: Buffer | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  verificationDocumentName: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  verificationDocumentMimeType: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  verificationReviewedAt: Date | null;
 
   @Column({ default: false })
   isOnboarded: boolean;

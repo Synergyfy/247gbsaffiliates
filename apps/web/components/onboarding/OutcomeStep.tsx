@@ -9,16 +9,22 @@ import { useAuthStore } from '@/store/useAuthStore';
 
 export const OutcomeStep: React.FC = () => {
     const { quizResult, role, resetOnboarding, isPaidVisibilityRequested } = useOnboardingStore();
-    const { updateUser } = useAuthStore();
+    const { updateUser, user } = useAuthStore();
     const router = useRouter();
 
     const handleEnterDashboard = async () => {
         try {
-            await apiClient.patch('/users/complete-onboarding');
+            const response = await apiClient.get('/auth/profile');
+            updateUser({
+                isOnboarded: Boolean(response.data.isOnboarded),
+                isQuizPassed: Boolean(response.data.isQuizPassed),
+                verificationStatus: response.data.verificationStatus,
+                verificationNotes: response.data.verificationNotes,
+                verificationSubmission: response.data.verificationSubmission,
+            });
         } catch (err) {
-            console.warn('Failed to complete onboarding on backend:', err);
+            console.warn('Could not refresh account status:', err);
         }
-        updateUser({ isOnboarded: true, isQuizPassed: Boolean(quizResult && (quizResult.percentage ? quizResult.percentage >= 50 : quizResult.score >= 50)) });
         const targetRole = role;
         resetOnboarding();
         if (targetRole === 'agent') {
@@ -34,7 +40,7 @@ export const OutcomeStep: React.FC = () => {
 
     if (!quizResult) return null;
 
-    const isPendingVerification = role === 'consultant' || isPaidVisibilityRequested;
+    const isPendingVerification = user?.verificationStatus !== 'verified' || role === 'consultant' || isPaidVisibilityRequested;
     const percentage = typeof quizResult.percentage === 'number'
         ? quizResult.percentage
         : quizResult.maxScore
@@ -79,10 +85,10 @@ export const OutcomeStep: React.FC = () => {
                                 Not Passed
                             </div>
                             <h1 className="text-xl md:text-2xl font-bold font-display text-text-main mb-1 leading-tight">
-                                Keep going — you're nearly there
+                                Keep going — you&apos;re nearly there
                             </h1>
                             <p className="text-xs md:text-sm text-slate-500 leading-relaxed">
-                                You scored <span className="font-bold text-red-500">{percentage}%</span>. The pass mark is <span className="font-bold">85%</span>. Review the materials below and come back when you're ready.
+                                You scored <span className="font-bold text-red-500">{percentage}%</span>. The pass mark is <span className="font-bold">85%</span>. Review the materials below and come back when you&apos;re ready.
                             </p>
                         </div>
                     </div>

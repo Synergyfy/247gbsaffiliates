@@ -1,10 +1,11 @@
-import { Injectable, OnModuleInit, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Brackets } from 'typeorm';
 import { Question, TargetingLevel, TargetingType } from './entities/question.entity';
 import { QuizAttempt } from './entities/quiz_attempt.entity';
 import { UsersService } from '../users/users.service';
 import { CreateQuestionDto } from './dto/create-question.dto';
+import { UpdateQuestionDto } from './dto/update-question.dto';
 import { Category } from '../categories/entities/category.entity';
 import { Sector } from '../sectors/entities/sector.entity';
 
@@ -26,6 +27,9 @@ export class AssessmentService implements OnModuleInit {
 
   async createQuestion(dto: CreateQuestionDto) {
     const { categoryIds, sectorIds, ...data } = dto;
+    if (!data.options?.length || data.correctOptionIndex < 0 || data.correctOptionIndex >= data.options.length) {
+      throw new BadRequestException('The correct answer must point to one of the supplied options.');
+    }
     
     const question = this.questionRepo.create(data);
 
@@ -37,6 +41,60 @@ export class AssessmentService implements OnModuleInit {
     }
 
     return this.questionRepo.save(question);
+  }
+
+  async getAdminQuestions() {
+    return this.questionRepo.find({ relations: ['categories', 'sectors'], order: { text: 'ASC' } });
+  }
+
+  async updateQuestion(id: string, dto: UpdateQuestionDto) {
+    const question = await this.questionRepo.findOne({ where: { id }, relations: ['categories', 'sectors'] });
+    if (!question) throw new NotFoundException('Assessment question not found.');
+    const { categoryIds, sectorIds, ...fields } = dto;
+    const options = fields.options ?? question.options;
+    const answerIndex = fields.correctOptionIndex ?? question.correctOptionIndex;
+    if (!options?.length || answerIndex < 0 || answerIndex >= options.length) {
+      throw new BadRequestException('The correct answer must point to one of the supplied options.');
+    }
+    Object.assign(question, fields);
+    if (categoryIds !== undefined) {
+      const categories = categoryIds.length ? await this.categoryRepo.findBy({ id: In(categoryIds) }) : [];
+      if (categories.length !== categoryIds.length) throw new BadRequestException('One or more assessment categories were not found.');
+      question.categories = categories;
+    }
+    if (sectorIds !== undefined) {
+      const sectors = sectorIds.length ? await this.sectorRepo.findBy({ id: In(sectorIds) }) : [];
+      if (sectors.length !== sectorIds.length) throw new BadRequestException('One or more assessment sectors were not found.');
+      question.sectors = sectors;
+    }
+    return this.questionRepo.save(question);
+  }
+
+  async deleteQuestion(id: string) {
+    const question = await this.questionRepo.findOne({ where: { id } });
+    if (!question) throw new NotFoundException('Assessment question not found.');
+    await this.questionRepo.remove(question);
+    return { id, deleted: true };
+  }
+
+  async getAdminAttempts() {
+    const attempts = await this.attemptRepo.createQueryBuilder('attempt')
+      .leftJoin('attempt.user', 'user')
+      .select(['attempt.id', 'attempt.userId', 'attempt.score', 'attempt.maxScore', 'attempt.percentage', 'attempt.band', 'attempt.answers', 'attempt.createdAt', 'user.id', 'user.email', 'user.firstName', 'user.lastName'])
+      .orderBy('attempt.createdAt', 'DESC')
+      .take(200)
+      .getMany();
+    return attempts.map((attempt) => ({
+      id: attempt.id,
+      userId: attempt.userId,
+      user: attempt.user ? { id: attempt.user.id, email: attempt.user.email, firstName: attempt.user.firstName, lastName: attempt.user.lastName } : null,
+      score: attempt.score,
+      maxScore: attempt.maxScore,
+      percentage: attempt.percentage,
+      band: attempt.band,
+      answers: attempt.answers,
+      createdAt: attempt.createdAt,
+    }));
   }
 
   async generateQuiz(userId?: string) {
@@ -163,6 +221,25 @@ export class AssessmentService implements OnModuleInit {
 
       return { score, maxScore, percentage, band };
     }
+
+  async getLatestAttempt(userId: string) {
+    const attempt = await this.attemptRepo.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!attempt) return null;
+
+    // Keep submitted answers private; this endpoint is for the user's status view.
+    return {
+      id: attempt.id,
+      score: attempt.score,
+      maxScore: attempt.maxScore,
+      percentage: attempt.percentage,
+      band: attempt.band,
+      createdAt: attempt.createdAt,
+    };
+  }
 
   async onModuleInit() {
     await this.seedQuestions();

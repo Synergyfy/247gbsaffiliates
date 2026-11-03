@@ -1,7 +1,7 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole } from './entities/user.entity';
+import { User, UserRole, VerificationStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import * as bcrypt from 'bcrypt';
@@ -29,6 +29,7 @@ export class UsersService {
       ...createUserDto,
       password: hashedPassword,
       isOnboarded: false, // Explicitly false for regular users
+      verificationStatus: VerificationStatus.PENDING,
     });
 
     return this.usersRepository.save(user);
@@ -73,6 +74,12 @@ export class UsersService {
 
   async completeOnboarding(id: string) {
     const user = await this.findOne(id);
+    if (user.verificationStatus !== VerificationStatus.VERIFIED) {
+      throw new ForbiddenException('An administrator must verify your account before onboarding can be completed.');
+    }
+    if (!user.verificationSubmission || !user.verificationDocumentMimeType || !user.isQuizPassed || !user.skills?.length) {
+      throw new ForbiddenException('Submit your profile and identity document, select your skills, and pass the assessment before completing onboarding.');
+    }
     user.isOnboarded = true;
     return this.usersRepository.save(user);
   }
@@ -81,7 +88,14 @@ export class UsersService {
     const user = await this.findOne(userId);
     // Check if user is already onboarded to avoid redundant updates
     if (!user.isOnboarded) {
-      if (user.isQuizPassed && user.skills && user.skills.length > 0) {
+      if (
+        user.verificationStatus === VerificationStatus.VERIFIED &&
+        user.verificationSubmission &&
+        user.verificationDocumentMimeType &&
+        user.isQuizPassed &&
+        user.skills &&
+        user.skills.length > 0
+      ) {
         user.isOnboarded = true;
         await this.usersRepository.save(user);
       }
@@ -101,7 +115,7 @@ export class UsersService {
   }
 
   async update(id: string, updateData: Partial<User>): Promise<User> {
-    await this.usersRepository.update(id, updateData);
+    await this.usersRepository.update(id, updateData as never);
     return this.findOne(id);
   }
 

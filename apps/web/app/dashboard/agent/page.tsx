@@ -1,285 +1,329 @@
 'use client';
 
-import React, { useState } from 'react';
 import Link from 'next/link';
-import { useTasks, Task } from '@/hooks/useTasks';
-import { useWallet, Transaction } from '@/hooks/useWallet';
-import { useMessaging } from '@/hooks/useMessaging';
+import { useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useOnboardingStore } from '@/store/useOnboardingStore';
-import { toast } from 'react-toastify';
+import { useLearningProgress, useLearningResources } from '@/hooks/useLearningResources';
+import { useTasks } from '@/hooks/useTasks';
 
-type TaskView = 'open' | 'active';
-
-const formatCurrency = (amount: number, currency = 'USD') => {
-    try {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
-    } catch {
-        return '$' + amount.toFixed(2);
-    }
+type WorkflowStatus = 'not_started' | 'in_progress' | 'pending_review' | 'completed' | 'blocked' | 'failed';
+type DashboardProfile = {
+    id: string;
+    name?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email: string;
+    role: string;
+    bio?: string | null;
+    skills?: string[] | null;
+    sectorId?: string | null;
+    categoryId?: string | null;
+    subCategoryId?: string | null;
+    verificationStatus?: string;
+    verificationNotes?: string | null;
+    verificationSubmission?: Record<string, unknown> | null;
+    verificationDocumentName?: string | null;
+    verificationDocumentMimeType?: string | null;
+    verificationReviewedAt?: string | null;
+    isOnboarded?: boolean;
+    isQuizPassed?: boolean;
 };
+type AssessmentAttempt = { id: string; score: number; maxScore: number; percentage: number; band: string; createdAt: string };
+
+const unwrap = <T,>(value: unknown): T => {
+    if (value && typeof value === 'object' && 'data' in value) {
+        const outer = (value as { data?: unknown }).data;
+        if (outer && typeof outer === 'object' && 'data' in outer) return (outer as { data: T }).data;
+        return outer as T;
+    }
+    return value as T;
+};
+
+const statusLabel: Record<WorkflowStatus, string> = {
+    not_started: 'Not started',
+    in_progress: 'In progress',
+    pending_review: 'Pending review',
+    completed: 'Completed',
+    blocked: 'Blocked',
+    failed: 'Failed',
+};
+
+const statusColor: Record<WorkflowStatus, string> = {
+    not_started: 'text-slate-500',
+    in_progress: 'text-blue-700',
+    pending_review: 'text-amber-800',
+    completed: 'text-emerald-800',
+    blocked: 'text-red-700',
+    failed: 'text-red-700',
+};
+
+const dotColor: Record<WorkflowStatus, string> = {
+    not_started: 'bg-slate-300',
+    in_progress: 'bg-blue-600',
+    pending_review: 'bg-amber-500',
+    completed: 'bg-emerald-600',
+    blocked: 'bg-red-600',
+    failed: 'bg-red-600',
+};
+
+function getDisplayName(profile?: DashboardProfile | null) {
+    return [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim() || profile?.name || profile?.email?.split('@')[0] || 'Affiliate';
+}
+
+function StageCard({ number, title, description, status, href, slideIndex }: { number: number; title: string; description: string; status: WorkflowStatus; href: string; slideIndex: number }) {
+    return (
+        <Link href={href} data-lifecycle-slide={slideIndex} className="group min-h-[136px] w-[min(84vw,320px)] shrink-0 snap-start rounded-lg border border-slate-200 bg-white p-3.5 transition-colors hover:border-blue-300 hover:bg-blue-50/30 sm:w-auto sm:shrink sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+                <span className={`flex size-7 items-center justify-center rounded-full ${status === 'completed' ? 'bg-emerald-700 text-white' : status === 'blocked' || status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
+                    <span className="material-symbols-outlined text-[16px]">{status === 'completed' ? 'check' : status === 'blocked' || status === 'failed' ? 'priority_high' : 'arrow_forward'}</span>
+                </span>
+                <span className={`flex items-center gap-1.5 text-[10px] font-semibold ${statusColor[status]}`}><span className={`size-1.5 rounded-full ${dotColor[status]}`} />{statusLabel[status]}</span>
+            </div>
+            <h3 className="mt-3 text-xs font-semibold text-slate-950">{number}. {title}</h3>
+            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{description}</p>
+        </Link>
+    );
+}
+
+function CapabilityCard({ icon, title, status, children, href, action }: { icon: string; title: string; status: WorkflowStatus; children: React.ReactNode; href: string; action: string }) {
+    return (
+        <article className="flex min-h-[188px] flex-col rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+                <span className="flex size-9 items-center justify-center rounded-md bg-blue-50 text-blue-700"><span className="material-symbols-outlined text-[20px]">{icon}</span></span>
+                <span className={`flex items-center gap-1.5 text-[10px] font-semibold ${statusColor[status]}`}><span className={`size-1.5 rounded-full ${dotColor[status]}`} />{statusLabel[status]}</span>
+            </div>
+            <h3 className="mt-3 text-sm font-semibold text-slate-950">{title}</h3>
+            <div className="mt-1.5 flex-1 text-xs leading-relaxed text-slate-600">{children}</div>
+            <Link href={href} className="mt-4 inline-flex min-h-8 items-center gap-1 self-start text-xs font-semibold text-blue-700 hover:text-blue-900">
+                {action}<span className="material-symbols-outlined text-[15px]">arrow_forward</span>
+            </Link>
+        </article>
+    );
+}
 
 export default function AgentDashboard() {
     const { user } = useAuthStore();
-    const { assessmentSkipped, currentStep } = useOnboardingStore();
-    const [taskView, setTaskView] = useState<TaskView>('open');
+    const lifecycleSliderRef = useRef<HTMLDivElement>(null);
+    const [activeLifecycleStage, setActiveLifecycleStage] = useState(1);
+    const profileQuery = useQuery({
+        queryKey: ['affiliate-dashboard-profile'],
+        queryFn: async () => unwrap<DashboardProfile>((await apiClient.get('/auth/profile')).data),
+    });
+    const profile = profileQuery.data || user as DashboardProfile | null;
+    const userId = profile?.id || user?.id;
+    const rawRole = profile?.role || user?.role || null;
+    const role = rawRole === 'account-manager' ? 'account_manager' : rawRole;
+    const attemptQuery = useQuery({
+        queryKey: ['affiliate-dashboard-latest-attempt'],
+        queryFn: async () => unwrap<AssessmentAttempt | null>((await apiClient.get('/assessment/latest-attempt')).data),
+    });
+    const resourcesQuery = useLearningResources(role);
+    const learningProgressQuery = useLearningProgress(Boolean(userId && role));
+    const hasTaskAccess = Boolean(profile?.verificationStatus === 'verified' && profile.isOnboarded && profile.isQuizPassed && profile.skills?.length);
+    const tasksQuery = useTasks({ assignedAgentId: userId, limit: 50, enabled: Boolean(userId && hasTaskAccess) });
 
-    const {
-        tasks: openTasksRaw,
-        isLoading: isLoadingOpenTasks,
-        isError: isErrorOpenTasks,
-        error: tasksError,
-        refetch: refetchTasks,
-        acceptTask,
-        isAccepting,
-    } = useTasks({ status: 'open' });
-    const { tasks: assignedTasksRaw, isLoading: isLoadingMissions } =
-        useTasks(user?.id ? { assignedAgentId: user.id } : {});
-    const { wallet, transactions, isLoading: isLoadingWallet } = useWallet();
-    const { conversations, isLoading: isLoadingConversations } = useMessaging();
+    const isLoading = profileQuery.isLoading || attemptQuery.isLoading || resourcesQuery.isLoading || learningProgressQuery.isLoading || (hasTaskAccess && tasksQuery.isLoading);
+    const hasAssessmentPassed = Boolean(profile?.isQuizPassed) || ['pass', 'partial'].includes(attemptQuery.data?.band?.toLowerCase() || '');
+    const verificationStatus = profile?.verificationStatus || 'unverified';
+    const hasProfileSubmission = Boolean(profile?.verificationSubmission);
+    const isQualified = Boolean(profile?.verificationStatus === 'verified' && profile?.isOnboarded && profile?.isQuizPassed && profile?.skills?.length);
+    const latestAttempt = attemptQuery.data;
+    const learningResources = resourcesQuery.data || [];
+    const progress = learningProgressQuery.data || [];
+    const progressByResource = new Map(progress.map((row) => [row.resourceId, row.status]));
+    const completedResources = learningResources.filter((resource) => progressByResource.get(resource.id) === 'completed').length;
+    const learningStatus: WorkflowStatus = learningResources.length > 0 && completedResources === learningResources.length
+        ? 'completed'
+        : progress.some((row) => row.status === 'in_progress' || row.status === 'completed')
+            ? 'in_progress'
+            : 'not_started';
+    const tasks = tasksQuery.tasks || [];
+    const assignedTaskStatus: WorkflowStatus = !isQualified
+        ? 'blocked'
+        : tasks.length === 0
+            ? 'not_started'
+            : tasks.every((task) => task.status === 'completed')
+                ? 'completed'
+                : 'in_progress';
+    const profileStatus: WorkflowStatus = hasProfileSubmission
+        ? 'completed'
+        : profile?.bio || profile?.skills?.length || profile?.sectorId || profile?.categoryId
+            ? 'in_progress'
+            : 'not_started';
+    const verificationStageStatus: WorkflowStatus = verificationStatus === 'verified'
+        ? 'completed'
+        : verificationStatus === 'pending' && hasProfileSubmission
+            ? 'pending_review'
+            : verificationStatus === 'pending'
+                ? 'in_progress'
+            : verificationStatus === 'rejected'
+                ? 'blocked'
+                : 'not_started';
+    const assessmentStageStatus: WorkflowStatus = hasAssessmentPassed
+        ? 'completed'
+        : latestAttempt?.band?.toLowerCase() === 'fail'
+            ? 'failed'
+            : 'not_started';
+    const qualificationStatus: WorkflowStatus = isQualified
+        ? 'completed'
+        : verificationStatus === 'rejected' || (verificationStatus === 'pending' && hasProfileSubmission)
+            ? 'blocked'
+            : profile?.isQuizPassed || hasProfileSubmission
+                ? 'in_progress'
+                : 'not_started';
 
-    const openTasks = (openTasksRaw || []).filter(task => task.status === 'open');
-    const activeMissions = (assignedTasksRaw || []).filter(task =>
-        ['assigned', 'accepted', 'in_progress', 'submitted'].includes(task.status),
-    );
-    const displayName = user?.email || user?.name || 'Affiliate Agent';
-    const statusLabel = user?.stats?.rank;
-    const balance = wallet ? formatCurrency(wallet.balance, wallet.currency || 'USD') : null;
-    const onboardingSteps = [
-        { id: 'basic-info', label: 'Basic Info' },
-        { id: 'profile-info', label: 'Professional Profile' },
-        { id: 'questionnaire', label: 'Expertise' },
-        { id: 'quiz', label: 'Assessment' },
-        { id: 'outcome', label: 'Certification' },
-    ];
-    const currentOnboardingStep = Math.max(0, onboardingSteps.findIndex(step => step.id === currentStep));
-    const onboardingProgress = Math.round((currentOnboardingStep / onboardingSteps.length) * 100);
-    const showOnboardingReminder = (assessmentSkipped || user?.assessmentSkipped) && !user?.isOnboarded;
+    const missingQualificationRequirements = [
+        verificationStatus !== 'verified' ? 'Admin verification' : null,
+        !hasProfileSubmission ? 'Profile and identity submission' : null,
+        !profile?.isQuizPassed ? 'Assessment pass' : null,
+        !profile?.skills?.length ? 'Selected skills' : null,
+        !profile?.isOnboarded ? 'Onboarding completion' : null,
+    ].filter(Boolean) as string[];
 
-    const handleAcceptTask = async (taskId: string) => {
-        try {
-            await acceptTask(taskId);
-            toast.success('Task accepted successfully! Track it in My Missions.');
-        } catch (error) {
-            console.error('Accept task error:', error);
-            toast.error('Failed to accept task. It may have already been claimed.');
-        }
+    let nextAction = {
+        eyebrow: 'Recommended next step',
+        title: 'Complete your affiliate profile',
+        description: 'Submit your profile information and identity document so an administrator can review your verification.',
+        href: '/onboarding?edit-profile=1',
+        action: 'Continue profile setup',
+        icon: 'person_edit',
     };
 
-    if (isLoadingOpenTasks || isLoadingMissions || isLoadingWallet || isLoadingConversations) {
-        return (
-            <div className="flex min-h-[65vh] flex-col items-center justify-center gap-4">
-                <div className="size-10 animate-spin rounded-full border-4 border-blue-100 border-b-blue-600" />
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Loading Agent Workspace…</p>
-            </div>
-        );
+    if (hasProfileSubmission && verificationStatus === 'rejected') {
+        nextAction = { ...nextAction, title: 'Update your verification submission', description: profile?.verificationNotes || 'Review the feedback and resubmit your profile and identity document for administrator review.', action: 'Update submission' };
+    } else if (hasProfileSubmission && verificationStatus === 'pending') {
+        nextAction = { ...nextAction, title: 'Your identity verification is under review', description: 'You can continue learning while an administrator reviews your submission. We’ll show the persisted verification status here.', href: '/dashboard/agent/verification', action: 'View verification status', icon: 'hourglass_top' };
+    } else if (verificationStatus === 'verified' && !hasAssessmentPassed && latestAttempt?.band?.toLowerCase() === 'fail') {
+        nextAction = { ...nextAction, title: 'Review learning resources before retaking your assessment', description: 'Your latest assessment result was not a pass. Review the published learning materials, then return to the assessment when retake rules allow.', href: '/learning', action: 'Open Learning Hub', icon: 'school' };
+    } else if (verificationStatus === 'verified' && !hasAssessmentPassed) {
+        nextAction = { ...nextAction, title: 'Complete your assessment', description: 'Your profile is verified. Take the existing affiliate assessment to continue toward qualification.', href: '/dashboard/agent/assessment', action: 'Open assessment', icon: 'quiz' };
+    } else if (!isQualified && hasAssessmentPassed) {
+        nextAction = { ...nextAction, title: 'Complete the remaining qualification requirements', description: missingQualificationRequirements.length ? `Still required: ${missingQualificationRequirements.join(', ')}.` : 'Finish the remaining onboarding checks before taking on assigned work.', href: '/dashboard/agent/qualification', action: 'Review qualification', icon: 'workspace_premium' };
+    } else if (isQualified && tasks.length > 0) {
+        nextAction = { ...nextAction, title: 'Review your administrator-assigned tasks', description: `You have ${tasks.length} assigned task${tasks.length === 1 ? '' : 's'}. Check the instructions and current status in My Tasks.`, href: '/dashboard/agent/tasks', action: 'Open My Tasks', icon: 'assignment' };
+    } else if (isQualified) {
+        nextAction = { ...nextAction, title: 'Your profile is ready for assigned work', description: 'You have met the current qualification checks. Administrators assign tasks through the platform when work is available.', href: '/dashboard/agent/tasks', action: 'View My Tasks', icon: 'assignment' };
     }
 
-    const taskList = taskView === 'active' ? activeMissions : openTasks;
+    const greeting = getDisplayName(profile).split(/\s+/)[0];
+    const stageItems = [
+        { title: 'Profile', description: hasProfileSubmission ? 'Information submitted' : 'Profile information needed', status: profileStatus, href: '/dashboard/agent/profile' },
+        { title: 'Verification', description: verificationStatus === 'verified' ? 'Admin review complete' : verificationStatus === 'pending' && hasProfileSubmission ? 'Awaiting admin review' : verificationStatus === 'rejected' ? 'Update submission' : 'Submit profile and identity details', status: verificationStageStatus, href: '/dashboard/agent/verification' },
+        { title: 'Learning', description: learningResources.length ? `${completedResources} of ${learningResources.length} published resources complete` : 'No published resources for your role', status: learningStatus, href: '/learning' },
+        { title: 'Assessment', description: latestAttempt ? `${latestAttempt.band} · ${latestAttempt.percentage}%` : hasAssessmentPassed ? 'Passed' : 'No result recorded', status: assessmentStageStatus, href: '/dashboard/agent/assessment' },
+        { title: 'Qualification', description: isQualified ? 'Current requirements complete' : missingQualificationRequirements[0] || 'Requirements remain', status: qualificationStatus, href: '/dashboard/agent/qualification' },
+        { title: 'Tasks', description: !isQualified ? 'Available after qualification' : tasks.length ? `${tasks.length} assigned task${tasks.length === 1 ? '' : 's'}` : 'Waiting for an admin assignment', status: assignedTaskStatus, href: '/dashboard/agent/tasks' },
+    ] as const;
+
+    if (isLoading) return <div className="mx-auto flex min-h-[55vh] max-w-6xl items-center justify-center gap-3 text-sm text-slate-500"><span className="size-6 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />Loading your dashboard…</div>;
 
     return (
-        <div className="min-h-screen bg-[#f7f8fc] font-display text-slate-950">
-            <main className="mx-auto max-w-5xl space-y-3 px-3.5 py-3 sm:px-5 lg:space-y-5 lg:px-8">
-                <section className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-600">Welcome back</p>
-                            <h1 className="truncate text-sm font-bold text-slate-950">{displayName}</h1>
-                        </div>
-                        {statusLabel && <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-emerald-900">{statusLabel}</span>}
+        <div className="mx-auto w-full max-w-[1500px] space-y-4 sm:space-y-7">
+            {(profileQuery.isError || attemptQuery.isError) && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-red-600 bg-red-50 px-4 py-3 text-xs text-red-900">
+                <span>Some account or assessment information could not be refreshed. Displayed values may be from your current signed-in profile.</span>
+                <button type="button" onClick={() => { void profileQuery.refetch(); void attemptQuery.refetch(); }} className="font-semibold underline">Retry</button>
+            </div>}
+
+            <section className="flex flex-col justify-between gap-2 border-b border-slate-200 pb-3 sm:gap-4 sm:pb-5 sm:flex-row sm:items-end">
+                <div className="min-w-0">
+                    <p className="text-[11px] font-semibold text-blue-700">Overview</p>
+                    <h1 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-950 sm:mt-1 sm:text-[28px]">Welcome back, {greeting}</h1>
+                    <p className="mt-1 hidden max-w-2xl text-sm leading-relaxed text-slate-600 sm:block">Track your profile, verification, learning and work assignments in one place.</p>
+                </div>
+            </section>
+
+            <section aria-labelledby="lifecycle-heading">
+                <div className="mb-2 flex flex-wrap items-end justify-between gap-2 sm:mb-3">
+                    <div><h2 id="lifecycle-heading" className="text-base font-semibold text-slate-950">Lifecycle progress</h2><p className="mt-0.5 hidden text-xs text-slate-500 sm:block">Statuses reflect your current saved account information.</p></div>
+                </div>
+                <div
+                    ref={lifecycleSliderRef}
+                    role="region"
+                    aria-label="Lifecycle progress stages"
+                    tabIndex={0}
+                    onScroll={(event) => {
+                        const slider = event.currentTarget;
+                        if (window.matchMedia('(min-width: 640px)').matches) return;
+                        const scrollInset = Number.parseFloat(window.getComputedStyle(slider).scrollPaddingLeft) || 24;
+                        const snapLine = slider.getBoundingClientRect().left + slider.clientLeft + scrollInset;
+                        const slides = slider.querySelectorAll<HTMLElement>('[data-lifecycle-slide]');
+                        let nearestIndex = 0;
+                        let nearestDistance = Number.POSITIVE_INFINITY;
+                        slides.forEach((slide, index) => {
+                            const distance = Math.abs(slide.getBoundingClientRect().left - snapLine);
+                            if (distance < nearestDistance) {
+                                nearestDistance = distance;
+                                nearestIndex = index;
+                            }
+                        });
+                        setActiveLifecycleStage(nearestIndex + 1);
+                    }}
+                    className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-6 px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-2.5 sm:overflow-visible sm:scroll-px-0 sm:px-0 sm:pb-0 sm:snap-none md:grid-cols-3 2xl:grid-cols-6"
+                >
+                    {stageItems.map((stage, index) => <StageCard key={stage.title} number={index + 1} slideIndex={index} {...stage} />)}
+                </div>
+                <div className="mt-2 flex sm:hidden" role="group" aria-label="Lifecycle stage slider controls">
+                    <span className="sr-only" aria-live="polite">Stage {activeLifecycleStage} of {stageItems.length}</span>
+                    <div className="flex w-full items-center gap-1.5">
+                        {stageItems.map((stage, index) => (
+                            <button
+                                key={stage.title}
+                                type="button"
+                                aria-label={`Show ${stage.title} stage, ${index + 1} of ${stageItems.length}`}
+                                aria-current={activeLifecycleStage === index + 1 ? 'step' : undefined}
+                                onClick={() => {
+                                    const slider = lifecycleSliderRef.current;
+                                    const slide = slider?.querySelector<HTMLElement>(`[data-lifecycle-slide="${index}"]`);
+                                    if (!slider || !slide) return;
+                                    const scrollInset = Number.parseFloat(window.getComputedStyle(slider).scrollPaddingLeft) || 24;
+                                    const snapLine = slider.getBoundingClientRect().left + slider.clientLeft + scrollInset;
+                                    slider.scrollBy({ left: slide.getBoundingClientRect().left - snapLine, behavior: 'smooth' });
+                                }}
+                                className={`h-1.5 flex-1 rounded-full transition-colors ${index === activeLifecycleStage - 1 ? 'bg-blue-700' : 'bg-slate-200'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600`}
+                            />
+                        ))}
                     </div>
+                </div>
+            </section>
 
-                    <div className="grid grid-cols-2 gap-2">
-                        <Link href="/dashboard/agent/earnings" className="min-w-0 rounded-lg border border-slate-100 bg-white p-3">
-                            <div className="flex items-start justify-between gap-2">
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-700">Available Balance</p>
-                                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-indigo-100 text-blue-700">
-                                    <span className="material-symbols-outlined text-[15px]">account_balance_wallet</span>
-                                </span>
-                            </div>
-                            <p className="mt-1 text-xl font-bold leading-none">{balance ?? '—'}</p>
-                            {!wallet && <p className="mt-2 text-[9px] text-slate-500">Balance unavailable</p>}
-                            <div className="mt-3 flex items-center justify-between gap-1 text-[9px]">
-                                <span className="inline-flex items-center gap-1 font-bold text-blue-700">Withdraw <span className="material-symbols-outlined text-xs">arrow_forward</span></span>
-                            </div>
-                        </Link>
+            <section aria-labelledby="next-action-heading" className="grid gap-3 rounded-lg bg-[#202b42] px-4 py-4 text-white shadow-sm sm:gap-4 sm:rounded-xl sm:px-7 sm:py-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                <div className="max-w-3xl">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-blue-200">{nextAction.eyebrow}</p>
+                    <h2 id="next-action-heading" className="mt-1.5 text-base font-semibold leading-snug sm:mt-2 sm:text-xl">{nextAction.title}</h2>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-300 sm:text-sm">{nextAction.description}</p>
+                </div>
+                <Link href={nextAction.href} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-xs font-semibold text-white transition-colors hover:bg-blue-500 sm:px-5">
+                    {nextAction.action}<span className="material-symbols-outlined text-base">arrow_forward</span>
+                </Link>
+            </section>
 
-                        <Link href="/dashboard/agent/messages" className="min-w-0 rounded-lg border border-slate-100 bg-white p-3">
-                            <div className="flex items-start justify-between gap-2">
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-700">Affiliate Inbox</p>
-                                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
-                                    <span className="material-symbols-outlined text-[15px]">chat_bubble_outline</span>
-                                </span>
-                            </div>
-                            <p className="mt-1 text-base font-bold leading-tight">{conversations?.length ?? 0} conversations</p>
-                            {!conversations?.length && <p className="mt-2 text-[9px] text-slate-500">No conversations yet</p>}
-                            <div className="mt-3 flex items-center justify-between gap-1 text-[9px]">
-                                <span className="inline-flex items-center gap-1 font-bold text-blue-700">Open Chat <span className="material-symbols-outlined text-[11px]">open_in_new</span></span>
-                            </div>
-                        </Link>
-                    </div>
-                </section>
-
-                {showOnboardingReminder && (
-                    <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                        <div className="flex items-start gap-2.5">
-                            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-800">
-                                <span className="material-symbols-outlined text-lg">assignment</span>
-                            </span>
-                            <div className="min-w-0 flex-1">
-                                <p className="text-[8px] font-bold uppercase tracking-wider text-amber-800">Onboarding · Step {currentOnboardingStep + 1} of {onboardingSteps.length}</p>
-                                <h2 className="mt-0.5 text-xs font-bold leading-tight">Finish setting up your affiliate profile</h2>
-                                <p className="mt-1 text-[9px] leading-snug text-slate-600">Your onboarding is incomplete. Continue where you left off to finish your setup.</p>
-                                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
-                                    <div className="h-full rounded-full bg-amber-600 transition-all" style={{ width: `${onboardingProgress}%` }} />
-                                </div>
-                                <div className="mt-2 flex items-center justify-between gap-2">
-                                    <span className="text-[8px] text-slate-600">{onboardingSteps[currentOnboardingStep]?.label} · {onboardingProgress}% complete</span>
-                                    <Link href="/onboarding" className="shrink-0 rounded-md bg-amber-700 px-2.5 py-1.5 text-[9px] font-bold text-white">Continue onboarding</Link>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                )}
-
-                <section>
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                        <h2 className="text-sm font-bold">Available Tasks <span className="rounded-full bg-blue-700 px-1.5 py-0.5 align-middle text-[8px] text-white">{openTasks.length} Open</span></h2>
-                        <div className="flex shrink-0 items-center gap-1 rounded-lg bg-indigo-100 p-0.5 text-[8px]">
-                            <button type="button" onClick={() => setTaskView('open')} className={taskView === 'open' ? 'rounded-md bg-white px-2 py-1.5 font-bold text-blue-700 shadow-sm' : 'rounded-md px-2 py-1.5 text-slate-600'}>Open ({openTasks.length})</button>
-                            <button type="button" onClick={() => setTaskView('active')} className={taskView === 'active' ? 'rounded-md bg-white px-2 py-1.5 font-bold text-blue-700 shadow-sm' : 'rounded-md px-2 py-1.5 text-slate-600'}>Active ({activeMissions.length})</button>
-                        </div>
-                    </div>
-
-                    {isErrorOpenTasks && (
-                        <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-[10px] text-red-800">
-                            <span>{tasksError instanceof Error ? tasksError.message : 'Tasks could not be loaded.'}</span>
-                            <button type="button" onClick={() => refetchTasks()} className="font-bold underline">Retry</button>
-                        </div>
-                    )}
-
-                    <div className="space-y-2">
-                        {taskList.length ? taskList.slice(0, 3).map((task: Task, index: number) => (
-                            <article key={task.id} className="rounded-lg border border-slate-100 bg-white p-2.5">
-                                <div className="flex min-w-0 items-start gap-2">
-                                    <span className={index === 1 ? 'flex size-8 shrink-0 items-center justify-center rounded-md bg-orange-100 text-orange-700' : 'flex size-8 shrink-0 items-center justify-center rounded-md bg-indigo-100 text-blue-700'}>
-                                        <span className="material-symbols-outlined text-[16px]">{task.type === 'audit' ? 'manage_search' : task.type === 'research' ? 'person_search' : 'campaign'}</span>
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[8px]">
-                                            {(typeof task.category === 'string' ? task.category : task.category?.name) && <span className={index === 1 ? 'rounded bg-orange-100 px-1.5 py-0.5 font-bold uppercase tracking-wide text-orange-900' : 'rounded bg-blue-100 px-1.5 py-0.5 font-bold uppercase tracking-wide text-blue-900'}>{typeof task.category === 'string' ? task.category : task.category?.name}</span>}
-                                            {task.estimatedTime && <span className="text-slate-500">{task.estimatedTime}</span>}
-                                        </div>
-                                        <h3 className="mt-0.5 truncate text-[11px] font-semibold">{task.title}</h3>
-                                        {task.description && <p className="mt-0.5 truncate text-[9px] text-slate-600">{task.description}</p>}
-                                    </div>
-                                    <div className="shrink-0 text-right">
-                                        <p className="text-sm font-bold text-emerald-800">{formatCurrency(Number(task.budget), task.currency)}</p>
-                                    </div>
-                                </div>
-                                <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
-                                    <p className="min-w-0 truncate text-[8px] text-slate-600">{task.requiredSkills?.length ? `Required: ${task.requiredSkills.join(', ')}` : task.status}</p>
-                                    <button type="button" onClick={() => handleAcceptTask(task.id)} disabled={isAccepting} className="shrink-0 rounded-md bg-blue-700 px-3 py-1.5 text-[9px] font-bold text-white disabled:opacity-50">
-                                        {isAccepting ? 'Accepting…' : 'Accept Task'}
-                                    </button>
-                                </div>
-                            </article>
-                        )) : (
-                            <div className="rounded-lg border border-dashed border-indigo-200 bg-white px-4 py-8 text-center text-[10px] text-slate-500">No tasks are available right now. Check again soon.</div>
-                        )}
-                    </div>
-                </section>
-
-                <section>
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                        <h2 className="text-sm font-bold">My Active Missions <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-900">{activeMissions.length}</span></h2>
-                        <Link href="/dashboard/agent/my-missions" className="text-[9px] font-bold text-blue-700">View all</Link>
-                    </div>
-                    {activeMissions.length ? activeMissions.slice(0, 1).map(mission => (
-                        <article key={mission.id} className="rounded-lg border border-indigo-100 bg-[#eff0ff] p-3">
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="flex min-w-0 items-start gap-2">
-                                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-800 text-white">
-                                        <span className="material-symbols-outlined text-[16px]">rocket_launch</span>
-                                    </span>
-                                    <div className="min-w-0">
-                                        <p className="flex flex-wrap items-center gap-1.5 text-[8px]">
-                                            <span className="rounded bg-emerald-200 px-1.5 py-0.5 font-bold uppercase text-emerald-900">{mission.status.replace(/_/g, ' ')}</span>
-                                            {mission.estimatedTime && <span className="text-slate-600">{mission.estimatedTime}</span>}
-                                        </p>
-                                        <h3 className="mt-1 truncate text-[11px] font-semibold">{mission.title}</h3>
-                                    </div>
-                                </div>
-                                <p className="shrink-0 text-xs font-semibold">{formatCurrency(Number(mission.budget), mission.currency)}</p>
-                            </div>
-                            <div className="mt-2 flex items-center justify-between gap-2 border-t border-indigo-100 pt-2 text-[8px] text-slate-500">
-                                {(typeof mission.category === 'string' ? mission.category : mission.category?.name) && <span>{typeof mission.category === 'string' ? mission.category : mission.category?.name}</span>}
-                                <Link href="/dashboard/agent/my-missions" className="shrink-0 rounded-md bg-emerald-800 px-2.5 py-1.5 text-[9px] font-bold text-white">Open mission</Link>
-                            </div>
-                        </article>
-                    )) : <div className="rounded-lg border border-dashed border-indigo-200 bg-white px-4 py-8 text-center text-[10px] text-slate-500">No active missions yet. Accepted tasks will appear here.</div>}
-                </section>
-
-                <section>
-                    <div className="mb-2 flex items-center justify-between">
-                        <h2 className="text-sm font-bold">Agent Performance</h2>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-lg border border-slate-100 bg-white p-2.5">
-                            <p className="text-[8px] uppercase tracking-wide text-slate-600">Completed Tasks</p>
-                            <p className="mt-1 text-lg font-semibold">{user?.stats?.tasksCompleted ?? '—'} <span className="text-[9px] font-normal text-slate-500">tasks</span></p>
-                            {user?.stats?.tasksCompleted == null && <p className="mt-0.5 text-[8px] text-slate-500">No task data yet</p>}
-                        </div>
-                        <div className="rounded-lg border border-slate-100 bg-white p-2.5">
-                            <p className="text-[8px] uppercase tracking-wide text-slate-600">Quality Rating</p>
-                            <p className="mt-1 text-lg font-semibold">{user?.stats?.rating ?? '—'} {user?.stats?.rating != null && <span className="text-amber-500">☆</span>}</p>
-                            {user?.stats?.rating == null && <p className="mt-0.5 text-[8px] text-slate-500">No rating data yet</p>}
-                        </div>
-                    </div>
-                </section>
-
-                <section className="rounded-lg border border-slate-200 bg-[#202b42] p-3 text-white shadow-sm">
-                    <h2 className="text-sm font-semibold">Progression</h2>
-                    <p className="mt-2 text-[10px] text-slate-300">Progression details are not available yet.</p>
-                </section>
-
-                <section className="rounded-lg border border-slate-100 bg-white p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                        <h2 className="text-sm font-bold">Financial Ledger</h2>
-                        <Link href="/dashboard/agent/earnings" className="text-[9px] font-bold text-blue-700">Audit Log</Link>
-                    </div>
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-[8px] uppercase tracking-wider">
-                        <span>Recent Movements</span>
-                        {transactions?.length ? <span className="text-emerald-800">{transactions.length} entries</span> : <span className="text-slate-500">No entries</span>}
-                    </div>
-                    {transactions?.length ? (
-                        <div className="space-y-2 py-2">
-                            {transactions.slice(0, 3).map((transaction: Transaction) => (
-                                <div key={transaction.id} className="flex items-center justify-between gap-2 text-[9px]">
-                                    <span className="truncate">{transaction.description || transaction.type}</span>
-                                    <span className="shrink-0 font-semibold">{formatCurrency(Number(transaction.amount), wallet?.currency || 'USD')}</span>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-2 py-3 text-[9px] leading-snug text-slate-600">
-                            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-blue-700">
-                                <span className="material-symbols-outlined text-sm">receipt_long</span>
-                            </span>
-                            <p>No financial movements recorded yet.</p>
-                        </div>
-                    )}
-                    <div className="flex items-center justify-between gap-2 rounded-md bg-indigo-50 p-2">
-                        <div className="min-w-0">
-                            <p className="truncate text-[9px] font-semibold">Affiliate Support &amp; Client Threads</p>
-                            <p className="text-[8px] text-slate-600">{conversations?.length ?? 0} conversations</p>
-                        </div>
-                        <Link href="/dashboard/agent/messages" className="shrink-0 rounded bg-white px-2 py-1 text-[9px] font-semibold text-blue-700">Open Inbox</Link>
-                    </div>
-                </section>
-
-            </main>
-
+            <section aria-labelledby="capabilities-heading">
+                <div className="mb-2 flex flex-wrap items-end justify-between gap-2 sm:mb-3">
+                    <div><h2 id="capabilities-heading" className="text-base font-semibold text-slate-950">Your account at a glance</h2><p className="mt-0.5 text-xs text-slate-500">Current status and the next useful place to go.</p></div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <CapabilityCard icon="person" title="Profile Completion" status={profileStatus} href="/dashboard/agent/profile" action="Manage profile">
+                        {hasProfileSubmission ? 'Your profile information has been submitted for verification.' : 'Complete and submit your profile information to begin verification.'}
+                    </CapabilityCard>
+                    <CapabilityCard icon="verified_user" title="Identity & Verification" status={verificationStageStatus} href="/dashboard/agent/verification" action="View verification">
+                        {verificationStatus === 'rejected' ? profile?.verificationNotes || 'Update your submission for another review.' : verificationStatus === 'pending' ? 'Your submitted identity information is awaiting administrator review.' : verificationStatus === 'verified' ? 'An administrator has verified your identity.' : 'Submit your identity document and profile for administrator review.'}
+                    </CapabilityCard>
+                    <CapabilityCard icon="school" title="Learning Hub" status={learningStatus} href="/learning" action="Open Learning Hub">
+                        {resourcesQuery.isError || learningProgressQuery.isError ? 'Learning progress could not be loaded.' : learningResources.length ? `${completedResources} of ${learningResources.length} published resources completed.` : 'No published learning resources are currently available for your role.'}
+                    </CapabilityCard>
+                    <CapabilityCard icon="quiz" title="Assessment" status={assessmentStageStatus} href="/dashboard/agent/assessment" action="View assessment">
+                        {latestAttempt ? `Latest result: ${latestAttempt.band}, ${latestAttempt.percentage}% on ${new Date(latestAttempt.createdAt).toLocaleDateString()}.` : hasAssessmentPassed ? 'Your account records a passed assessment.' : 'No assessment result has been recorded yet.'}
+                    </CapabilityCard>
+                    <CapabilityCard icon="workspace_premium" title="Qualification" status={qualificationStatus} href="/dashboard/agent/qualification" action="Review requirements">
+                        {isQualified ? 'Your persisted verification, onboarding, assessment and skill requirements are complete.' : `Outstanding: ${missingQualificationRequirements.slice(0, 3).join(', ') || 'onboarding completion'}.`}
+                    </CapabilityCard>
+                    <CapabilityCard icon="assignment" title="Assigned Tasks" status={assignedTaskStatus} href="/dashboard/agent/tasks" action="Open My Tasks">
+                        {!isQualified ? 'Task access becomes available after the current qualification requirements are met.' : tasksQuery.isError ? 'Assigned tasks could not be loaded.' : tasks.length ? `${tasks.length} administrator-assigned task${tasks.length === 1 ? '' : 's'} in your task list.` : 'There are no administrator-assigned tasks for your account yet.'}
+                    </CapabilityCard>
+                </div>
+            </section>
         </div>
     );
 }

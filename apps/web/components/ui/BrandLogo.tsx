@@ -6,13 +6,14 @@ import { cn } from '@/lib/utils'; // Assuming you have a utils file for classnam
 
 interface BrandLogoProps {
     className?: string;
+    iconClassName?: string;
     labelClassName?: string;
     variant?: 'default' | 'white';
     size?: 'sm' | 'md' | 'lg';
     label?: string;
 }
 
-export const BrandLogo: React.FC<BrandLogoProps> = ({ className, labelClassName, variant = 'default', size = 'md', label = '247gbs' }) => {
+export const BrandLogo: React.FC<BrandLogoProps> = ({ className, iconClassName, labelClassName, variant = 'default', size = 'md', label = '247gbs' }) => {
     const isWhite = variant === 'white';
 
     const sizeClasses = {
@@ -25,7 +26,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({ className, labelClassName,
 
     return (
         <Link href="/" className={`flex items-center gap-3 font-display tracking-tight group ${className}`}>
-            <div className={`${icon} ${isWhite ? 'text-white' : 'text-primary'} transition-transform group-hover:scale-110`}>
+            <div className={`${iconClassName || icon} ${isWhite ? 'text-white' : 'text-primary'} transition-transform group-hover:scale-110`}>
                 <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                     <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                 </svg>

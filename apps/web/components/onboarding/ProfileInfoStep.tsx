@@ -8,11 +8,16 @@ import { profileSchema, ProfileFormValues } from '@/lib/schemas';
 import { FormInput, FormSelect } from '@/components/ui/FormComponents';
 import { toast } from 'react-toastify';
 import { COUNTRY_OPTIONS, TIMEZONE_OPTIONS, TOP_LANGUAGES } from '@/lib/constants';
+import apiClient from '@/lib/apiClient';
+import { useAuthStore } from '@/store/useAuthStore';
 
 const ProfileInfoStep: React.FC = () => {
     const { role, profileInfo, updateProfileInfo, setStep } = useOnboardingStore();
+    const { updateUser } = useAuthStore();
     const [detectingLocation, setDetectingLocation] = useState(false);
     const [currency, setCurrency] = useState("$"); // Default currency
+    const [identityDocument, setIdentityDocument] = useState<File | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const {
         register,
@@ -57,10 +62,37 @@ const ProfileInfoStep: React.FC = () => {
         }
     }, [watchedCountry]);
 
-    const onSubmit = (data: ProfileFormValues) => {
-        updateProfileInfo(data);
-        toast.success("Profile details saved!");
-        setStep('questionnaire');
+    const onSubmit = async (data: ProfileFormValues) => {
+        if (!identityDocument) {
+            toast.error('Upload an identity document to submit your profile for admin verification.');
+            return;
+        }
+
+        const submission = { ...data, role: role || data.role };
+        const formData = new FormData();
+        formData.append('submission', JSON.stringify(submission));
+        formData.append('identityDocument', identityDocument);
+        setIsSubmitting(true);
+        try {
+            const response = await apiClient.post('/verification/account', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            updateProfileInfo(submission);
+            updateUser({
+                verificationStatus: response.data.verificationStatus,
+                verificationNotes: response.data.verificationNotes,
+                verificationSubmission: response.data.verificationSubmission,
+                verificationReviewedAt: response.data.verificationReviewedAt,
+                isOnboarded: false,
+            });
+            toast.success('Profile and identity document submitted for admin verification.');
+            setStep('questionnaire');
+        } catch (error) {
+            console.error('Verification submission failed:', error);
+            toast.error('Could not submit your profile for verification. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const onError = () => {
@@ -260,16 +292,18 @@ const ProfileInfoStep: React.FC = () => {
                     required
                 />
 
-                {(role === 'consultant') && (
-                    <div className="space-y-1.5 md:space-y-2">
-                        <label className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Upload ID / Verification Docs</label>
-                        <p className="text-[10px] md:text-xs text-amber-600 font-bold uppercase tracking-widest mb-1.5 md:mb-2">Required for Consultant Verification</p>
-                        <input
-                            type="file"
-                            className="block w-full text-xs md:text-sm text-slate-500 file:mr-3 md:file:mr-4 file:py-1.5 md:file:py-2 file:px-3 md:file:px-4 file:rounded-full file:border-0 file:text-[10px] md:file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all"
-                        />
-                    </div>
-                )}
+                <div className="space-y-1.5 md:space-y-2">
+                    <label htmlFor="identity-document" className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Identity document</label>
+                    <p className="text-[10px] md:text-xs text-amber-700 font-medium mb-1.5 md:mb-2">Required for administrator verification. PDF, JPG, or PNG up to 5 MB.</p>
+                    <input
+                        id="identity-document"
+                        type="file"
+                        accept="application/pdf,image/jpeg,image/png"
+                        onChange={(event) => setIdentityDocument(event.target.files?.[0] || null)}
+                        className="block w-full text-xs md:text-sm text-slate-500 file:mr-3 md:file:mr-4 file:py-1.5 md:file:py-2 file:px-3 md:file:px-4 file:rounded-full file:border-0 file:text-[10px] md:file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all"
+                    />
+                    {identityDocument && <p className="text-[10px] text-slate-500">Selected: {identityDocument.name}</p>}
+                </div>
 
                 <div className="flex items-center gap-2 sm:gap-4 mt-4 md:mt-8 pt-2.5 md:pt-4 border-t border-slate-50">
                     <button
@@ -283,10 +317,11 @@ const ProfileInfoStep: React.FC = () => {
                     </button>
                     <button
                         type="submit"
-                        className="flex-1 h-10 md:h-14 px-3 md:px-8 bg-primary hover:bg-primary-hover text-white rounded-xl md:rounded-2xl font-display font-bold text-xs sm:text-sm md:text-base transition-all active:scale-[0.99] shadow-sm md:shadow-md shadow-primary/20 flex items-center justify-center gap-1.5 md:gap-2 group"
+                        disabled={isSubmitting}
+                        className="flex-1 h-10 md:h-14 px-3 md:px-8 bg-primary hover:bg-primary-hover text-white rounded-xl md:rounded-2xl font-display font-bold text-xs sm:text-sm md:text-base transition-all active:scale-[0.99] shadow-sm md:shadow-md shadow-primary/20 flex items-center justify-center gap-1.5 md:gap-2 group disabled:opacity-60"
                     >
-                        <span className="md:hidden">Questionnaire</span>
-                        <span className="hidden md:inline">Continue to Questionnaire</span>
+                        <span className="md:hidden">{isSubmitting ? 'Submitting…' : 'Questionnaire'}</span>
+                        <span className="hidden md:inline">{isSubmitting ? 'Submitting verification…' : 'Continue to Questionnaire'}</span>
                         <span className="material-symbols-outlined text-base md:text-lg transition-transform group-hover:translate-x-0.5">arrow_forward</span>
                     </button>
                 </div>
