@@ -1,180 +1,68 @@
 'use client';
 
-import React from 'react';
+import Link from 'next/link';
 import { useAdminStats } from '@/hooks/useAdminStats';
-import { useAuthStore } from '@/store/useAuthStore';
+
+const metrics = [
+    { key: 'totalAffiliates', label: 'Registered affiliates', icon: 'group', href: '/dashboard/admin/users', color: 'text-blue-700 bg-blue-50' },
+    { key: 'pendingAffiliateVerification', label: 'Pending verification', icon: 'pending_actions', href: '/dashboard/admin/verifications', color: 'text-amber-700 bg-amber-50' },
+    { key: 'verifiedAffiliates', label: 'Verified affiliates', icon: 'verified_user', href: '/dashboard/admin/users?verificationStatus=verified', color: 'text-emerald-700 bg-emerald-50' },
+    { key: 'qualifiedAffiliates', label: 'Qualified affiliates', icon: 'workspace_premium', href: '/dashboard/admin/users?qualification=qualified', color: 'text-violet-700 bg-violet-50' },
+    { key: 'assignedTasks', label: 'Assigned / active tasks', icon: 'assignment', href: '/dashboard/admin/tasks', color: 'text-orange-700 bg-orange-50' },
+    { key: 'completedTasks', label: 'Completed tasks', icon: 'task_alt', href: '/dashboard/admin/tasks?status=completed', color: 'text-teal-700 bg-teal-50' },
+] as const;
 
 export default function AdminDashboard() {
-    const { user } = useAuthStore();
-    const { stats, isLoading } = useAdminStats();
+    const { stats, isLoading, isError, refetch } = useAdminStats();
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary"></div>
-            </div>
-        );
-    }
+    if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><span className="size-9 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div>;
+    if (isError || !stats) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">Admin metrics could not be loaded. <button onClick={() => void refetch()} className="font-bold underline">Try again</button></div>;
 
     return (
-        <div className="p-8 lg:p-10 max-w-7xl mx-auto w-full font-display">
-            <header className="mb-10">
-                <h1 className="text-3xl font-black text-text-main">System Overview</h1>
-                <p className="text-text-secondary font-medium mt-1">
-                    Platform-wide metrics and user activity monitoring.
-                </p>
+        <div className="mx-auto w-full max-w-7xl font-display">
+            <header className="mb-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-primary">Affiliate operations</p>
+                <h1 className="mt-1 text-2xl font-black text-text-main">Admin Overview</h1>
+                <p className="mt-1 text-sm text-text-secondary">Current account verification, qualification, assessment and task activity.</p>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-                {/* Stat 1 */}
-                <div className="bg-surface-light p-8 rounded-3xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <span className="text-xs font-black text-text-secondary uppercase tracking-widest">
-                            Total Registered Users
-                        </span>
-                        <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                            <span className="material-symbols-outlined">group</span>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Affiliate lifecycle metrics">
+                {metrics.map((metric) => (
+                    <Link key={metric.key} href={metric.href} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{metric.label}</span>
+                            <span className={`flex size-9 items-center justify-center rounded-lg ${metric.color}`}><span className="material-symbols-outlined">{metric.icon}</span></span>
                         </div>
-                    </div>
-                    <div className="flex items-end gap-2">
-                        <span className="text-4xl font-black text-text-main">
-                            {stats?.totalUsers || 0}
-                        </span>
-                        <span className="text-[10px] font-bold text-primary mb-1.5">+0%</span>
-                    </div>
-                </div>
+                        <p className="mt-3 text-3xl font-black text-slate-950">{stats[metric.key].toLocaleString()}</p>
+                    </Link>
+                ))}
+            </section>
 
-                {/* Stat 2 */}
-                <div className="bg-surface-light p-8 rounded-3xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <span className="text-xs font-black text-text-secondary uppercase tracking-widest">
-                            Active Tasks
-                        </span>
-                        <div className="size-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
-                            <span className="material-symbols-outlined">assignment</span>
-                        </div>
+            <section className="mt-6 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                        <h2 className="font-bold text-slate-900">Recent affiliate registrations</h2>
+                        <Link href="/dashboard/admin/users" className="text-xs font-semibold text-primary hover:underline">View all</Link>
                     </div>
-                    <div className="flex items-end gap-2">
-                        <span className="text-4xl font-black text-text-main">
-                            {stats?.activeTasks || 0}
-                        </span>
-                        <span className="text-[10px] font-bold text-orange-600 mb-1.5">+0%</span>
+                    <div className="divide-y divide-slate-100">
+                        {stats.recentUsers.length ? stats.recentUsers.map((affiliate) => (
+                            <Link href={`/dashboard/admin/users/${affiliate.id}`} key={affiliate.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-slate-50">
+                                <span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{affiliate.name}</span><span className="block truncate text-xs text-slate-500">{affiliate.email}</span></span>
+                                <span className="text-right text-xs"><span className="block capitalize text-slate-600">{affiliate.role.replaceAll('_', ' ')}</span><span className="block capitalize text-slate-500">{affiliate.verificationStatus}</span></span>
+                            </Link>
+                        )) : <p className="px-4 py-8 text-center text-sm text-slate-500">No affiliate registrations yet.</p>}
                     </div>
                 </div>
-
-                {/* Stat 3 */}
-                <div className="bg-surface-light p-8 rounded-3xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <span className="text-xs font-black text-text-secondary uppercase tracking-widest">
-                            Platform Revenue (USD)
-                        </span>
-                        <div className="size-10 rounded-xl bg-green-100 flex items-center justify-center text-green-600">
-                            <span className="material-symbols-outlined">monetization_on</span>
-                        </div>
-                    </div>
-                    <div className="flex items-end gap-2">
-                        <span className="text-4xl font-black text-text-main">
-                            ${(stats?.totalRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-[10px] font-bold text-green-600 mb-1.5">+0%</span>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <h2 className="font-bold text-slate-900">Assessment results</h2>
+                    <div className="mt-4 space-y-3">
+                        <div className="flex justify-between text-sm"><span className="text-slate-600">Passed / partial attempts</span><strong className="text-slate-900">{stats.passedAssessments}</strong></div>
+                        <div className="flex justify-between text-sm"><span className="text-slate-600">Failed attempts</span><strong className="text-slate-900">{stats.failedAssessments}</strong></div>
+                        <div className="border-t border-slate-100 pt-3 text-xs text-slate-500">Qualification also requires verification, completed onboarding and selected skills.</div>
+                        <Link href="/dashboard/admin/assessments" className="inline-flex min-h-10 items-center text-sm font-semibold text-primary hover:underline">Manage assessments and results →</Link>
                     </div>
                 </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Recent Users */}
-                <div className="bg-surface-light rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-8 py-6 border-b border-slate-200">
-                        <h3 className="font-bold text-text-main">Recent Registrations</h3>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 border-b border-slate-200">
-                                <tr>
-                                    <th className="px-8 py-4 text-[10px] font-black text-text-secondary uppercase tracking-widest">User</th>
-                                    <th className="px-8 py-4 text-[10px] font-black text-text-secondary uppercase tracking-widest">Role</th>
-                                    <th className="px-8 py-4 text-[10px] font-black text-text-secondary uppercase tracking-widest">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {stats?.recentUsers && stats.recentUsers.length > 0 ? (
-                                    stats.recentUsers.map((u) => (
-                                        <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-8 py-4">
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-bold text-text-main">{u.name}</span>
-                                                    <span className="text-[10px] text-text-secondary">{u.email}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-8 py-4">
-                                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 bg-slate-100 rounded">
-                                                    {u.role}
-                                                </span>
-                                            </td>
-                                            <td className="px-8 py-4">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className={`size-1.5 rounded-full ${u.status === 'active' ? 'bg-green-500' : 'bg-slate-400'}`}></span>
-                                                    <span className="text-[10px] font-bold capitalize">{u.status}</span>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={3} className="px-8 py-8 text-center text-xs text-slate-400 font-medium">
-                                            No recent registrations found
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* System Alerts */}
-                <div className="bg-surface-light rounded-3xl border border-slate-200 shadow-sm p-8">
-                    <h3 className="font-bold text-text-main mb-6">System Health</h3>
-                    <div className="space-y-4">
-                        {stats?.systemAlerts && stats.systemAlerts.length > 0 ? (
-                            stats.systemAlerts.map((alert, idx) => (
-                                <div key={idx} className={`p-4 rounded-2xl flex items-start gap-4 ${
-                                    alert.severity === 'error' ? 'bg-red-50 border border-red-100' :
-                                    alert.severity === 'warning' ? 'bg-amber-50 border border-amber-100' :
-                                    'bg-blue-50 border border-blue-100'
-                                }`}>
-                                    <span className={`material-symbols-outlined ${
-                                        alert.severity === 'error' ? 'text-red-500' :
-                                        alert.severity === 'warning' ? 'text-amber-500' :
-                                        'text-blue-500'
-                                    }`}>
-                                        {alert.severity === 'error' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info'}
-                                    </span>
-                                    <div>
-                                        <p className={`text-xs font-bold ${
-                                            alert.severity === 'error' ? 'text-red-900' :
-                                            alert.severity === 'warning' ? 'text-amber-900' :
-                                            'text-blue-900'
-                                        }`}>
-                                            System Notification
-                                        </p>
-                                        <p className="text-[10px] font-medium text-slate-600 mt-0.5">
-                                            {alert.message}
-                                        </p>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center gap-3">
-                                <span className="material-symbols-outlined text-emerald-600">check_circle</span>
-                                <div>
-                                    <p className="text-xs font-bold text-emerald-900">All Systems Operational</p>
-                                    <p className="text-[10px] font-medium text-emerald-700 mt-0.5">No critical issues or warnings detected.</p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+            </section>
         </div>
     );
 }

@@ -1,80 +1,35 @@
 'use client';
 
-import React from 'react';
+import Link from 'next/link';
 import { useAdminStats } from '@/hooks/useAdminStats';
 
 export default function AdminReportsPage() {
-    const { stats, isLoading } = useAdminStats();
-
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary"></div>
-            </div>
-        );
-    }
+    const { stats, isLoading, isError, refetch } = useAdminStats();
+    if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><span className="size-9 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div>;
+    if (isError || !stats) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">Operational reports could not be loaded. <button onClick={() => void refetch()} className="font-bold underline">Retry</button></div>;
+    const taskStatuses = Object.entries(stats.tasksByStatus || {}).sort(([a], [b]) => a.localeCompare(b));
+    const resultBands = Object.entries(stats.attemptsByBand || {}).sort(([a], [b]) => a.localeCompare(b));
 
     return (
-        <div className="p-8 lg:p-10 font-display">
-            <div className="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-text-main uppercase tracking-tighter italic">Platform Intelligence</h1>
-                    <p className="text-text-secondary text-sm font-medium italic">Deep-dive analytics and real-time operational logs.</p>
-                </div>
-                <div className="flex gap-3">
-                    <button className="bg-primary text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-primary-hover transition-all shadow-xl shadow-primary/10 flex items-center gap-3">
-                        <span className="material-symbols-outlined text-lg">analytics</span>
-                        Generate Intelligence Report
-                    </button>
-                </div>
-            </div>
+        <div className="mx-auto max-w-6xl font-display">
+            <header className="mb-6"><p className="text-xs font-bold uppercase tracking-widest text-primary">Reporting</p><h1 className="mt-1 text-2xl font-black text-text-main">Affiliate Operations</h1><p className="mt-1 text-sm text-text-secondary">Live counts from persisted affiliate, assessment and task records.</p></header>
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                    ['Registered affiliates', stats.totalAffiliates],
+                    ['Pending verification', stats.pendingAffiliateVerification],
+                    ['Verified affiliates', stats.verifiedAffiliates],
+                    ['Qualified affiliates', stats.qualifiedAffiliates],
+                    ['Assessment passes / partials', stats.passedAssessments],
+                    ['Assessment failures', stats.failedAssessments],
+                    ['Assigned / active tasks', stats.assignedTasks],
+                    ['Completed tasks', stats.completedTasks],
+                ].map(([label, count]) => <div key={label} className="rounded-lg border border-slate-200 bg-white p-4"><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-2 text-2xl font-black text-slate-950">{Number(count).toLocaleString()}</p></div>)}
+            </section>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-                <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col items-center text-center relative overflow-hidden group">
-                    <div className="size-16 rounded-3xl bg-primary/5 flex items-center justify-center text-primary mb-6 transition-transform group-hover:scale-110 shadow-inner">
-                        <span className="material-symbols-outlined text-3xl">query_stats</span>
-                    </div>
-                    <h3 className="text-4xl font-black text-text-main mb-2 italic">+{stats?.activeTasks || 0}%</h3>
-                    <p className="text-text-secondary text-[10px] font-black uppercase tracking-[0.2em] italic">Deployment Velocity</p>
-                </div>
-                <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col items-center text-center relative overflow-hidden group">
-                    <div className="size-16 rounded-3xl bg-green-50 flex items-center justify-center text-green-600 mb-6 transition-transform group-hover:scale-110 shadow-inner">
-                        <span className="material-symbols-outlined text-3xl">verified_user</span>
-                    </div>
-                    <h3 className="text-4xl font-black text-text-main mb-2 italic">99.2%</h3>
-                    <p className="text-text-secondary text-[10px] font-black uppercase tracking-[0.2em] italic">Security Integrity</p>
-                </div>
-                <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col items-center text-center relative overflow-hidden group">
-                    <div className="size-16 rounded-3xl bg-slate-800 flex items-center justify-center text-white mb-6 transition-transform group-hover:scale-110 shadow-inner">
-                        <span className="material-symbols-outlined text-3xl">account_balance_wallet</span>
-                    </div>
-                    <h3 className="text-4xl font-black text-text-main mb-2 italic">£{(stats?.totalRevenue || 0).toLocaleString()}</h3>
-                    <p className="text-text-secondary text-[10px] font-black uppercase tracking-[0.2em] italic">Total Fiscal Yield</p>
-                </div>
-            </div>
-
-            <div className="bg-surface-light rounded-[2.5rem] border border-slate-200 shadow-sm p-8 md:p-10">
-                <h3 className="text-sm font-black text-text-main mb-10 uppercase tracking-widest italic border-b border-slate-100 pb-4">Operational Activity Log</h3>
-                <div className="space-y-4">
-                    {(stats?.recentUsers || []).map((reg: any, i: number) => (
-                        <div key={i} className="flex gap-6 p-6 hover:bg-slate-50/50 rounded-3xl transition-all border border-transparent hover:border-slate-100 items-center group">
-                            <div className="size-12 rounded-2xl bg-slate-100 shrink-0 flex items-center justify-center text-slate-400 group-hover:text-primary transition-colors">
-                                <span className="material-symbols-outlined text-lg">history</span>
-                            </div>
-                            <div className="flex-1">
-                                <div className="flex justify-between items-center mb-1">
-                                    <p className="font-black text-text-main text-sm uppercase tracking-tighter">Strategic Enrollment Complete</p>
-                                    <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full uppercase tracking-widest">Just Now</span>
-                                </div>
-                                <p className="text-[11px] text-text-secondary font-medium italic">New identity confirmed: <span className="text-text-main font-bold">{reg.name}</span> has joined as <span className="text-primary font-black uppercase tracking-widest text-[9px] border-b border-primary/20">{reg.role}</span>.</p>
-                            </div>
-                        </div>
-                    ))}
-                    {(!stats?.recentUsers || stats.recentUsers.length === 0) && (
-                        <div className="py-20 text-center text-slate-300 font-bold uppercase tracking-widest text-[10px] italic">No tactical movements recorded in the last 24h.</div>
-                    )}
-                </div>
-            </div>
+            <section className="mt-5 grid gap-4 lg:grid-cols-2">
+                <article className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-bold text-slate-900">Task status breakdown</h2>{taskStatuses.length ? <div className="mt-3 divide-y divide-slate-100">{taskStatuses.map(([status, count]) => <div key={status} className="flex justify-between py-2 text-sm"><span className="capitalize text-slate-600">{status.replaceAll('_', ' ')}</span><strong>{count}</strong></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No task status data.</p>}<Link href="/dashboard/admin/tasks" className="mt-3 inline-block text-xs font-semibold text-primary hover:underline">Manage tasks →</Link></article>
+                <article className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="font-bold text-slate-900">Assessment result breakdown</h2>{resultBands.length ? <div className="mt-3 divide-y divide-slate-100">{resultBands.map(([band, count]) => <div key={band} className="flex justify-between py-2 text-sm"><span className="capitalize text-slate-600">{band}</span><strong>{count}</strong></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No assessment attempts recorded.</p>}<Link href="/dashboard/admin/assessments" className="mt-3 inline-block text-xs font-semibold text-primary hover:underline">Review assessment results →</Link></article>
+            </section>
         </div>
     );
 }

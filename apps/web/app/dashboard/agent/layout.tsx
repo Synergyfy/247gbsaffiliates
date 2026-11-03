@@ -1,130 +1,172 @@
-"use client";
+'use client';
 
-import React from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { BrandLogo } from "@/components/ui/BrandLogo";
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
-import { UserMenu } from "@/components/dashboard/UserMenu";
-import { useAuthStore } from "@/store/useAuthStore";
+import { FormEvent, ReactNode, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/store/useAuthStore';
 
-export default function AgentLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+const navigation = [
+    {
+        title: 'Core Operations',
+        items: [
+            { name: 'Overview', href: '/dashboard/agent', icon: 'dashboard' },
+            { name: 'My Profile', href: '/dashboard/agent/profile', icon: 'person' },
+            { name: 'Verification', href: '/dashboard/agent/verification', icon: 'verified_user' },
+        ],
+    },
+    {
+        title: 'Advancement',
+        items: [
+            { name: 'Learning Hub', href: '/learning', icon: 'school' },
+            { name: 'Assessment & Qualification', href: '/dashboard/agent/assessment', icon: 'quiz' },
+        ],
+    },
+    {
+        title: 'Execution',
+        items: [
+            { name: 'My Tasks', href: '/dashboard/agent/tasks', icon: 'assignment' },
+            { name: 'Notifications', href: '/dashboard/agent/notifications', icon: 'notifications' },
+            { name: 'Settings', href: '/dashboard/agent/settings', icon: 'settings' },
+        ],
+    },
+];
+
+function getName(user: ReturnType<typeof useAuthStore.getState>['user']) {
+    return [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || user?.email || 'Affiliate';
+}
+
+export default function AgentLayout({ children }: { children: ReactNode }) {
     const pathname = usePathname();
+    const router = useRouter();
     const { user } = useAuthStore();
-    // Derived user fields
-    const name = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.name || user?.email?.split('@')[0] || "Affiliate Agent";
-    const initials = name.substring(0, 2).toUpperCase();
-    
-    let roleTitle = 'Agent Level 1';
-    if (user?.roles?.includes('account-manager') || user?.role === 'account_manager') {
-        roleTitle = 'Account Manager';
-    } else if (user?.roles?.includes('consultant') || user?.role === 'consultant') {
-        roleTitle = 'Consultant';
-    } else if (user?.roles?.includes('admin') || user?.role === 'admin') {
-        roleTitle = 'Administrator';
-    }
+    const { logout, isLoggingOut } = useAuth();
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+    const [taskSearch, setTaskSearch] = useState('');
+    const name = getName(user);
+    const initials = useMemo(() => name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'A', [name]);
+    const roleLabel = user?.role?.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Affiliate';
+    const title = pathname === '/dashboard/agent' ? 'Dashboard' : pathname.split('/').filter(Boolean).at(-1)?.replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Dashboard';
 
-    const sidebarLinks = [
-        { name: "Dashboard", href: "/dashboard/agent", icon: "dashboard" },
-        { name: "Available Tasks", href: "/dashboard/agent/tasks", icon: "assignment" },
-        { name: "My Missions", href: "/dashboard/agent/my-missions", icon: "rocket_launch" },
-        { name: "Earnings", href: "/dashboard/agent/earnings", icon: "account_balance_wallet" },
-        { name: "Messages", href: "/dashboard/agent/messages", icon: "chat_bubble" },
-        { name: "Settings", href: "/dashboard/agent/settings", icon: "settings" },
-    ];
+    const navigateToTaskSearch = (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const query = taskSearch.trim();
+        router.push(query ? `/dashboard/agent/tasks?search=${encodeURIComponent(query)}` : '/dashboard/agent/tasks');
+        setMenuOpen(false);
+    };
+
+    const isActive = (href: string) => href === '/dashboard/agent'
+        ? pathname === href
+        : pathname === href || pathname.startsWith(`${href}/`) || (href === '/learning' && pathname === '/learning');
+
+    const navigationGroups = (onNavigate?: () => void) => navigation.map((group) => (
+        <section key={group.title} className="mb-6">
+            <h2 className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.title}</h2>
+            <div className="space-y-1">
+                {group.items.map((item) => {
+                    const active = isActive(item.href);
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={onNavigate}
+                            aria-current={active ? 'page' : undefined}
+                            className={`flex min-h-10 items-center gap-3 rounded-md px-3 text-[13px] font-medium transition-colors ${active ? 'bg-blue-700 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'}`}
+                        >
+                            <span className="material-symbols-outlined text-[19px]">{item.icon}</span>
+                            <span>{item.name}</span>
+                        </Link>
+                    );
+                })}
+            </div>
+        </section>
+    ));
 
     return (
-        <div className="bg-background-light min-h-screen font-sans text-text-main flex flex-col lg:flex-row">
-            {/* Desktop Sidebar */}
-            <aside className="w-64 bg-surface-light border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen z-30">
-                <div className="p-6">
-                    <div className="mb-8">
-                        <BrandLogo size="md" />
-                    </div>
-                    <p className="px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 font-display">
-                        Affiliate Portal
-                    </p>
-                    <nav className="space-y-1">
-                        {sidebarLinks.map((link) => {
-                            const isActive = pathname === link.href;
-                            return (
-                                <Link
-                                    key={link.name}
-                                    href={link.href}
-                                    className={`flex items-center gap-3 px-3.5 py-2.5 text-sm font-bold transition-all rounded-xl ${
-                                        isActive
-                                            ? "bg-primary text-white shadow-md shadow-primary/20"
-                                            : "text-slate-600 hover:text-text-main hover:bg-slate-100/70"
-                                    }`}
-                                >
-                                    <span className={`material-symbols-outlined text-lg ${isActive ? "text-white" : "text-slate-400"}`}>
-                                        {link.icon}
-                                    </span>
-                                    <span>{link.name}</span>
-                                </Link>
-                            );
-                        })}
-                    </nav>
+        <div className="min-h-screen bg-[#f7f8fc] font-display text-slate-950 lg:flex">
+            <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
+                <div className="border-b border-slate-100 px-5 py-5">
+                    <Link href="/dashboard/agent" aria-label="247GBS Affiliate dashboard" className="inline-flex">
+                        <BrandLogo size="md" label="247GBS Affiliate" labelClassName="text-sm" />
+                    </Link>
                 </div>
-                <div className="mt-auto p-4 border-t border-slate-200/80 bg-slate-50/50">
-                    <UserMenu name={name} role={roleTitle} initials={initials} />
+                <nav aria-label="Affiliate navigation" className="flex-1 overflow-y-auto px-3 py-5">
+                    {navigationGroups()}
+                </nav>
+                <div className="border-t border-slate-200 p-3">
+                    <button type="button" onClick={() => setProfileMenuOpen((open) => !open)} className="flex w-full items-center gap-3 rounded-lg bg-[#202b42] p-3 text-left text-white hover:bg-[#273550]">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-blue-700 text-xs font-bold">{initials}</span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-semibold">{name}</span>
+                            <span className="mt-0.5 block truncate text-[10px] text-slate-300">{roleLabel}</span>
+                        </span>
+                        <span className="material-symbols-outlined text-lg text-slate-300">{profileMenuOpen ? 'expand_more' : 'more_horiz'}</span>
+                    </button>
+                    {profileMenuOpen && <div className="mt-2 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-sm">
+                        <Link href="/dashboard/agent/profile" onClick={() => setProfileMenuOpen(false)} className="block rounded px-3 py-2 text-slate-700 hover:bg-slate-50">My Profile</Link>
+                        <Link href="/dashboard/agent/settings" onClick={() => setProfileMenuOpen(false)} className="block rounded px-3 py-2 text-slate-700 hover:bg-slate-50">Settings</Link>
+                        <button type="button" disabled={isLoggingOut} onClick={() => void logout()} className="w-full rounded px-3 py-2 text-left text-red-700 hover:bg-red-50 disabled:opacity-50">{isLoggingOut ? 'Signing out…' : 'Sign out'}</button>
+                    </div>}
                 </div>
             </aside>
 
-            {/* Shared mobile header for every Agent page */}
-            <header className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5 lg:hidden">
-                <BrandLogo
-                    size="sm"
-                    label="247GBS Affiliate"
-                    labelClassName="text-[15px]"
-                    className="min-w-0 gap-2"
-                />
-                <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 text-[11px] font-bold text-slate-700">
-                    {user?.avatar || user?.image
-                        ? <img src={user?.avatar || user?.image || ''} alt="" className="size-full object-cover" />
-                        : initials}
-                </div>
-            </header>
+            <div className="min-w-0 flex-1">
+                <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
+                    <div className="flex min-h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:min-h-[68px] lg:px-8">
+                        <button type="button" aria-label="Open navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)} className="flex size-9 shrink-0 items-center justify-center border-0 bg-transparent p-0 text-slate-600 hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 lg:hidden">
+                            <span className="material-symbols-outlined text-[18px]">menu</span>
+                        </button>
+                        <BrandLogo size="sm" iconClassName="size-5" label="247GBS Affiliate" labelClassName="text-[11px]" className="gap-1.5 md:hidden" />
+                        <div className="hidden min-w-0 flex-1 md:block">
+                            <h1 className="text-[15px] font-semibold text-slate-950">{title}</h1>
+                            <p className="mt-0.5 text-xs text-slate-500">Your affiliate programme and progress at a glance</p>
+                        </div>
+                        <form onSubmit={navigateToTaskSearch} role="search" className="ml-auto hidden w-full max-w-[340px] items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 lg:flex xl:ml-0">
+                            <span className="material-symbols-outlined text-[18px] text-slate-400">search</span>
+                            <input value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} aria-label="Search assigned tasks" placeholder="Search your assigned tasks" className="h-10 min-w-0 flex-1 bg-transparent text-xs text-slate-800 outline-none placeholder:text-slate-400" />
+                            <button type="submit" className="text-[11px] font-semibold text-blue-700">Search</button>
+                        </form>
+                        <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-2">
+                            <Link href="/dashboard/agent/notifications" aria-label="Notifications" className="relative flex size-10 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100">
+                                <span className="material-symbols-outlined text-[21px]">notifications</span>
+                            </Link>
+                            <button type="button" onClick={() => setProfileMenuOpen((open) => !open)} aria-haspopup="menu" aria-expanded={profileMenuOpen} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-slate-50">
+                                <span className="flex size-6 items-center justify-center rounded-full bg-blue-700 text-[9px] font-bold text-white sm:size-8 sm:text-[10px]">{initials}</span>
+                                <span className="hidden max-w-32 truncate text-xs font-medium text-slate-800 lg:inline">{name}</span>
+                                <span className="material-symbols-outlined hidden text-base text-slate-400 sm:inline">expand_more</span>
+                            </button>
+                            {profileMenuOpen && <div role="menu" className="absolute right-4 top-[60px] z-50 w-52 rounded-lg border border-slate-200 bg-white p-1 shadow-lg sm:right-6 lg:right-8">
+                                <p className="truncate px-3 py-2 text-[11px] text-slate-500">{user?.email}</p>
+                                <Link role="menuitem" href="/dashboard/agent/profile" onClick={() => setProfileMenuOpen(false)} className="block rounded px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">My Profile</Link>
+                                <Link role="menuitem" href="/dashboard/agent/settings" onClick={() => setProfileMenuOpen(false)} className="block rounded px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">Settings</Link>
+                                <button role="menuitem" type="button" disabled={isLoggingOut} onClick={() => void logout()} className="w-full rounded px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">{isLoggingOut ? 'Signing out…' : 'Sign out'}</button>
+                            </div>}
+                        </div>
+                    </div>
+                </header>
 
-            {/* Main Content Area */}
-            <div className="flex-1 flex flex-col min-w-0">
-                <div className="hidden lg:block"><DashboardPageHeader /></div>
-                <main className="flex-1 w-full pb-20 lg:pb-0">
+                <main className="min-h-[calc(100vh-56px)] px-3 py-3 pb-8 sm:px-6 sm:py-7 lg:min-h-[calc(100vh-68px)] lg:px-8">
                     {children}
                 </main>
             </div>
 
-            {/* Shared mobile bottom navigation for every Agent page */}
-            <nav aria-label="Agent navigation" className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white px-1 pb-[env(safe-area-inset-bottom)] lg:hidden">
-                <div className="mx-auto grid max-w-lg grid-cols-5">
-                    {[
-                        { name: "Dashboard", href: "/dashboard/agent", icon: "dashboard" },
-                        { name: "Tasks", href: "/dashboard/agent/tasks", icon: "assignment" },
-                        { name: "Missions", href: "/dashboard/agent/my-missions", icon: "military_tech" },
-                        { name: "Earnings", href: "/dashboard/agent/earnings", icon: "payments" },
-                        { name: "Inbox", href: "/dashboard/agent/messages", icon: "mail" },
-                    ].map((item) => {
-                        const active = item.href === "/dashboard/agent"
-                            ? pathname === item.href
-                            : pathname === item.href || pathname.startsWith(`${item.href}/`);
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                aria-current={active ? "page" : undefined}
-                                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[8px] font-semibold uppercase tracking-wide ${active ? "text-blue-700" : "text-slate-600"}`}
-                            >
-                                <span className="material-symbols-outlined text-lg">{item.icon}</span>
-                                <span>{item.name}</span>
-                            </Link>
-                        );
-                    })}
-                </div>
-            </nav>
+            {menuOpen && <div className="fixed inset-0 z-50 lg:hidden">
+                <button type="button" aria-label="Close navigation" className="absolute inset-0 bg-slate-950/35" onClick={() => setMenuOpen(false)} />
+                <aside className="relative flex h-full w-[min(82vw,300px)] flex-col bg-white shadow-xl">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
+                        <Link href="/dashboard/agent" onClick={() => setMenuOpen(false)}><BrandLogo size="sm" label="247GBS Affiliate" labelClassName="text-sm" /></Link>
+                        <button type="button" aria-label="Close navigation" onClick={() => setMenuOpen(false)} className="flex size-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"><span className="material-symbols-outlined">close</span></button>
+                    </div>
+                    <nav aria-label="Affiliate navigation" className="flex-1 overflow-y-auto px-3 py-5">{navigationGroups(() => setMenuOpen(false))}</nav>
+                    <div className="border-t border-slate-200 p-4">
+                        <p className="truncate text-xs font-semibold text-slate-900">{name}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-500">{roleLabel}</p>
+                        <button type="button" disabled={isLoggingOut} onClick={() => void logout()} className="mt-3 text-xs font-semibold text-red-700">{isLoggingOut ? 'Signing out…' : 'Sign out'}</button>
+                    </div>
+                </aside>
+            </div>}
         </div>
     );
 }

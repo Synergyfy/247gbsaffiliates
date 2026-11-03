@@ -57,15 +57,22 @@ export function AuthCallbackClient() {
         }
 
         const isOnboarded = Boolean(profile.data?.isOnboarded);
+        const verificationStatus = profile.data?.verificationStatus;
+        const verificationSubmission = profile.data?.verificationSubmission;
         setAuth({
           id: profile.data?.id ?? profile.data?.userId ?? profile.data?.sub ?? '',
           email: profile.data?.email ?? '',
           name: profile.data?.name ?? profile.data?.email ?? '',
           role,
           isOnboarded,
+          verificationStatus,
+          verificationNotes: profile.data?.verificationNotes,
+          verificationSubmission,
+          verificationReviewedAt: profile.data?.verificationReviewedAt,
         });
 
-        if (role !== 'admin' && !isOnboarded) {
+        const hasSubmittedVerification = Boolean(verificationSubmission);
+        if (role !== 'admin' && !isOnboarded && !(hasSubmittedVerification && ['pending', 'rejected'].includes(verificationStatus))) {
           router.push('/onboarding');
         } else {
           router.push(`/dashboard/${role.replace('_', '-')}`);

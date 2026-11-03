@@ -18,8 +18,8 @@ export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT)
-  @ApiOperation({ summary: 'Create a new task (Internal)', description: 'Restricted to: Admin, Account Manager, Consultant. Creates a manual task not linked to Central.' })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Create a new task (Admin only)', description: 'Creates a manual task not linked to Central.' })
   @ApiBody({ type: CreateTaskDto })
   @ApiResponse({ status: 201, description: 'Task created successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden. Role not authorized.' })
@@ -56,14 +56,14 @@ export class TasksController {
 
   @Get()
   @ApiOperation({ summary: 'List tasks', description: 'Authenticated users. Returns paginated tasks.' })
-  findAll(@Query() query: FindTasksQueryDto) {
-    return this.tasksService.findAll(query);
+  findAll(@Query() query: FindTasksQueryDto, @Request() req) {
+    return this.tasksService.findAll(query, req.user.userId, req.user.role);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get task details', description: 'Authenticated users.' })
-  findOne(@Param('id') id: string) {
-    return this.tasksService.findOne(id);
+  @ApiOperation({ summary: 'Get task details', description: 'Authenticated users. Affiliates can only view tasks assigned to them.' })
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.tasksService.findOneForUser(id, req.user.userId, req.user.role);
   }
 
   @Post(':id/assign')
@@ -112,8 +112,8 @@ export class TasksController {
     } 
   })
   @ApiResponse({ status: 200, description: 'Status updated' })
-  updateStatus(@Param('id') id: string, @Body('status') status: TaskStatus) {
-    return this.tasksService.updateStatus(id, status);
+  updateStatus(@Param('id') id: string, @Body('status') status: TaskStatus, @Request() req) {
+    return this.tasksService.updateStatus(id, status, req.user.userId);
   }
 }
 

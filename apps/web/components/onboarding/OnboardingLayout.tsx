@@ -4,12 +4,12 @@ import React from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useRouter } from 'next/navigation';
-import { UserRole } from '@/types/auth';
 
 interface OnboardingLayoutProps {
     children: React.ReactNode;
     title?: string;
     subtitle?: string;
+    hideSkipToDashboard?: boolean;
 }
 
 const steps = [
@@ -20,7 +20,7 @@ const steps = [
     { id: 'outcome', label: 'Certification' },
 ];
 
-export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
+export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children, hideSkipToDashboard = false }) => {
     const { currentStep, role, setAssessmentSkipped } = useOnboardingStore();
     const { updateUser } = useAuthStore();
     const router = useRouter();
@@ -61,7 +61,7 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) 
                                     </span>
                                 </div>
                             )}
-                            {currentStep !== 'basic-info' && (
+                            {currentStep !== 'basic-info' && !hideSkipToDashboard && (
                                 <button
                                     type="button"
                                     onClick={handleSkipToDashboard}

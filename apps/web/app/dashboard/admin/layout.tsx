@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import { UserMenu } from "@/components/dashboard/UserMenu";
+import { useAuthStore } from "@/store/useAuthStore";
 
 
 export default function AdminLayout({
@@ -12,10 +13,17 @@ export default function AdminLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const user = useAuthStore((state) => state.user);
+    const userName = user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "Admin";
+    const userInitials = userName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "AD";
 
     const sidebarLinks = [
         { name: "Overview", href: "/dashboard/admin", icon: "dashboard" },
-        { name: "User", href: "/dashboard/admin/users", icon: "manage_accounts" },
+        { name: "Affiliates", href: "/dashboard/admin/users", icon: "manage_accounts" },
+        { name: "Verifications", href: "/dashboard/admin/verifications", icon: "verified_user" },
+        { name: "Learning Materials", href: "/dashboard/admin/learning", icon: "school" },
+        { name: "Assessments", href: "/dashboard/admin/assessments", icon: "quiz" },
+        { name: "Tasks", href: "/dashboard/admin/tasks", icon: "assignment" },
         { name: "Settings", href: "/dashboard/admin/settings", icon: "settings_suggest" },
         { name: "Reports", href: "/dashboard/admin/reports", icon: "summarize" },
     ];
@@ -38,7 +46,7 @@ export default function AdminLayout({
                     </div>
                     <nav className="space-y-1">
                         {sidebarLinks.map((link) => {
-                            const isActive = pathname === link.href;
+                            const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                             return (
                                 <Link
                                     key={link.name}
@@ -57,7 +65,7 @@ export default function AdminLayout({
                 </div>
                 <div className="mt-auto p-8 border-t border-slate-800">
                     <div className="mt-auto p-4 border-t border-slate-50">
-                        <UserMenu name="Anthony James" role="Admin" initials="AJ" />
+                        <UserMenu name={userName} role={user?.role || "Admin"} initials={userInitials} />
                     </div>
                 </div>
             </aside>

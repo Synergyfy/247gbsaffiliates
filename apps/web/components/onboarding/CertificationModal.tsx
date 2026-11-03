@@ -18,12 +18,12 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({ isOpen, 
         resetOnboarding,
         isPaidVisibilityRequested
     } = useOnboardingStore();
-    const { updateUser } = useAuthStore();
+    const { updateUser, user } = useAuthStore();
     const router = useRouter();
 
     if (!isOpen || !quizResult) return null;
 
-    const isPendingVerification = role === 'consultant' || isPaidVisibilityRequested;
+    const isPendingVerification = user?.verificationStatus !== 'verified' || role === 'consultant' || isPaidVisibilityRequested;
     // We only show this modal on success (>=50%), failed attempts redirect to learning dashboard
     const score = typeof quizResult.percentage === 'number'
         ? quizResult.percentage
@@ -33,11 +33,17 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({ isOpen, 
 
     const handleNavigate = async () => {
         try {
-            await apiClient.patch('/users/complete-onboarding');
+            const response = await apiClient.get('/auth/profile');
+            updateUser({
+                isOnboarded: Boolean(response.data.isOnboarded),
+                isQuizPassed: Boolean(response.data.isQuizPassed),
+                verificationStatus: response.data.verificationStatus,
+                verificationNotes: response.data.verificationNotes,
+                verificationSubmission: response.data.verificationSubmission,
+            });
         } catch (err) {
-            console.warn('Failed to complete onboarding on backend:', err);
+            console.warn('Could not refresh account status:', err);
         }
-        updateUser({ isOnboarded: true, isQuizPassed: true });
         const targetRole = role;
         resetOnboarding();
         if (targetRole === 'agent') {
@@ -83,7 +89,7 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({ isOpen, 
                 </div>
 
                 <h1 className="relative z-10 text-5xl md:text-6xl font-black text-slate-900 mb-8 tracking-[-0.03em] drop-shadow-sm font-display">
-                    Certification Achieved!
+                    {isPendingVerification ? 'Assessment Passed!' : 'Certification Achieved!'}
                 </h1>
 
                 <div className="relative z-10 flex flex-col items-center mb-8">
@@ -109,7 +115,9 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({ isOpen, 
                 </div>
 
                 <p className="relative z-10 text-xl text-slate-500 font-medium max-w-[500px] mx-auto mb-10 leading-relaxed font-body">
-                    You've mastered the skills and are now officially a <span className="font-bold bg-teal-50 px-2 py-0.5 rounded text-teal-600">Verified {role?.replace('-', ' ')}</span> on Listeo.
+                    {isPendingVerification
+                        ? 'You passed the assessment. Your account will be fully activated after an administrator verifies your submitted profile and identity document.'
+                        : <>You&apos;ve mastered the skills and are now officially a <span className="font-bold bg-teal-50 px-2 py-0.5 rounded text-teal-600">Verified {role?.replace('-', ' ')}</span> on Listeo.</>}
                 </p>
 
                 <button

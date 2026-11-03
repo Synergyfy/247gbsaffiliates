@@ -41,7 +41,7 @@ export class LearningResource {
   category: Category;
 
   @Column({ nullable: true })
-  categoryId: string;
+  categoryId: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

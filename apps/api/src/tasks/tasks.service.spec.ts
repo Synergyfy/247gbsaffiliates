@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Task, TaskStatus } from './entities/task.entity';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '../users/entities/user.entity';
+import { VerificationStatus } from '../users/entities/user.entity';
 import { ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
 
 const mockTask: {
@@ -21,6 +22,10 @@ const mockTask: {
 const mockUser = {
   id: 'uuid-agent-1',
   role: UserRole.AGENT,
+  verificationStatus: VerificationStatus.VERIFIED,
+  isOnboarded: true,
+  isQuizPassed: true,
+  skills: ['Lead generation'],
 };
 
 const mockAdmin = {
@@ -32,8 +37,8 @@ const mockRepo = {
   create: jest.fn().mockImplementation((dto) => ({ ...dto, id: 'uuid-new', status: TaskStatus.OPEN })),
   save: jest.fn().mockImplementation((task) => Promise.resolve({ ...mockTask, ...task })),
   findAndCount: jest.fn().mockResolvedValue([[mockTask], 1]),
-  findOne: jest.fn().mockImplementation(({ where: { id } }) => {
-    if (id === 'uuid-task-1') return Promise.resolve({ ...mockTask }); // Return copy
+  findOne: jest.fn().mockImplementation(({ where: { id, assignedAgentId } }) => {
+    if (id === 'uuid-task-1' && (!assignedAgentId || assignedAgentId === mockTask.assignedAgentId)) return Promise.resolve({ ...mockTask }); // Return copy
     return Promise.resolve(null);
   }),
 };
@@ -61,6 +66,13 @@ describe('TasksService (AffiliateBackend)', () => {
   let service: TasksService;
 
   beforeEach(async () => {
+    mockTask.status = TaskStatus.OPEN;
+    mockTask.assignedAgentId = null;
+    mockRepo.findAndCount.mockClear();
+    mockRepo.findOne.mockClear();
+    mockRepo.save.mockClear();
+    mockRepo.create.mockClear();
+    mockUsersService.findOne.mockClear();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TasksService,
@@ -91,6 +103,46 @@ describe('TasksService (AffiliateBackend)', () => {
     expect(result.status).toBe(TaskStatus.OPEN);
   });
 
+  it('scopes an affiliate assigned-task query to the authenticated affiliate', async () => {
+    mockTask.assignedAgentId = 'uuid-agent-1';
+    await service.findAll({ assignedAgentId: 'uuid-other-agent' }, 'uuid-agent-1', UserRole.AGENT);
+
+    expect(mockRepo.findAndCount).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { assignedAgentId: 'uuid-agent-1' },
+      relations: [],
+    }));
+  });
+
+  it('does not return other affiliates’ assigned tasks from an unfiltered affiliate list request', async () => {
+    await service.findAll({}, 'uuid-agent-1', UserRole.AGENT);
+
+    expect(mockRepo.findAndCount).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { status: TaskStatus.OPEN },
+    }));
+  });
+
+  it('applies affiliate ownership rules to account managers and consultants too', async () => {
+    await service.findAll({ status: TaskStatus.ASSIGNED, assignedAgentId: 'uuid-other-agent' }, 'uuid-agent-1', UserRole.ACCOUNT_MANAGER);
+
+    expect(mockRepo.findAndCount).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { status: TaskStatus.ASSIGNED, assignedAgentId: 'uuid-agent-1' },
+      relations: [],
+    }));
+  });
+
+  it('blocks task-list access when an affiliate has not completed all qualification requirements', async () => {
+    mockUsersService.findOne.mockResolvedValueOnce({ ...mockUser, isQuizPassed: false });
+
+    await expect(service.findAll({}, 'uuid-agent-1', UserRole.AGENT)).rejects.toThrow(ForbiddenException);
+    expect(mockRepo.findAndCount).not.toHaveBeenCalled();
+  });
+
+  it('hides task details from an affiliate it is not assigned to', async () => {
+    mockTask.assignedAgentId = 'uuid-other-agent';
+    await expect(service.findOneForUser('uuid-task-1', 'uuid-agent-1', UserRole.AGENT))
+      .rejects.toThrow(NotFoundException);
+  });
+
   it('should assign task to agent', async () => {
     const result = await service.assign('uuid-task-1', 'uuid-agent-1');
     expect(result.status).toBe(TaskStatus.ASSIGNED);
@@ -108,6 +160,36 @@ describe('TasksService (AffiliateBackend)', () => {
     
     const result = await service.respondToTask('uuid-task-1', 'uuid-agent-1', 'accept');
     expect(result.status).toBe(TaskStatus.ACCEPTED);
+  });
+
+  it('should not allow an unverified affiliate to accept an assigned task', async () => {
+    mockTask.status = TaskStatus.ASSIGNED;
+    mockTask.assignedAgentId = 'uuid-agent-1';
+    mockUsersService.findOne.mockResolvedValueOnce({
+      ...mockUser,
+      verificationStatus: VerificationStatus.PENDING,
+      isOnboarded: false,
+    });
+
+    await expect(service.respondToTask('uuid-task-1', 'uuid-agent-1', 'accept'))
+      .rejects.toThrow(ForbiddenException);
+  });
+
+  it('allows a qualified assigned affiliate to submit an accepted task for review', async () => {
+    mockTask.status = TaskStatus.ACCEPTED;
+    mockTask.assignedAgentId = 'uuid-agent-1';
+
+    const result = await service.updateStatus('uuid-task-1', TaskStatus.SUBMITTED, 'uuid-agent-1');
+
+    expect(result.status).toBe(TaskStatus.SUBMITTED);
+  });
+
+  it('does not allow an affiliate to skip review by setting completed directly', async () => {
+    mockTask.status = TaskStatus.ACCEPTED;
+    mockTask.assignedAgentId = 'uuid-agent-1';
+
+    await expect(service.updateStatus('uuid-task-1', TaskStatus.COMPLETED, 'uuid-agent-1'))
+      .rejects.toThrow(BadRequestException);
   });
 
   it('should respond to task (decline)', async () => {

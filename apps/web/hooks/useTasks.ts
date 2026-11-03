@@ -13,6 +13,13 @@ export interface Task {
   estimatedTime?: string;
   category?: string | { name: string };
   requiredSkills?: string[];
+  assignedAgentId?: string | null;
+  dueDate?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  taskType?: string | null;
+  originSystem?: string;
+  assignedAgent?: { id: string; email: string; firstName?: string | null; lastName?: string | null } | null;
 }
 
 export interface TaskFilters {
@@ -22,6 +29,7 @@ export interface TaskFilters {
   status?: string;
   categoryId?: string;
   assignedAgentId?: string;
+  enabled?: boolean;
 }
 
 export const useTasks = (filters: TaskFilters = {}) => {
@@ -29,9 +37,11 @@ export const useTasks = (filters: TaskFilters = {}) => {
 
   const { data: tasks, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['tasks', filters],
+    enabled: filters.enabled ?? true,
     queryFn: async () => {
-      const response = await apiClient.get('/tasks', { params: filters });
-      const data = response.data;
+      const { enabled: _enabled, ...params } = filters;
+      const response = await apiClient.get('/tasks', { params });
+      const data = response.data?.data ?? response.data;
       if (Array.isArray(data)) return data as Task[];
       if (data && Array.isArray(data.items)) return data.items as Task[];
       if (data && Array.isArray(data.data)) return data.data as Task[];
@@ -46,7 +56,38 @@ export const useTasks = (filters: TaskFilters = {}) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
     },
+  });
+
+  const declineTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      const response = await apiClient.post(`/tasks/${taskId}/decline`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
+    },
+  });
+
+  const updateTaskStatusMutation = useMutation({
+    mutationFn: async ({ taskId, status }: { taskId: string; status: string }) => {
+      const response = await apiClient.patch(`/tasks/${taskId}/status`, { status });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
+    },
+  });
+
+  const assignTaskMutation = useMutation({
+    mutationFn: async ({ taskId, agentId }: { taskId: string; agentId: string }) => {
+      const response = await apiClient.post(`/tasks/${taskId}/assign`, { agentId });
+      return response.data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
   const createTaskMutation = useMutation({
@@ -69,5 +110,20 @@ export const useTasks = (filters: TaskFilters = {}) => {
     isAccepting: acceptTaskMutation.isPending,
     createTask: createTaskMutation.mutateAsync,
     isCreating: createTaskMutation.isPending,
+    declineTask: declineTaskMutation.mutateAsync,
+    isDeclining: declineTaskMutation.isPending,
+    updateTaskStatus: updateTaskStatusMutation.mutateAsync,
+    isUpdatingStatus: updateTaskStatusMutation.isPending,
+    assignTask: assignTaskMutation.mutateAsync,
+    isAssigning: assignTaskMutation.isPending,
   };
 };
+
+export const useTask = (taskId: string, enabled = true) => useQuery({
+  queryKey: ['task', taskId],
+  enabled: Boolean(taskId) && enabled,
+  queryFn: async () => {
+    const response = await apiClient.get(`/tasks/${taskId}`);
+    return (response.data?.data ?? response.data) as Task;
+  },
+});

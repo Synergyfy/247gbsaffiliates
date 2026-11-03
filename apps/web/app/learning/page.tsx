@@ -3,12 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
-import { useLearningResources } from '@/hooks/useLearningResources';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useLearningProgress, useLearningResources, useUpdateLearningProgress } from '@/hooks/useLearningResources';
 import { CountdownTimer } from '@/components/learning/CountdownTimer';
 import { LearningCard } from '@/components/learning/LearningCard';
 import { ProgressTracker } from '@/components/learning/ProgressTracker';
-
-type CategoryFilter = 'all' | 'scenario' | 'knowledge' | 'skills';
 
 export default function LearningPage() {
     const router = useRouter();
@@ -18,54 +17,41 @@ export default function LearningPage() {
         userName,
         retakeAvailableAt
     } = useOnboardingStore();
+    const { user } = useAuthStore();
+    const selectedRole = role || user?.role || null;
+    const activeRole = selectedRole === 'account-manager' ? 'account_manager' : selectedRole;
+    const hasPassedAssessment = Boolean(user?.isQuizPassed)
+        || ['pass', 'partial'].includes(quizResult?.band.toLowerCase() || '');
 
-    const [completedResources, setCompletedResources] = useState<Set<string>>(new Set());
-    const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
-    const [canRetake, setCanRetake] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [now, setNow] = useState(0);
 
     // Fetch learning resources
-    const { data: resources, isLoading } = useLearningResources(role!);
+    const { data: resources, isLoading, isError, refetch } = useLearningResources(activeRole);
+    const { data: progress = [], isLoading: isProgressLoading, isError: isProgressError, refetch: refetchProgress } = useLearningProgress(Boolean(activeRole));
+    const updateProgress = useUpdateLearningProgress();
+    const progressByResource = new Map(progress.map((item) => [item.resourceId, item.status]));
 
-    // Check if user can retake quiz
+    // Keep the retake countdown current without storing a second copy of its state.
     useEffect(() => {
-        if (!retakeAvailableAt) {
-            setCanRetake(true);
-            return;
-        }
-
-        const checkRetakeAvailability = () => {
-            setCanRetake(Date.now() >= retakeAvailableAt);
-        };
-
-        checkRetakeAvailability();
-        const interval = setInterval(checkRetakeAvailability, 1000);
+        const interval = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(interval);
-    }, [retakeAvailableAt]);
+    }, []);
+    const canRetake = !retakeAvailableAt || now >= retakeAvailableAt;
 
-    // Redirect if no quiz result or passed
-    useEffect(() => {
-        if (!quizResult || quizResult.score >= 50) {
-            router.replace('/dashboard');
-        }
-    }, [quizResult, router]);
+    const handleStartResource = (resourceId: string) => {
+        if (!progressByResource.has(resourceId)) updateProgress.mutate({ resourceId, status: 'in_progress' });
+    };
 
-    const handleToggleComplete = (id: string) => {
-        setCompletedResources(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) {
-                newSet.delete(id);
-            } else {
-                newSet.add(id);
-            }
-            return newSet;
-        });
+    const handleCompleteResource = (resourceId: string) => {
+        updateProgress.mutate({ resourceId, status: 'completed' });
     };
 
     const handleRetakeQuiz = () => {
-        router.push('/onboarding');
+        router.push('/onboarding?retake=1');
     };
 
-    if (isLoading || !resources) {
+    if (isLoading || isProgressLoading) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
@@ -76,11 +62,25 @@ export default function LearningPage() {
         );
     }
 
-    const filteredResources = categoryFilter === 'all'
-        ? resources
-        : resources.filter(r => r.category === categoryFilter);
+    if (isError || isProgressError) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+                <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                    <h1 className="text-xl font-bold text-text-main">Learning resources unavailable</h1>
+                    <p className="mt-2 text-sm text-text-secondary">We couldn’t load your Learning Hub materials. Try again in a moment.</p>
+                    <button onClick={() => { void refetch(); void refetchProgress(); }} className="mt-5 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-white">Try again</button>
+                </div>
+            </div>
+        );
+    }
 
-    const completedCount = resources.filter(r => completedResources.has(r.id)).length;
+    const learningResources = resources || [];
+    const categories = Array.from(new Map(learningResources.filter((resource) => resource.category).map((resource) => [resource.category!.id, resource.category!])).values());
+    const filteredResources = categoryFilter === 'all'
+        ? learningResources
+        : learningResources.filter(resource => resource.category?.id === categoryFilter);
+
+    const completedCount = learningResources.filter(resource => progressByResource.get(resource.id) === 'completed').length;
 
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 font-display">
@@ -136,29 +136,28 @@ export default function LearningPage() {
                     <div className="mb-8">
                         <CountdownTimer
                             targetTimestamp={retakeAvailableAt}
-                            onComplete={() => setCanRetake(true)}
                         />
                     </div>
                 )}
 
                 {/* Progress Tracker */}
                 <div className="mb-8">
-                    <ProgressTracker completed={completedCount} total={resources.length} />
+                    <ProgressTracker completed={completedCount} total={learningResources.length} />
                 </div>
 
                 {/* Category Filters */}
                 <div className="mb-8">
                     <div className="flex flex-wrap gap-3">
-                        {(['all', 'scenario', 'knowledge', 'skills'] as CategoryFilter[]).map(category => (
+                        {[{ id: 'all', name: 'All Resources' }, ...categories].map(category => (
                             <button
-                                key={category}
-                                onClick={() => setCategoryFilter(category)}
-                                className={`px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wider transition-all ${categoryFilter === category
+                                key={category.id}
+                                onClick={() => setCategoryFilter(category.id)}
+                                className={`px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wider transition-all ${categoryFilter === category.id
                                         ? 'bg-primary text-white shadow-lg shadow-primary/25'
                                         : 'bg-white text-slate-600 border border-slate-200 hover:border-primary/50'
                                     }`}
                             >
-                                {category === 'all' ? 'All Resources' : category}
+                                {category.name}
                             </button>
                         ))}
                     </div>
@@ -170,8 +169,10 @@ export default function LearningPage() {
                         <LearningCard
                             key={resource.id}
                             resource={resource}
-                            isCompleted={completedResources.has(resource.id)}
-                            onToggleComplete={handleToggleComplete}
+                            status={progressByResource.get(resource.id) || 'not_started'}
+                            isUpdating={updateProgress.isPending}
+                            onStart={handleStartResource}
+                            onComplete={handleCompleteResource}
                         />
                     ))}
                 </div>
@@ -179,7 +180,7 @@ export default function LearningPage() {
                 {filteredResources.length === 0 && (
                     <div className="text-center py-12">
                         <span className="material-symbols-outlined text-6xl text-slate-300 mb-4">search_off</span>
-                        <p className="text-slate-400 font-medium">No resources found for this category.</p>
+                        <p className="text-slate-400 font-medium">No published learning resources are available for your role{categoryFilter !== 'all' ? ' in this category' : ''}.</p>
                     </div>
                 )}
 
@@ -187,14 +188,14 @@ export default function LearningPage() {
                 <div className="sticky bottom-8 flex justify-center">
                     <button
                         onClick={handleRetakeQuiz}
-                        disabled={!canRetake}
-                        className={`px-12 py-4 rounded-xl font-bold text-sm uppercase tracking-wider shadow-2xl transition-all flex items-center gap-3 ${canRetake
+                        disabled={!canRetake || hasPassedAssessment}
+                        className={`px-12 py-4 rounded-xl font-bold text-sm uppercase tracking-wider shadow-2xl transition-all flex items-center gap-3 ${canRetake && !hasPassedAssessment
                                 ? 'bg-primary text-white hover:brightness-110 active:scale-95'
                                 : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                             }`}
                     >
                         <span className="material-symbols-outlined">quiz</span>
-                        {canRetake ? 'Retake Assessment' : 'Assessment Locked'}
+                        {hasPassedAssessment ? 'Assessment Passed' : canRetake ? 'Retake Assessment' : 'Assessment Locked'}
                     </button>
                 </div>
             </div>
