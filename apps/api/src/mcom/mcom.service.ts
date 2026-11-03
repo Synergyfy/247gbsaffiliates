@@ -338,4 +338,18 @@ export class McomService {
     const b = Buffer.from(signature.replace(/^sha256=/, ''), 'hex');
     return a.length === b.length && timingSafeEqual(a, b);
   }
+
+  /**
+   * Central Hub's webhook dispatcher signs the raw JSON body only:
+   *   X-Mcom-Webhook-Signature: sha256=<hex>
+   * This verifier supports that scheme so both sides interoperate.
+   */
+  verifyRawBodySignature(payload: string, signature: string): boolean {
+    const secret = this.config.get<string>('MCOM_WEBHOOK_SECRET');
+    if (!secret || !signature) return false;
+    const expected = createHmac('sha256', secret).update(payload).digest('hex');
+    const a = Buffer.from(expected, 'hex');
+    const b = Buffer.from(signature.replace(/^sha256=/, ''), 'hex');
+    return a.length === b.length && timingSafeEqual(a, b);
+  }
 }

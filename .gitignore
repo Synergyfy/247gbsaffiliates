@@ -40,3 +40,5 @@ coverage
 
 # typescript
 *.tsbuildinfo
+# user uploads
+apps/api/uploads
