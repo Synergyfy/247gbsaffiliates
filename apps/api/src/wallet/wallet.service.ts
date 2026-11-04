@@ -14,12 +14,23 @@ export class WalletService {
   ) {}
 
   async findOneByUserId(userId: string) {
-    let wallet = await this.walletRepo.findOne({ where: { userId } });
-    if (!wallet) {
-      wallet = this.walletRepo.create({ userId, balance: 0 });
-      await this.walletRepo.save(wallet);
+    const existing = await this.walletRepo.findOne({ where: { userId } });
+    if (existing) return existing;
+
+    // Concurrent dashboard requests can both miss the read above and try to
+    // insert the same wallet. The unique userId constraint lets exactly one
+    // win; the loser re-reads the row instead of surfacing a 500.
+    try {
+      return await this.walletRepo.save(
+        this.walletRepo.create({ userId, balance: 0 }),
+      );
+    } catch (error) {
+      if ((error as { code?: string })?.code === '23505') {
+        const wallet = await this.walletRepo.findOne({ where: { userId } });
+        if (wallet) return wallet;
+      }
+      throw error;
     }
-    return wallet;
   }
 
   async deposit(userId: string, amount: number, description?: string) {

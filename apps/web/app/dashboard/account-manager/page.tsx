@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { useWallet } from '@/hooks/useWallet';
 import { useMessaging } from '@/hooks/useMessaging';
@@ -163,9 +164,9 @@ export default function AccountManagerDashboard() {
                                         <tr key={task.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
-                                                    <span className="font-bold text-text-main text-sm">
+                                                    <Link href={`/dashboard/agent/tasks/${task.id}`} className="font-bold text-text-main text-sm hover:text-primary hover:underline">
                                                         {task.title}
-                                                    </span>
+                                                    </Link>
                                                     <span className="text-[10px] text-text-secondary uppercase tracking-tighter">
                                                         ID: #{task.id.slice(0, 8)}
                                                     </span>
@@ -228,7 +229,7 @@ export default function AccountManagerDashboard() {
                                         }`}
                                     >
                                         <div className="size-10 rounded-full bg-slate-800 shrink-0 flex items-center justify-center text-white text-xs font-bold italic shadow-inner">
-                                            {conv.participant?.name.slice(0, 2).toUpperCase() || '??'}
+                                            {conv.participant?.name?.slice(0, 2).toUpperCase() || '??'}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between mb-0.5">

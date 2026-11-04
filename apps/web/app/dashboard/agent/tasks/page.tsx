@@ -13,10 +13,12 @@ const formatDate = (value?: string | null) => {
 };
 
 const statusStyles: Record<string, string> = {
+    open: 'bg-slate-50 text-slate-700 border-slate-200',
     assigned: 'bg-blue-50 text-blue-800 border-blue-200',
     accepted: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     declined: 'bg-slate-100 text-slate-600 border-slate-200',
     submitted: 'bg-amber-50 text-amber-800 border-amber-200',
+    revision_requested: 'bg-orange-50 text-orange-800 border-orange-200',
     approved: 'bg-teal-50 text-teal-800 border-teal-200',
     completed: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     cancelled: 'bg-red-50 text-red-700 border-red-200',
@@ -25,30 +27,54 @@ const statusStyles: Record<string, string> = {
 function TaskCard({ task }: { task: Task }) {
     const assignedDate = formatDate(task.createdAt);
     const dueDate = formatDate(task.dueDate);
+    const isRevision = task.status === 'revision_requested';
+    const isCentralTask = task.originSystem === 'MCOM_CENTRAL' || Boolean(task.externalTaskId);
 
     return (
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <h2 className="text-base font-bold text-slate-950">{task.title}</h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-base font-bold text-slate-950">{task.title}</h2>
+                        {isCentralTask && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">Central Hub</span>}
+                    </div>
                     <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">{task.description || 'No additional description was provided.'}</p>
+                    {(task.centralBusinessName || task.platforms?.length) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {task.centralBusinessName && <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700"><span className="material-symbols-outlined text-sm">storefront</span>{task.centralBusinessName}</span>}
+                            {(task.platforms ?? []).map((platform) => <span key={platform} className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-blue-800">{platform}</span>)}
+                        </div>
+                    )}
                 </div>
                 <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${statusStyles[task.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}>
                     {task.status.replaceAll('_', ' ')}
                 </span>
             </div>
 
+            {isRevision && (
+                <p className="mt-3 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-xs leading-5 text-orange-900">
+                    <strong className="font-semibold">Changes requested.</strong>{task.reviewNotes ? ` ${task.reviewNotes}` : ' Open the task to review the feedback and resubmit.'}
+                </p>
+            )}
+
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-600">
                 {assignedDate && <span><strong className="font-semibold text-slate-800">Created:</strong> {assignedDate}</span>}
                 {dueDate && <span><strong className="font-semibold text-slate-800">Deadline:</strong> {dueDate}</span>}
                 {task.estimatedTime && <span><strong className="font-semibold text-slate-800">Estimate:</strong> {task.estimatedTime}</span>}
                 {task.budget != null && <span><strong className="font-semibold text-slate-800">Budget:</strong> {new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'USD' }).format(Number(task.budget))}</span>}
+                {task.submittedAt && <span><strong className="font-semibold text-slate-800">Submitted:</strong> {formatDate(task.submittedAt)}</span>}
             </div>
 
             <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-                <span className="text-xs text-slate-500">{task.requiredSkills?.length ? `${task.requiredSkills.length} listed requirement${task.requiredSkills.length === 1 ? '' : 's'}` : 'Review the task instructions for requirements'}</span>
+                <span className="text-xs text-slate-500">
+                    {task.status === 'submitted'
+                        ? `Awaiting ${isCentralTask ? 'Central Hub' : 'administrator'} review`
+                        : task.requiredSkills?.length
+                            ? `${task.requiredSkills.length} listed requirement${task.requiredSkills.length === 1 ? '' : 's'}`
+                            : 'Review the task instructions for requirements'}
+                </span>
                 <Link href={`/dashboard/agent/tasks/${task.id}`} className="inline-flex min-h-10 items-center gap-1 rounded-lg px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50">
-                    Open task <span className="material-symbols-outlined text-base">arrow_forward</span>
+                    {isRevision ? 'Review & resubmit' : 'Open task'} <span className="material-symbols-outlined text-base">arrow_forward</span>
                 </Link>
             </div>
         </article>
@@ -84,7 +110,7 @@ function AgentTasksContent() {
                 <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Affiliate workspace</p>
                     <h1 className="mt-1 text-2xl font-bold text-slate-950">Assigned Tasks</h1>
-                    <p className="mt-1 max-w-2xl text-sm text-slate-600">Tasks assigned to your account by an administrator, with their current status and deadlines.</p>
+                    <p className="mt-1 max-w-2xl text-sm text-slate-600">Tasks assigned to you by Central Hub businesses or an administrator, with their current status, deadlines and review feedback.</p>
                 </div>
                 <Link href="/dashboard/agent/my-missions" className="text-sm font-semibold text-blue-700 hover:underline">View my missions</Link>
             </header>
@@ -109,7 +135,7 @@ function AgentTasksContent() {
                 <section className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
                     <span className="material-symbols-outlined text-4xl text-slate-300">assignment</span>
                     <h2 className="mt-3 font-semibold text-slate-900">{search.trim() ? 'No matching tasks' : 'No tasks assigned yet'}</h2>
-                    <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">{search.trim() ? 'Try a different search term.' : 'Administrator-assigned tasks will appear here when they’re ready for you.'}</p>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">{search.trim() ? 'Try a different search term.' : 'Tasks delegated by Central Hub businesses or an administrator will appear here when they’re ready for you.'}</p>
                     <Link href="/dashboard/agent" className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to dashboard</Link>
                 </section>
             )}

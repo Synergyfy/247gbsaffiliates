@@ -29,6 +29,7 @@ export default function AccountManagerLayout({
         },
         { name: "Campaigns", href: "/dashboard/account-manager/campaigns", icon: "campaign" },
         { name: "Agents", href: "/dashboard/account-manager/agents", icon: "groups" },
+        { name: "Messages", href: "/dashboard/account-manager/messages", icon: "forum" },
         { name: "Revenue", href: "/dashboard/account-manager/revenue", icon: "payments" },
         { name: "Settings", href: "/dashboard/account-manager/settings", icon: "settings" },
     ];

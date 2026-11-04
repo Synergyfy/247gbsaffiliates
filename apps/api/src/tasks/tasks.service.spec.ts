@@ -12,6 +12,15 @@ const mockTask: {
   title: string;
   status: TaskStatus;
   assignedAgentId: string | null;
+  externalTaskId?: string | null;
+  submissionData?: Record<string, any> | null;
+  reviewHistory?: Array<Record<string, any>> | null;
+  reviewNotes?: string | null;
+  revisionCount?: number;
+  submittedAt?: Date | null;
+  reviewedAt?: Date | null;
+  completedAt?: Date | null;
+  assigneeEmail?: string | null;
 } = {
   id: 'uuid-task-1',
   title: 'Affiliate Task',
@@ -37,7 +46,11 @@ const mockRepo = {
   create: jest.fn().mockImplementation((dto) => ({ ...dto, id: 'uuid-new', status: TaskStatus.OPEN })),
   save: jest.fn().mockImplementation((task) => Promise.resolve({ ...mockTask, ...task })),
   findAndCount: jest.fn().mockResolvedValue([[mockTask], 1]),
-  findOne: jest.fn().mockImplementation(({ where: { id, assignedAgentId } }) => {
+  findOne: jest.fn().mockImplementation(({ where }) => {
+    if (where?.externalTaskId && where.externalTaskId === mockTask.externalTaskId) {
+      return Promise.resolve({ ...mockTask });
+    }
+    const { id, assignedAgentId } = where ?? {};
     if (id === 'uuid-task-1' && (!assignedAgentId || assignedAgentId === mockTask.assignedAgentId)) return Promise.resolve({ ...mockTask }); // Return copy
     return Promise.resolve(null);
   }),
@@ -53,9 +66,11 @@ const mockUsersService = {
 
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { of } from 'rxjs';
 
 const mockHttpService = {
-  patch: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
+  patch: jest.fn().mockReturnValue(of({ data: {} })),
+  post: jest.fn().mockReturnValue(of({ data: {} })),
 };
 
 const mockConfigService = {
@@ -68,6 +83,14 @@ describe('TasksService (AffiliateBackend)', () => {
   beforeEach(async () => {
     mockTask.status = TaskStatus.OPEN;
     mockTask.assignedAgentId = null;
+    mockTask.externalTaskId = undefined;
+    mockTask.submissionData = null;
+    mockTask.reviewHistory = null;
+    mockTask.reviewNotes = null;
+    mockTask.revisionCount = 0;
+    mockTask.submittedAt = null;
+    mockTask.reviewedAt = null;
+    mockTask.completedAt = null;
     mockRepo.findAndCount.mockClear();
     mockRepo.findOne.mockClear();
     mockRepo.save.mockClear();
@@ -195,6 +218,63 @@ describe('TasksService (AffiliateBackend)', () => {
 
     await expect(service.updateStatus('uuid-task-1', TaskStatus.COMPLETED, 'uuid-agent-1'))
       .rejects.toThrow(BadRequestException);
+  });
+
+  it('stores notes, links and attachments when submitting for review', async () => {
+    mockTask.status = TaskStatus.ACCEPTED;
+    mockTask.assignedAgentId = 'uuid-agent-1';
+
+    const result = await service.submit('uuid-task-1', 'uuid-agent-1', {
+      notes: 'Uploaded the first 20 products.',
+      links: ['https://store.example.com/widget'],
+      attachments: [{ url: 'https://cdn.example.com/proof.png', fileName: 'proof.png', kind: 'IMAGE' }],
+    });
+
+    expect(result.status).toBe(TaskStatus.SUBMITTED);
+    expect(result.submittedAt).toBeInstanceOf(Date);
+    expect(result.submissionData).toMatchObject({
+      notes: 'Uploaded the first 20 products.',
+      links: ['https://store.example.com/widget'],
+      attachments: [{ url: 'https://cdn.example.com/proof.png', fileName: 'proof.png', kind: 'IMAGE' }],
+    });
+  });
+
+  it('acknowledges a changes-requested review and returns the task to accepted', async () => {
+    mockTask.status = TaskStatus.REVISION_REQUESTED;
+    mockTask.assignedAgentId = 'uuid-agent-1';
+    mockTask.reviewHistory = [
+      { round: 1, decision: 'CHANGES_REQUESTED', notes: 'Fix the banner', reviewedAt: new Date().toISOString(), acknowledgedAt: null },
+    ];
+
+    const result = await service.acknowledgeReview('uuid-task-1', 'uuid-agent-1');
+
+    expect(result.status).toBe(TaskStatus.ACCEPTED);
+    expect(result.reviewHistory?.[0]?.acknowledgedAt).toBeTruthy();
+  });
+
+  it('applies a Central changes-requested outcome and an approval', async () => {
+    mockTask.status = TaskStatus.SUBMITTED;
+    mockTask.externalTaskId = 'ext-review-1';
+    mockTask.reviewHistory = [];
+    mockTask.revisionCount = 0;
+
+    const changes = await service.applyReviewFromCentral('ext-review-1', {
+      decision: 'CHANGES_REQUESTED',
+      notes: 'Please add the banner to the homepage.',
+      round: 1,
+    });
+    expect(changes.status).toBe(TaskStatus.REVISION_REQUESTED);
+    expect(changes.reviewNotes).toBe('Please add the banner to the homepage.');
+    expect(changes.revisionCount).toBe(1);
+    expect(changes.reviewHistory).toHaveLength(1);
+
+    const approved = await service.applyReviewFromCentral('ext-review-1', {
+      decision: 'APPROVED',
+      notes: 'Looks good.',
+      round: 2,
+    });
+    expect(approved.status).toBe(TaskStatus.COMPLETED);
+    expect(approved.completedAt).toBeInstanceOf(Date);
   });
 
   it('should respond to task (decline)', async () => {

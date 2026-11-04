@@ -24,6 +24,7 @@ export default function AdminLayout({
         { name: "Learning Materials", href: "/dashboard/admin/learning", icon: "school" },
         { name: "Assessments", href: "/dashboard/admin/assessments", icon: "quiz" },
         { name: "Tasks", href: "/dashboard/admin/tasks", icon: "assignment" },
+        { name: "Messages", href: "/dashboard/admin/messages", icon: "forum" },
         { name: "Settings", href: "/dashboard/admin/settings", icon: "settings_suggest" },
         { name: "Reports", href: "/dashboard/admin/reports", icon: "summarize" },
     ];

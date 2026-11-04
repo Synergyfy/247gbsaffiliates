@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import apiClient from '@/lib/apiClient';
+import { ChatNotificationToasts } from '@/components/chat/ChatNotificationToasts';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { user, isAuthenticated, updateUser } = useAuthStore();
@@ -117,6 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                 </section>
             )}
+            <ChatNotificationToasts />
             {children}
         </div>
     );

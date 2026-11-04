@@ -150,6 +150,13 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { email } });
   }
 
+  /** Batch lookup used to map Central Hub participants to local profiles. */
+  async findByMcomUserIds(mcomUserIds: string[]): Promise<User[]> {
+    const ids = Array.from(new Set(mcomUserIds.filter(Boolean)));
+    if (!ids.length) return [];
+    return this.usersRepository.find({ where: { mcomUserId: In(ids) } });
+  }
+
   async findOne(id: string): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {

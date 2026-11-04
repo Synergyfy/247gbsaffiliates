@@ -17,6 +17,7 @@ export default function ConsultantLayout({
     const sidebarLinks = [
         { name: "Dashboard", href: "/dashboard/consultant", icon: "dashboard" },
         { name: "Sessions", href: "/dashboard/consultant/sessions", icon: "calendar_today" },
+        { name: "Messages", href: "/dashboard/consultant/messages", icon: "forum" },
         { name: "Earnings", href: "/dashboard/consultant/earnings", icon: "payments" },
         { name: "Profile", href: "/dashboard/consultant/profile", icon: "person" },
     ];

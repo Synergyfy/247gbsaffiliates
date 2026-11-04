@@ -29,6 +29,7 @@ function OnboardingFlow() {
         role: onboardingRole,
         updateBasicInfo,
         updateProfileInfo,
+        resetOnboarding,
     } = useOnboardingStore();
     const { user } = useAuthStore();
     const searchParams = useSearchParams();
@@ -36,6 +37,10 @@ function OnboardingFlow() {
     const isRetakeQuiz = searchParams.get('retake') === '1';
     const isEditingProfile = searchParams.get('edit-profile') === '1';
     const hydratedEditUser = useRef<string | null>(null);
+    const syncedOnboardingUser = useRef<string | null>(null);
+
+    const normalizeRole = (role?: string | null) =>
+        (role || '').toLowerCase().replace(/_/g, '-');
 
     useEffect(() => {
         if (!isEditingProfile || !user?.id || hydratedEditUser.current === user.id) return;
@@ -83,10 +88,25 @@ function OnboardingFlow() {
     }, [clearQuizAnswers, isRetakeQuiz, retakeAvailableAt, router, setStep]);
 
     useEffect(() => {
-        if (user?.role && !onboardingRole) {
+        if (!user?.role) return;
+
+        // The onboarding store is persisted in localStorage and is shared by
+        // every account that signs in on this browser. Sync the role from the
+        // authenticated user and clear another user's draft so an agent's
+        // onboarding state can never leak into an account manager/consultant
+        // session (which previously mis-routed "Skip to Dashboard" and showed
+        // the wrong profile heading).
+        if (syncedOnboardingUser.current !== user.id) {
+            syncedOnboardingUser.current = user.id ?? null;
+            if (onboardingRole && normalizeRole(onboardingRole) !== normalizeRole(user.role)) {
+                resetOnboarding();
+            }
+        }
+
+        if (normalizeRole(onboardingRole) !== normalizeRole(user.role)) {
             setRole(user.role);
         }
-    }, [user, onboardingRole, setRole]);
+    }, [user?.id, user?.role, onboardingRole, setRole, resetOnboarding]);
 
     const renderStep = () => {
         const stepToRender = isRetakeQuiz ? 'quiz' : isEditingProfile && currentStep !== 'basic-info' ? 'profile-info' : currentStep;

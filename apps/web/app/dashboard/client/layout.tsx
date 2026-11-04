@@ -75,6 +75,15 @@ export default function ClientLayout({
                         >
                             History
                         </Link>
+                        <Link
+                            href="/dashboard/client/messages"
+                            className={`text-sm font-medium transition-colors ${pathname === "/dashboard/client/messages"
+                                    ? "text-primary"
+                                    : "text-text-main hover:text-primary"
+                                }`}
+                        >
+                            Messages
+                        </Link>
                     </nav>
                     <div className="flex gap-2">
                         <button className="flex min-w-[100px] cursor-pointer items-center justify-center rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold shadow-sm hover:opacity-90 transition-opacity">
