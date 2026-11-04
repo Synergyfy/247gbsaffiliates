@@ -26,7 +26,7 @@ export default function CampaignsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const campaigns = (tasks || []).filter(t => {
-        const catName = typeof t.category === 'string' ? t.category : t.category?.name;
+        const catName = typeof t.category === 'string' ? t.category : '';
         return t.type?.toLowerCase() === 'campaign' || catName?.toLowerCase() === 'campaign';
     });
 

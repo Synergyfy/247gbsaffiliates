@@ -18,6 +18,7 @@ const statusStyles: Record<string, string> = {
     accepted: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     declined: 'bg-slate-100 text-slate-600 border-slate-200',
     submitted: 'bg-amber-50 text-amber-800 border-amber-200',
+    pending_business_approval: 'bg-violet-50 text-violet-800 border-violet-200',
     revision_requested: 'bg-orange-50 text-orange-800 border-orange-200',
     approved: 'bg-teal-50 text-teal-800 border-teal-200',
     completed: 'bg-emerald-50 text-emerald-800 border-emerald-200',
@@ -43,6 +44,9 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                             {task.centralBusinessName && <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700"><span className="material-symbols-outlined text-sm">storefront</span>{task.centralBusinessName}</span>}
                             {(task.platforms ?? []).map((platform) => <span key={platform} className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-blue-800">{platform}</span>)}
+                            {task.category && <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-indigo-800">{task.category}</span>}
+                            {task.projectName && <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800"><span className="material-symbols-outlined text-sm">folder</span>{task.projectName}</span>}
+                            {task.chargeApprovalRequired && <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Awaiting charge approval</span>}
                         </div>
                     )}
                 </div>

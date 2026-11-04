@@ -61,7 +61,7 @@ export default function SessionsPage() {
                                     </div>
                                     <div>
                                         <h4 className="font-black text-lg text-text-main uppercase tracking-tighter italic">{session.title}</h4>
-                                        <p className="text-[11px] text-text-secondary font-medium italic mt-1">Strategic topic: <span className="text-text-main font-bold">{(typeof session.category === 'object' ? session.category?.name : session.category) || session.centralBusinessName || 'Expert Advisory'}</span> • <span className="text-primary font-black uppercase tracking-widest text-[9px]">{session.priority || 'Standard'}</span></p>
+                                        <p className="text-[11px] text-text-secondary font-medium italic mt-1">Strategic topic: <span className="text-text-main font-bold">{(typeof session.category === 'string' ? session.category : '') || session.centralBusinessName || 'Expert Advisory'}</span> • <span className="text-primary font-black uppercase tracking-widest text-[9px]">{session.priority || 'Standard'}</span></p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-6">

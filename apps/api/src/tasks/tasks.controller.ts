@@ -8,7 +8,7 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { CreateTaskFromCentralDto } from './dto/create-task-from-central.dto';
 import { CreateWorkRequestDto } from './dto/create-work-request.dto';
 import { FindTasksQueryDto } from './dto/find-tasks.dto';
-import { ReviewCallbackDto, SubmitTaskDto } from './dto/task-collaboration.dto';
+import { CentralStatusUpdateDto, ReviewCallbackDto, SubmitTaskDto } from './dto/task-collaboration.dto';
 import { TaskStatus } from './entities/task.entity';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse, ApiBody, ApiHeader } from '@nestjs/swagger';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -202,6 +202,22 @@ export class TasksController {
       throw new BadRequestException('Attachment not found');
     }
     res.sendFile(filePath);
+  }
+
+  @Post('external/:externalTaskId/status')
+  @Public()
+  @UseGuards(ApiKeyGuard)
+  @ApiHeader({ name: 'x-api-key', required: true })
+  @ApiOperation({
+    summary: 'Apply a Central status/charge-approval update',
+    description: 'Backend-to-backend: lifts the chargeable-work hold, cancels or closes a task.',
+  })
+  @ApiBody({ type: CentralStatusUpdateDto })
+  applyStatus(
+    @Param('externalTaskId') externalTaskId: string,
+    @Body() dto: CentralStatusUpdateDto,
+  ) {
+    return this.tasksService.applyStatusFromCentral(externalTaskId, dto);
   }
 
   @Post('external/:externalTaskId/review')

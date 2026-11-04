@@ -34,7 +34,6 @@ export interface Task {
   type: string;
   priority?: string;
   estimatedTime?: string;
-  category?: string | { name: string };
   requiredSkills?: string[];
   assignedAgentId?: string | null;
   dueDate?: string | null;
@@ -44,6 +43,26 @@ export interface Task {
   originSystem?: string;
   assignedAgent?: { id: string; email: string; firstName?: string | null; lastName?: string | null } | null;
   // ── Central Hub delegated task fields ────────────────────────────────────
+  category?: 'internal' | 'external' | string | null;
+  projectId?: string | null;
+  projectName?: string | null;
+  deliverables?: string[] | null;
+  materials?: string | null;
+  prerequisiteExternalTaskId?: string | null;
+  compensationModel?: string | null;
+  compensationAmount?: number | null;
+  compensationCurrency?: string | null;
+  billableToBusiness?: boolean;
+  businessChargeAmount?: number | null;
+  businessChargeCurrency?: string | null;
+  chargeApprovalRequired?: boolean;
+  chargeApprovedAt?: string | null;
+  paymentStatus?: string | null;
+  acceptedAt?: string | null;
+  requiresBusinessApproval?: boolean;
+  businessApprovedAt?: string | null;
+  amReviewedAt?: string | null;
+  amReviewNotes?: string | null;
   externalTaskId?: string | null;
   originRequesterId?: string | null;
   centralBusinessId?: string | null;
@@ -214,3 +233,180 @@ export const useTask = (taskId: string, enabled = true) => useQuery({
     return unwrapTask(response.data);
   },
 });
+
+// ─── Account Manager: tasks across managed businesses ────────────────────────
+
+export interface ManagedTask extends Task {
+  dueAt?: string | null;
+  business?: {
+    id: string;
+    businessName?: string | null;
+    email?: string | null;
+  } | null;
+  project?: { id: string; title: string; status?: string } | null;
+  prerequisiteTask?: { id: string; title: string; status: string } | null;
+  reviews?: Array<{
+    id: string;
+    round: number;
+    decision: 'APPROVED' | 'CHANGES_REQUESTED';
+    notes?: string | null;
+    stage?: string | null;
+    reviewedAt: string;
+  }> | null;
+  events?: Array<{
+    id: string;
+    type: string;
+    message?: string | null;
+    actorRole?: string | null;
+    createdAt: string;
+  }> | null;
+}
+
+const unwrapManagedTasks = (payload: any): ManagedTask[] => {
+  const data = payload?.data ?? payload;
+  const rows: any[] = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data?.items)
+        ? data.items
+        : [];
+  return rows.map((row) => ({
+    ...row,
+    // Central stores agreed deliverables as free text; the affiliate UI works
+    // with a list. Normalise both shapes here.
+    deliverables: Array.isArray(row.deliverables)
+      ? row.deliverables
+      : typeof row.deliverables === 'string' && row.deliverables.trim()
+        ? row.deliverables.split(/\r?\n|,/).map((item: string) => item.trim()).filter(Boolean)
+        : [],
+    status: typeof row.status === 'string' ? row.status.toUpperCase() : row.status,
+  })) as ManagedTask[];
+};
+
+export interface ManagedServiceRequest {
+  id: string;
+  title: string;
+  description: string;
+  desiredOutcome?: string | null;
+  urgency?: string;
+  status: string;
+  clarificationNote?: string | null;
+  estimatedCost?: number | null;
+  currency?: string;
+  business?: { id: string; businessName?: string | null; email?: string | null } | null;
+  project?: { id: string; title: string; status: string } | null;
+  createdAt?: string;
+}
+
+export const useManagedRequests = (filters: { status?: string; search?: string; limit?: number } = {}, enabled = true) => {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ['managed-requests', filters],
+    enabled,
+    queryFn: async () => {
+      const response = await apiClient.get('/account-manager/managed-requests', { params: filters });
+      const data = response.data?.data ?? response.data;
+      return (Array.isArray(data) ? data : data?.data ?? []) as ManagedServiceRequest[];
+    },
+  });
+
+  const clarify = useMutation({
+    mutationFn: async ({ requestId, note }: { requestId: string; note: string }) => {
+      const response = await apiClient.post(`/account-manager/managed-requests/${requestId}/clarify`, { note });
+      return response.data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['managed-requests'] }),
+  });
+
+  const quote = useMutation({
+    mutationFn: async ({
+      requestId,
+      estimatedCost,
+      currency,
+      notes,
+    }: {
+      requestId: string;
+      estimatedCost: number;
+      currency?: string;
+      notes?: string;
+    }) => {
+      const response = await apiClient.post(
+        `/account-manager/managed-requests/${requestId}/quote`,
+        { estimatedCost, currency, notes },
+      );
+      return response.data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['managed-requests'] }),
+  });
+
+  const convert = useMutation({
+    mutationFn: async ({
+      requestId,
+      project,
+    }: {
+      requestId: string;
+      project: { title: string; description: string; objective?: string; dueAt?: string };
+    }) => {
+      const response = await apiClient.post(
+        `/account-manager/managed-requests/${requestId}/convert`,
+        project,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managed-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-tasks'] });
+    },
+  });
+
+  return {
+    ...query,
+    clarify: clarify.mutateAsync,
+    isClarifying: clarify.isPending,
+    quote: quote.mutateAsync,
+    isQuoting: quote.isPending,
+    convert: convert.mutateAsync,
+    isConverting: convert.isPending,
+  };
+};
+
+export const useManagedTasks = (filters: { status?: string; search?: string; limit?: number } = {}, enabled = true) => {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ['managed-tasks', filters],
+    enabled,
+    queryFn: async () => {
+      const response = await apiClient.get('/account-manager/managed-tasks', { params: filters });
+      return unwrapManagedTasks(response.data);
+    },
+  });
+
+  const reviewTask = useMutation({
+    mutationFn: async ({
+      taskId,
+      decision,
+      notes,
+    }: {
+      taskId: string;
+      decision: 'APPROVED' | 'CHANGES_REQUESTED';
+      notes?: string;
+    }) => {
+      const response = await apiClient.post(`/account-manager/managed-tasks/${taskId}/review`, {
+        decision,
+        ...(notes ? { notes } : {}),
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managed-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+
+  return {
+    ...query,
+    reviewTask: reviewTask.mutateAsync,
+    isReviewing: reviewTask.isPending,
+  };
+};

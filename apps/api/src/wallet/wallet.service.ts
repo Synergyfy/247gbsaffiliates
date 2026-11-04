@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
-import { Transaction, TransactionType } from './entities/transaction.entity';
+import { Transaction, TransactionStatus, TransactionType } from './entities/transaction.entity';
 
 @Injectable()
 export class WalletService {
@@ -56,6 +56,41 @@ export class WalletService {
       where: { walletId: wallet.id },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  /**
+   * Credit an affiliate's wallet for a Central Hub task. Idempotent on the
+   * settlement reference so retries can never pay the same task twice.
+   */
+  async creditForTask(input: {
+    userId: string;
+    amount: number;
+    currency?: string;
+    description?: string;
+    reference: string;
+  }) {
+    const existing = await this.transactionRepo.findOne({
+      where: { reference: input.reference },
+    });
+    if (existing) {
+      return { transaction: existing, duplicated: true };
+    }
+
+    const wallet = await this.findOneByUserId(input.userId);
+    wallet.balance = Number(wallet.balance) + Number(input.amount);
+    wallet.currency = input.currency || wallet.currency;
+    await this.walletRepo.save(wallet);
+
+    const transaction = this.transactionRepo.create({
+      walletId: wallet.id,
+      type: TransactionType.PAYMENT,
+      amount: input.amount,
+      description: input.description || 'Task payment',
+      reference: input.reference,
+      status: TransactionStatus.COMPLETED,
+    });
+    await this.transactionRepo.save(transaction);
+    return { transaction, wallet, duplicated: false };
   }
 }
 

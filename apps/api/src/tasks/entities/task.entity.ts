@@ -7,10 +7,16 @@ export enum TaskStatus {
   ACCEPTED = 'accepted',
   DECLINED = 'declined',
   SUBMITTED = 'submitted',
+  PENDING_BUSINESS_APPROVAL = 'pending_business_approval',
   REVISION_REQUESTED = 'revision_requested',
   APPROVED = 'approved',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
+}
+
+export enum TaskCategory {
+  INTERNAL = 'internal',
+  EXTERNAL = 'external',
 }
 
 export enum TaskType {
@@ -59,6 +65,54 @@ export class Task {
 
   @Column({ nullable: true })
   taskType: string;
+
+  // Internal platform work vs external professional/creative services.
+  @Column({ type: 'enum', enum: TaskCategory, default: TaskCategory.EXTERNAL })
+  category: TaskCategory;
+
+  // Project grouping and agreed scope/deliverables from Central Hub.
+  @Column({ nullable: true })
+  projectId: string;
+
+  @Column({ nullable: true })
+  projectName: string;
+
+  @Column('simple-array', { nullable: true })
+  deliverables: string[];
+
+  @Column('text', { nullable: true })
+  materials: string;
+
+  @Column({ nullable: true })
+  prerequisiteExternalTaskId: string;
+
+  // Compensation arrangement (recorded before work begins).
+  @Column({ nullable: true })
+  compensationModel: string;
+
+  @Column('decimal', { precision: 12, scale: 2, nullable: true })
+  compensationAmount: number;
+
+  @Column({ default: 'GBP' })
+  compensationCurrency: string;
+
+  @Column({ default: false })
+  billableToBusiness: boolean;
+
+  @Column('decimal', { precision: 12, scale: 2, nullable: true })
+  businessChargeAmount: number;
+
+  @Column({ default: 'GBP' })
+  businessChargeCurrency: string;
+
+  @Column({ default: false })
+  chargeApprovalRequired: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  chargeApprovedAt: Date;
+
+  @Column({ nullable: true })
+  paymentStatus: string;
 
   @Column()
   @Index()
@@ -121,6 +175,9 @@ export class Task {
 
   @Column({ default: 0 })
   revisionCount: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  acceptedAt: Date;
 
   @Column({ type: 'timestamptz', nullable: true })
   submittedAt: Date;

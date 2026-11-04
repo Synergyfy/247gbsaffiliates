@@ -44,6 +44,7 @@ const statusStyles: Record<string, string> = {
     accepted: 'border-emerald-200 bg-emerald-50 text-emerald-800',
     declined: 'border-slate-200 bg-slate-100 text-slate-600',
     submitted: 'border-amber-200 bg-amber-50 text-amber-800',
+    pending_business_approval: 'border-violet-200 bg-violet-50 text-violet-800',
     revision_requested: 'border-orange-200 bg-orange-50 text-orange-800',
     approved: 'border-teal-200 bg-teal-50 text-teal-800',
     completed: 'border-emerald-200 bg-emerald-50 text-emerald-800',
@@ -217,6 +218,7 @@ export default function AgentTaskDetailsPage() {
 
     const canRespond = task.status === 'assigned';
     const canSubmit = task.status === 'accepted' || task.status === 'revision_requested';
+    const waitingForCharge = task.status === 'assigned' && Boolean(task.chargeApprovalRequired);
     const isRevision = task.status === 'revision_requested';
     const isCentralTask = task.originSystem === 'MCOM_CENTRAL' || Boolean(task.externalTaskId);
     const money = formatMoney(task);
@@ -239,6 +241,8 @@ export default function AgentTaskDetailsPage() {
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                             {task.centralBusinessName && <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700"><span className="material-symbols-outlined text-sm">storefront</span>{task.centralBusinessName}</span>}
                             {(task.platforms ?? []).map((platform) => <span key={platform} className="rounded-md bg-blue-50 px-2 py-1 text-[11px] font-semibold capitalize text-blue-800">{platform}</span>)}
+                            {task.category && <span className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] font-semibold capitalize text-indigo-800">{task.category} task</span>}
+                            {task.projectName && <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800"><span className="material-symbols-outlined text-sm">folder</span>{task.projectName}</span>}
                             {task.taskType && <span className="rounded-md bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">{task.taskType.replaceAll('_', ' ')}</span>}
                         </div>
                     </div>
@@ -261,6 +265,18 @@ export default function AgentTaskDetailsPage() {
                     </div>
                 )}
 
+                {task.chargeApprovalRequired && (
+                    <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4" role="status">
+                        <p className="flex items-center gap-1.5 text-sm font-bold text-amber-900">
+                            <span className="material-symbols-outlined text-base">lock_clock</span>
+                            Waiting for business approval
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-amber-900">
+                            This is chargeable work{task.businessChargeAmount != null ? ` (${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.businessChargeCurrency || 'GBP' }).format(Number(task.businessChargeAmount))})` : ''}. The business must approve the charge before you can accept the task.
+                        </p>
+                    </div>
+                )}
+
                 <dl className="mt-5 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-3">
                     <div><dt className="text-xs text-slate-500">Task created</dt><dd className="mt-1 font-semibold text-slate-900">{formatDate(task.createdAt)}</dd></div>
                     <div><dt className="text-xs text-slate-500">Deadline</dt><dd className="mt-1 font-semibold text-slate-900">{formatDate(task.dueDate)}</dd></div>
@@ -275,6 +291,36 @@ export default function AgentTaskDetailsPage() {
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{task.description || 'No additional instructions were provided.'}</p>
                     {task.executionUrl && <a href={task.executionUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800">Open work link<span className="material-symbols-outlined text-base">open_in_new</span></a>}
                 </section>
+
+                {task.deliverables?.length ? (
+                    <section className="mt-6 border-t border-slate-100 pt-5">
+                        <h2 className="text-base font-semibold text-slate-950">Agreed deliverables</h2>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                            {task.deliverables.map((item) => <li key={item}>{item}</li>)}
+                        </ul>
+                    </section>
+                ) : null}
+
+                {task.materials ? (
+                    <section className="mt-6 border-t border-slate-100 pt-5">
+                        <h2 className="text-base font-semibold text-slate-950">Materials supplied</h2>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{task.materials}</p>
+                    </section>
+                ) : null}
+
+                {(task.compensationAmount != null || task.compensationModel) && (
+                    <section className="mt-6 border-t border-slate-100 pt-5">
+                        <h2 className="text-base font-semibold text-slate-950">Compensation</h2>
+                        <p className="mt-2 text-sm text-slate-700">
+                            {task.compensationModel === 'MEMBERSHIP_INCLUDED'
+                                ? 'Included in the CHS membership service arrangement.'
+                                : task.compensationAmount != null
+                                    ? `${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(Number(task.compensationAmount))} payable on approved completion.`
+                                    : 'To be agreed with the account manager before work begins.'}
+                        </p>
+                        {task.paymentStatus && <p className="mt-1 text-xs capitalize text-slate-500">Payment status: {task.paymentStatus.replaceAll('_', ' ').toLowerCase()}</p>}
+                    </section>
+                )}
 
                 {task.requiredSkills?.length ? (
                     <section className="mt-6 border-t border-slate-100 pt-5">
@@ -319,6 +365,11 @@ export default function AgentTaskDetailsPage() {
                         Submitted{task.submittedAt ? ` ${formatDate(task.submittedAt)}` : ''} · awaiting {isCentralTask ? 'Central Hub' : 'administrator'} review.
                     </p>
                 )}
+                {task.status === 'pending_business_approval' && (
+                    <p className="mt-5 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900" role="status">
+                        Your work was checked by the account manager and is awaiting the business owner&apos;s approval.
+                    </p>
+                )}
                 {(task.status === 'approved' || task.status === 'completed') && (
                     <p className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
                         {task.status === 'approved' ? 'Approved' : 'Completed'}{task.completedAt ? ` ${formatDate(task.completedAt)}` : ''}. Thank you for your work.
@@ -345,7 +396,7 @@ export default function AgentTaskDetailsPage() {
 
                 {canRespond && (
                     <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
-                        <button type="button" onClick={() => void run(() => acceptTask(taskId), 'Task accepted. You can now work on it and submit it for review when ready.')} disabled={!isQualified || isAccepting || isDeclining} className="min-h-11 rounded-lg bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">{isAccepting ? 'Accepting…' : 'Accept task'}</button>
+                        <button type="button" onClick={() => void run(() => acceptTask(taskId), 'Task accepted. You can now work on it and submit it for review when ready.')} disabled={!isQualified || isAccepting || isDeclining || waitingForCharge} title={waitingForCharge ? 'The business must approve the charge first' : undefined} className="min-h-11 rounded-lg bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">{isAccepting ? 'Accepting…' : waitingForCharge ? 'Awaiting business approval' : 'Accept task'}</button>
                         <button type="button" onClick={() => void run(() => declineTask(taskId), 'Task declined.')} disabled={isAccepting || isDeclining} className="min-h-11 rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{isDeclining ? 'Declining…' : 'Decline'}</button>
                     </div>
                 )}
