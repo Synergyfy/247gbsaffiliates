@@ -79,7 +79,7 @@ function AgentTasksContent() {
     }
 
     return (
-        <div className="mx-auto w-full max-w-5xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+        <div className="mx-auto w-full max-w-[1500px] py-5 lg:py-8">
             <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Affiliate workspace</p>

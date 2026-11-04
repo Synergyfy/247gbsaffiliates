@@ -27,10 +27,18 @@ const navigation = [
         title: 'Execution',
         items: [
             { name: 'My Tasks', href: '/dashboard/agent/tasks', icon: 'assignment' },
+            { name: 'Messages', href: '/dashboard/agent/messages', icon: 'mail' },
             { name: 'Notifications', href: '/dashboard/agent/notifications', icon: 'notifications' },
             { name: 'Settings', href: '/dashboard/agent/settings', icon: 'settings' },
         ],
     },
+];
+
+const primaryMobileLinks = [
+    { name: 'Dashboard', href: '/dashboard/agent', icon: 'dashboard' },
+    { name: 'Tasks', href: '/dashboard/agent/tasks', icon: 'assignment' },
+    { name: 'Missions', href: '/dashboard/agent/my-missions', icon: 'rocket_launch' },
+    { name: 'Earnings', href: '/dashboard/agent/earnings', icon: 'payments' },
 ];
 
 function getName(user: ReturnType<typeof useAuthStore.getState>['user']) {
@@ -42,7 +50,7 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
     const router = useRouter();
     const { user } = useAuthStore();
     const { logout, isLoggingOut } = useAuth();
-    const [menuOpen, setMenuOpen] = useState(false);
+    const [moreOpen, setMoreOpen] = useState(false);
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [taskSearch, setTaskSearch] = useState('');
     const name = getName(user);
@@ -54,14 +62,18 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
         event.preventDefault();
         const query = taskSearch.trim();
         router.push(query ? `/dashboard/agent/tasks?search=${encodeURIComponent(query)}` : '/dashboard/agent/tasks');
-        setMenuOpen(false);
     };
 
     const isActive = (href: string) => href === '/dashboard/agent'
         ? pathname === href
         : pathname === href || pathname.startsWith(`${href}/`) || (href === '/learning' && pathname === '/learning');
 
-    const navigationGroups = (onNavigate?: () => void) => navigation.map((group) => (
+    const moreNavigation = navigation.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => !primaryMobileLinks.some((primary) => primary.href === item.href)),
+    })).filter((group) => group.items.length > 0);
+
+    const navigationGroups = (groups = navigation, onNavigate?: () => void) => groups.map((group) => (
         <section key={group.title} className="mb-6">
             <h2 className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.title}</h2>
             <div className="space-y-1">
@@ -115,9 +127,6 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
             <div className="min-w-0 flex-1">
                 <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
                     <div className="flex min-h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:min-h-[68px] lg:px-8">
-                        <button type="button" aria-label="Open navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)} className="flex size-9 shrink-0 items-center justify-center border-0 bg-transparent p-0 text-slate-600 hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 lg:hidden">
-                            <span className="material-symbols-outlined text-[18px]">menu</span>
-                        </button>
                         <BrandLogo size="sm" iconClassName="size-5" label="247GBS Affiliate" labelClassName="text-[11px]" className="gap-1.5 md:hidden" />
                         <div className="hidden min-w-0 flex-1 md:block">
                             <h1 className="text-[15px] font-semibold text-slate-950">{title}</h1>
@@ -147,25 +156,46 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
                     </div>
                 </header>
 
-                <main className="min-h-[calc(100vh-56px)] px-3 py-3 pb-8 sm:px-6 sm:py-7 lg:min-h-[calc(100vh-68px)] lg:px-8">
+                <main className={pathname === '/dashboard/agent/messages'
+                    ? 'h-[calc(100dvh-120px)] min-h-0 overflow-hidden p-0 lg:h-[calc(100dvh-68px)]'
+                    : pathname.startsWith('/dashboard/agent/assessment/')
+                    ? 'min-h-[calc(100vh-56px)] px-3 py-1 pb-20 sm:px-6 sm:py-5 lg:min-h-[calc(100vh-68px)] lg:px-8 lg:pb-8'
+                    : 'min-h-[calc(100vh-56px)] px-3 py-3 pb-24 sm:px-6 sm:py-7 lg:min-h-[calc(100vh-68px)] lg:px-8 lg:pb-8'}>
                     {children}
                 </main>
             </div>
 
-            {menuOpen && <div className="fixed inset-0 z-50 lg:hidden">
-                <button type="button" aria-label="Close navigation" className="absolute inset-0 bg-slate-950/35" onClick={() => setMenuOpen(false)} />
-                <aside className="relative flex h-full w-[min(82vw,300px)] flex-col bg-white shadow-xl">
-                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
-                        <Link href="/dashboard/agent" onClick={() => setMenuOpen(false)}><BrandLogo size="sm" label="247GBS Affiliate" labelClassName="text-sm" /></Link>
-                        <button type="button" aria-label="Close navigation" onClick={() => setMenuOpen(false)} className="flex size-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"><span className="material-symbols-outlined">close</span></button>
+            <nav aria-label="Affiliate mobile navigation" className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_18px_rgba(15,23,42,0.06)] backdrop-blur lg:hidden">
+                <div className="mx-auto grid h-16 max-w-xl grid-cols-5">
+                    {primaryMobileLinks.map((item) => {
+                        const active = isActive(item.href);
+                        return (
+                            <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={`flex min-w-0 flex-col items-center justify-center gap-0.5 text-[10px] font-medium ${active ? 'text-blue-700' : 'text-slate-500'}`}>
+                                <span className={`material-symbols-outlined text-[21px] ${active ? 'font-semibold' : ''}`}>{item.icon}</span>
+                                <span className="truncate">{item.name}</span>
+                            </Link>
+                        );
+                    })}
+                    <button type="button" aria-haspopup="dialog" aria-expanded={moreOpen} onClick={() => setMoreOpen(true)} className={`flex min-w-0 flex-col items-center justify-center gap-0.5 text-[10px] font-medium ${moreOpen || !primaryMobileLinks.some((item) => isActive(item.href)) ? 'text-blue-700' : 'text-slate-500'}`}>
+                        <span className="material-symbols-outlined text-[21px]">more_horiz</span>
+                        <span>More</span>
+                    </button>
+                </div>
+            </nav>
+
+            {moreOpen && <div className="fixed inset-0 z-50 lg:hidden">
+                <button type="button" aria-label="Close more navigation" className="absolute inset-0 bg-slate-950/40" onClick={() => setMoreOpen(false)} />
+                <section role="dialog" aria-modal="true" aria-labelledby="mobile-more-title" className="absolute inset-x-0 bottom-0 flex max-h-[82dvh] flex-col rounded-t-2xl border border-slate-200 bg-white shadow-2xl">
+                    <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-slate-300" aria-hidden="true" />
+                    <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+                        <h2 id="mobile-more-title" className="text-sm font-semibold text-slate-900">More</h2>
+                        <button type="button" aria-label="Close more navigation" onClick={() => setMoreOpen(false)} className="flex size-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"><span className="material-symbols-outlined">close</span></button>
                     </div>
-                    <nav aria-label="Affiliate navigation" className="flex-1 overflow-y-auto px-3 py-5">{navigationGroups(() => setMenuOpen(false))}</nav>
-                    <div className="border-t border-slate-200 p-4">
-                        <p className="truncate text-xs font-semibold text-slate-900">{name}</p>
-                        <p className="mt-0.5 text-[11px] text-slate-500">{roleLabel}</p>
-                        <button type="button" disabled={isLoggingOut} onClick={() => void logout()} className="mt-3 text-xs font-semibold text-red-700">{isLoggingOut ? 'Signing out…' : 'Sign out'}</button>
+                    <nav aria-label="More affiliate pages" className="min-h-0 flex-1 overflow-y-auto px-3 py-4">{navigationGroups(moreNavigation, () => setMoreOpen(false))}</nav>
+                    <div className="border-t border-slate-100 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                        <button type="button" onClick={() => setMoreOpen(false)} className="w-full rounded-md border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Close</button>
                     </div>
-                </aside>
+                </section>
             </div>}
         </div>
     );

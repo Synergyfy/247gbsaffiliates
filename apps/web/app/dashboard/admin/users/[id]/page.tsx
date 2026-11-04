@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useAdminAffiliate } from '@/hooks/useAdminUsers';
 import apiClient from '@/lib/apiClient';
+import { getVisibleSubmissionEntries } from '@/lib/profile-submission';
 
 const display = (value: unknown) => {
     if (value == null || value === '') return 'Not provided';
@@ -33,6 +34,7 @@ export default function AdminAffiliateProfilePage() {
     const attempts = affiliate.assessmentAttempts || [];
     const profile = affiliate.profile || {};
     const submission = profile.verificationSubmission && typeof profile.verificationSubmission === 'object' ? profile.verificationSubmission as Record<string, unknown> : {};
+    const visibleSubmission = getVisibleSubmissionEntries(submission);
 
     return (
         <div className="mx-auto max-w-5xl">
@@ -64,12 +66,9 @@ export default function AdminAffiliateProfilePage() {
                             'Sub-category': profile.subCategoryId,
                             'Hourly rate': profile.hourlyRate,
                             Currency: profile.currency,
-                            Timezone: profile.timezone,
-                            Languages: profile.languages,
-                            Portfolio: profile.portfolioUrl,
                         }).map(([key, value]) => <div key={key}><dt className="text-[10px] font-semibold uppercase text-slate-500">{key}</dt><dd className="mt-0.5 break-words text-sm text-slate-800">{display(value)}</dd></div>)}
                     </dl>
-                    {Object.keys(submission).length > 0 && <div className="mt-4 border-t border-slate-100 pt-3"><h3 className="text-xs font-bold text-slate-800">Submitted verification information</h3><dl className="mt-2 grid gap-2 sm:grid-cols-2">{Object.entries(submission).map(([key, value]) => <div key={key}><dt className="text-[10px] font-semibold uppercase text-slate-500">{key.replace(/([A-Z])/g, ' $1')}</dt><dd className="break-words text-xs text-slate-800">{display(value)}</dd></div>)}</dl></div>}
+                    {visibleSubmission.length > 0 && <div className="mt-4 border-t border-slate-100 pt-3"><h3 className="text-xs font-bold text-slate-800">Submitted verification information</h3><dl className="mt-2 grid gap-2 sm:grid-cols-2">{visibleSubmission.map(([key, value]) => <div key={key}><dt className="text-[10px] font-semibold uppercase text-slate-500">{key.replace(/([A-Z])/g, ' $1')}</dt><dd className="break-words text-xs text-slate-800">{display(value)}</dd></div>)}</dl></div>}
                     <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
                         <span className="text-xs text-slate-600">Identity: {display(profile.verificationDocumentName)}</span>
                         {Boolean(profile.verificationDocumentMimeType) && <button onClick={() => void openIdentityDocument()} className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">View identity document</button>}

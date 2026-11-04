@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, Request, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { UserRole } from './entities/user.entity';
@@ -12,6 +12,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get('postal-code-lookup')
+  @ApiOperation({ summary: 'Resolve a UK postal code using the CHS Nominatim lookup approach' })
+  @ApiResponse({ status: 200, description: 'Resolved location or found=false when no match exists' })
+  async lookupPostalCode(@Query('postcode') postcode: string) {
+    return this.usersService.lookupPostalCode(postcode || '');
+  }
 
   @Get('agents')
   @UseGuards(RolesGuard)

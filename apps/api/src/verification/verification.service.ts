@@ -44,6 +44,7 @@ export class VerificationService {
 
     const allowedFields = [
       'hourlyRate', 'bio', 'country', 'timezone', 'languages', 'portfolioUrl',
+      'phone', 'postalCode', 'city', 'region',
       'licenseNumber', 'yearsExperience', 'company', 'expertise', 'linkedinUrl',
     ];
     const cleanSubmission: Record<string, unknown> = {};
@@ -55,11 +56,23 @@ export class VerificationService {
       }
     }
 
+    if (typeof cleanSubmission.phone !== 'string' || !cleanSubmission.phone) {
+      throw new BadRequestException('A phone number is required to submit your profile.');
+    }
+    if (typeof cleanSubmission.postalCode !== 'string' || !cleanSubmission.postalCode) {
+      throw new BadRequestException('A postal code is required to submit your profile.');
+    }
+
     if (Object.keys(cleanSubmission).length === 0) {
       throw new BadRequestException('Submit your professional profile information before requesting verification.');
     }
 
-    user.verificationSubmission = cleanSubmission;
+    // Keep legacy profile fields in JSONB when users resubmit after those fields
+    // have been removed from onboarding; do not discard historical values.
+    user.verificationSubmission = {
+      ...(user.verificationSubmission || {}),
+      ...cleanSubmission,
+    };
     user.verificationDocument = document.buffer;
     user.verificationDocumentName = document.originalname.replace(/[\\/\r\n\0]/g, '_').slice(0, 180);
     user.verificationDocumentMimeType = document.mimetype;

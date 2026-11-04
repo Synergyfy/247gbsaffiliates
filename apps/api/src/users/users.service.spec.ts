@@ -1,4 +1,5 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
+import axios from 'axios';
 import { UsersService } from './users.service';
 import { User, UserRole, VerificationStatus } from './entities/user.entity';
 
@@ -61,5 +62,42 @@ describe('UsersService onboarding verification gate', () => {
 
     expect(result.isOnboarded).toBe(true);
     expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({ isOnboarded: true }));
+  });
+});
+
+describe('UsersService postal-code lookup', () => {
+  const repository = { findOne: jest.fn() };
+  const service = new UsersService(repository as never);
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('uses the CHS Nominatim UK lookup and returns available location fields', async () => {
+    const get = jest.spyOn(axios, 'get').mockResolvedValue({ data: [{
+      address: { postcode: 'SW1A 1AA', city: 'London', state: 'England', country: 'United Kingdom' },
+      display_name: 'London, England, United Kingdom',
+    }] } as never);
+
+    await expect(service.lookupPostalCode('sw1a 1aa')).resolves.toEqual({
+      found: true,
+      postalCode: 'SW1A 1AA',
+      city: 'London',
+      region: 'England',
+      country: 'United Kingdom',
+      displayName: 'London, England, United Kingdom',
+    });
+    expect(get).toHaveBeenCalledWith('https://nominatim.openstreetmap.org/search', expect.objectContaining({
+      params: expect.objectContaining({ postalcode: 'SW1A 1AA', country: 'United Kingdom' }),
+    }));
+  });
+
+  it('returns found=false for an unsupported postal code', async () => {
+    jest.spyOn(axios, 'get').mockResolvedValue({ data: [] } as never);
+    await expect(service.lookupPostalCode('ZZ99 9ZZ')).resolves.toEqual({ found: false, postalCode: 'ZZ99 9ZZ' });
+  });
+
+  it('reports malformed postal-code input and upstream lookup failures distinctly', async () => {
+    await expect(service.lookupPostalCode('x')).rejects.toBeInstanceOf(BadRequestException);
+    jest.spyOn(axios, 'get').mockRejectedValue(new Error('network unavailable'));
+    await expect(service.lookupPostalCode('SW1A 1AA')).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });

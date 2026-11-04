@@ -1,6 +1,7 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import axios from 'axios';
 import { User, UserRole, VerificationStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
@@ -8,6 +9,8 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -70,6 +73,47 @@ export class UsersService {
     await this.usersRepository.save(user);
     await this.checkAndSetOnboarding(user.id);
     return user;
+  }
+
+  async lookupPostalCode(postcode: string) {
+    const normalizedPostcode = String(postcode || '').trim().toUpperCase();
+    if (normalizedPostcode.length < 3) {
+      throw new BadRequestException('Enter a valid postal code.');
+    }
+
+    try {
+      // Match CHS: use Nominatim postal-code search restricted to the UK.
+      const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+        params: {
+          postalcode: normalizedPostcode,
+          country: 'United Kingdom',
+          format: 'json',
+          addressdetails: 1,
+          limit: 1,
+        },
+        headers: { 'User-Agent': '247GBS Affiliates/1.0' },
+        timeout: 8000,
+      });
+      const match = Array.isArray(response.data) ? response.data[0] : null;
+      if (!match) return { found: false, postalCode: normalizedPostcode };
+
+      const address = match.address || {};
+      const city = address.city || address.town || address.village || address.municipality || address.suburb || '';
+      const region = address.state || address.county || address.region || address.admin_county || '';
+      const country = address.country || '';
+
+      return {
+        found: Boolean(city || region || country),
+        postalCode: address.postcode || normalizedPostcode,
+        city,
+        region,
+        country,
+        displayName: match.display_name || '',
+      };
+    } catch (error) {
+      this.logger.warn(`Postal-code lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new ServiceUnavailableException('Postal-code lookup is unavailable right now. Please try again.');
+    }
   }
 
   async completeOnboarding(id: string) {

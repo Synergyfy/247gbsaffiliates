@@ -92,6 +92,7 @@ export function HeroCarousel() {
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.8 }}
+                            className="flex flex-col sm:flex-row gap-4 items-center justify-center"
                         >
                             <Link
                                 href={slides[current].href}
@@ -99,6 +100,13 @@ export function HeroCarousel() {
                             >
                                 {slides[current].cta}
                                 <span className="material-symbols-outlined ml-2">arrow_forward</span>
+                            </Link>
+                            <Link
+                                href="/find-agent"
+                                className="inline-flex items-center px-8 py-4 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-full font-display font-semibold transition-all backdrop-blur-sm"
+                            >
+                                <span className="material-symbols-outlined mr-2">search</span>
+                                Find an Agent
                             </Link>
                         </motion.div>
                     </div>

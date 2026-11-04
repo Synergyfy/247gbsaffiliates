@@ -1,45 +1,46 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { profileSchema, ProfileFormValues } from '@/lib/schemas';
-import { FormInput, FormSelect } from '@/components/ui/FormComponents';
+import { FormInput } from '@/components/ui/FormComponents';
 import { toast } from 'react-toastify';
-import { COUNTRY_OPTIONS, TIMEZONE_OPTIONS, TOP_LANGUAGES } from '@/lib/constants';
 import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 
 const ProfileInfoStep: React.FC = () => {
-    const { role, profileInfo, updateProfileInfo, setStep } = useOnboardingStore();
+    const { role, basicInfo, profileInfo, updateProfileInfo, setStep } = useOnboardingStore();
     const { updateUser } = useAuthStore();
-    const [detectingLocation, setDetectingLocation] = useState(false);
-    const [currency, setCurrency] = useState("$"); // Default currency
     const [identityDocument, setIdentityDocument] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const {
         register,
         handleSubmit,
-        setValue,
-        watch,
+        control,
         formState: { errors },
     } = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
         defaultValues: {
             role: role || 'agent',
-            hourlyRate: profileInfo.hourlyRate || '',
-            bio: profileInfo.bio || '',
-            country: profileInfo.country || '',
-            timezone: profileInfo.timezone || '',
-            languages: profileInfo.languages || '',
-            portfolioUrl: profileInfo.portfolioUrl || '',
-            ...profileInfo,
+            hourlyRate: String(profileInfo.hourlyRate ?? ''),
+            bio: String(profileInfo.bio ?? ''),
+            phone: basicInfo.phone || String(profileInfo.phone ?? ''),
+            postalCode: basicInfo.zipCode || String(profileInfo.postalCode ?? ''),
+            city: basicInfo.city || String(profileInfo.city ?? ''),
+            region: basicInfo.region || String(profileInfo.region ?? ''),
+            country: basicInfo.country || String(profileInfo.country ?? ''),
+            licenseNumber: String(profileInfo.licenseNumber ?? ''),
+            yearsExperience: String(profileInfo.yearsExperience ?? ''),
+            company: String(profileInfo.company ?? ''),
+            expertise: String(profileInfo.expertise ?? ''),
+            linkedinUrl: String(profileInfo.linkedinUrl ?? ''),
         },
     });
 
-    const watchedCountry = watch('country');
+    const watchedCountry = useWatch({ control, name: 'country' });
 
     // Map common countries to currencies (basic mapping)
     const getCurrencyForCountry = (country: string) => {
@@ -54,13 +55,7 @@ const ProfileInfoStep: React.FC = () => {
         };
         return mapping[country] || '$';
     };
-
-    useEffect(() => {
-        if (watchedCountry) {
-            const newCurrency = getCurrencyForCountry(watchedCountry);
-            setCurrency(newCurrency);
-        }
-    }, [watchedCountry]);
+    const currency = watchedCountry ? getCurrencyForCountry(watchedCountry) : '$';
 
     const onSubmit = async (data: ProfileFormValues) => {
         if (!identityDocument) {
@@ -97,40 +92,6 @@ const ProfileInfoStep: React.FC = () => {
 
     const onError = () => {
         toast.error("Please fix the errors before continuing.");
-    };
-
-    const detectLocation = () => {
-        if (!navigator.geolocation) {
-            toast.error("Geolocation is not supported by your browser.");
-            return;
-        }
-
-        setDetectingLocation(true);
-        navigator.geolocation.getCurrentPosition(async (position) => {
-            try {
-                const response = await fetch(
-                    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&localityLanguage=en`
-                );
-                const data = await response.json();
-
-                if (data.countryName) {
-                    // Try to match standard country name to our options if possible
-                    // Ideally we'd map standard names to our values, but for now we'll assumes names match or set directly
-                    // This sets the value in the form
-                    setValue('country', data.countryName, { shouldValidate: true });
-                    toast.success(`Detected Location: ${data.countryName}`);
-                }
-            } catch (error) {
-                console.error("Location error:", error);
-                toast.error("Failed to fetch location details.");
-            } finally {
-                setDetectingLocation(false);
-            }
-        }, (error) => {
-            console.error("Geolocation error:", error);
-            toast.error("Location access denied or unavailable.");
-            setDetectingLocation(false);
-        });
     };
 
     const renderRoleFields = () => {
@@ -202,6 +163,12 @@ const ProfileInfoStep: React.FC = () => {
 
             <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-3.5 md:space-y-6 bg-white p-4 sm:p-6 md:p-10 rounded-2xl md:rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
 
+                <input type="hidden" {...register('phone')} />
+                <input type="hidden" {...register('postalCode')} />
+                <input type="hidden" {...register('city')} />
+                <input type="hidden" {...register('region')} />
+                <input type="hidden" {...register('country')} />
+
                 {/* Role Specific Top Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-2 md:mb-4">
                     {renderRoleFields()}
@@ -224,42 +191,6 @@ const ProfileInfoStep: React.FC = () => {
                             {currency} / hr
                         </div>
                     </div>
-                    <FormSelect
-                        label="Primary Language"
-                        register={register('languages')}
-                        options={TOP_LANGUAGES}
-                        error={errors.languages}
-                        required
-                    />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    <div className="relative">
-                        <FormSelect
-                            label="Country"
-                            register={register('country')}
-                            options={COUNTRY_OPTIONS}
-                            error={errors.country}
-                            required
-                        />
-                        <button
-                            type="button"
-                            onClick={detectLocation}
-                            disabled={detectingLocation}
-                            className="absolute right-0 top-0 text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-wider hover:underline flex items-center gap-1 mt-1"
-                        >
-                            <span className="material-symbols-outlined text-[13px] md:text-[14px]">my_location</span>
-                            {detectingLocation ? 'Detecting...' : 'Use Current Location'}
-                        </button>
-                    </div>
-
-                    <FormSelect
-                        label="Timezone"
-                        register={register('timezone')}
-                        options={TIMEZONE_OPTIONS}
-                        error={errors.timezone}
-                        required
-                    />
                 </div>
 
                 <div className="space-y-1 md:space-y-2">
@@ -283,17 +214,8 @@ const ProfileInfoStep: React.FC = () => {
                     )}
                 </div>
 
-                <FormInput
-                    label="Portfolio/Sample Work URL"
-                    type="url"
-                    register={register('portfolioUrl')}
-                    placeholder="https://portfolio.com"
-                    error={errors.portfolioUrl}
-                    required
-                />
-
                 <div className="space-y-1.5 md:space-y-2">
-                    <label htmlFor="identity-document" className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Identity document</label>
+                    <label htmlFor="identity-document" className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Identity document <span className="text-red-600">*</span></label>
                     <p className="text-[10px] md:text-xs text-amber-700 font-medium mb-1.5 md:mb-2">Required for administrator verification. PDF, JPG, or PNG up to 5 MB.</p>
                     <input
                         id="identity-document"

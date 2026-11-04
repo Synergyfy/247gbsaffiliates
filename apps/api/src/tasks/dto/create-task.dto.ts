@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min, IsArray, IsDateString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, Min, IsArray, IsDateString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { TaskType } from '../entities/task.entity';
 
@@ -12,6 +12,11 @@ export class CreateTaskDto {
   @IsString()
   @IsNotEmpty()
   description: string;
+
+  @ApiProperty({ example: 'https://adsmanager.facebook.com/', required: false, description: 'Where the affiliate should carry out the task' })
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true, require_tld: false })
+  executionUrl?: string;
 
   @ApiProperty({ example: 50.00 })
   @IsNumber()
