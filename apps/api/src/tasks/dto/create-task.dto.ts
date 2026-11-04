@@ -23,6 +23,11 @@ export class CreateTaskDto {
   @Min(5)
   budget: number;
 
+  @ApiProperty({ example: 'GBP', required: false })
+  @IsString()
+  @IsOptional()
+  currency?: string;
+
   @ApiProperty({ enum: TaskType, default: TaskType.ONE_TIME })
   @IsEnum(TaskType)
   @IsOptional()

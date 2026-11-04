@@ -54,6 +54,11 @@ export interface McomCentralUser {
   firstName?: string;
   lastName?: string;
   role?: string;
+  phone?: string | null;
+  postcode?: string | null;
+  city?: string | null;
+  region?: string | null;
+  country?: string | null;
   membershipLevel?: string;
   membershipStatus?: string;
   businessProfile?: McomBusinessProfile | null;
@@ -81,6 +86,11 @@ export interface JitProvisionInput {
   email: string;
   name?: string;
   role?: string;
+  phone?: string | null;
+  postcode?: string | null;
+  city?: string | null;
+  region?: string | null;
+  country?: string | null;
   membership?: { level?: string | null; status?: string | null };
   permissions?: Record<string, boolean>;
 }

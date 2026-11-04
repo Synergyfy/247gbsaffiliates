@@ -165,6 +165,11 @@ export class SsoController {
         email: centralUser.email.toLowerCase(),
         name: fullName || centralUser.email,
         role: normalizedRole,
+        phone: centralUser.phone ?? null,
+        postcode: centralUser.postcode ?? null,
+        city: centralUser.city ?? null,
+        region: centralUser.region ?? null,
+        country: centralUser.country ?? null,
         membership: {
           level:
             centralUser.membershipLevel ??
@@ -255,6 +260,11 @@ export class SsoController {
         email: centralUser.email.toLowerCase(),
         name: this.mcomService.resolveDisplayName(centralUser),
         role: centralUser.role,
+        phone: centralUser.phone ?? null,
+        postcode: centralUser.postcode ?? null,
+        city: centralUser.city ?? null,
+        region: centralUser.region ?? null,
+        country: centralUser.country ?? null,
         membership: {
           level: centralUser.membershipLevel ?? null,
           status: centralUser.membershipStatus ?? null,
@@ -301,6 +311,11 @@ export class SsoController {
             email: centralUser.email.toLowerCase(),
             name: this.mcomService.resolveDisplayName(centralUser),
             role: centralUser.role,
+            phone: centralUser.phone ?? null,
+            postcode: centralUser.postcode ?? null,
+            city: centralUser.city ?? null,
+            region: centralUser.region ?? null,
+            country: centralUser.country ?? null,
             membership: {
               level: centralUser.membershipLevel ?? null,
               status: centralUser.membershipStatus ?? null,

@@ -4,7 +4,7 @@ import { Repository, Like, In } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
-import { Task, TaskStatus } from './entities/task.entity';
+import { Task, TaskStatus, TaskType, OriginSystem } from './entities/task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { CreateTaskFromCentralDto } from './dto/create-task-from-central.dto';
 import { FindTasksQueryDto } from './dto/find-tasks.dto';
@@ -30,12 +30,47 @@ export class TasksService {
   }
 
   async create(userId: string, createTaskDto: CreateTaskDto) {
-    await this.assertVerifiedAffiliate(userId);
+    const creator = await this.usersService.findOne(userId);
+    if (creator.role !== UserRole.ADMIN) {
+      await this.assertQualifiedAffiliate(userId);
+    }
     const task = this.tasksRepo.create({
       ...createTaskDto,
       clientId: userId,
     });
     return this.tasksRepo.save(task);
+  }
+
+  /**
+   * Public enterprise request from the marketplace. Creates real, routable
+   * work: assigned straight to the chosen affiliate when they still exist,
+   * otherwise left in the open pool.
+   */
+  async createWorkRequest(dto: {
+    title: string;
+    description: string;
+    budget: number;
+    currency?: string;
+    assigneeEmail?: string;
+  }) {
+    const email = dto.assigneeEmail?.trim().toLowerCase();
+    const assignee = email ? await this.usersService.findByEmail(email) : null;
+
+    const request = this.tasksRepo.create({
+      title: dto.title,
+      description: dto.description,
+      budget: dto.budget,
+      currency: dto.currency || 'GBP',
+      type: TaskType.ONE_TIME,
+      taskType: 'WORK_REQUEST',
+      originSystem: OriginSystem.INTERNAL,
+      status: assignee ? TaskStatus.ASSIGNED : TaskStatus.OPEN,
+      assignedAgent: assignee ?? undefined,
+      assignedAgentId: assignee?.id,
+      assigneeEmail: email || null,
+    } as never);
+
+    return this.tasksRepo.save(request as unknown as Task);
   }
 
   /**
@@ -190,13 +225,23 @@ export class TasksService {
 
   async respondToTask(id: string, userId: string, response: 'accept' | 'decline') {
     const task = await this.findOne(id);
-    await this.assertQualifiedAffiliate(userId);
+    const me = await this.assertQualifiedAffiliate(userId);
 
-    if (task.assignedAgentId !== userId) {
+    const isAssignee =
+      task.assignedAgentId === userId ||
+      (task.assigneeEmail && me?.email && task.assigneeEmail === me.email.toLowerCase());
+    if (!isAssignee) {
       throw new ForbiddenException('You are not assigned to this task');
     }
     if (task.status !== TaskStatus.ASSIGNED) {
       throw new BadRequestException('Task is not in ASSIGNED state');
+    }
+
+    // Central may have delegated before this affiliate completed their local
+    // SSO signup; bind the local user id now that they are known.
+    if (!task.assignedAgentId) {
+      task.assignedAgent = me;
+      task.assignedAgentId = userId;
     }
 
     if (response === 'accept') {
@@ -249,12 +294,20 @@ export class TasksService {
   /** Affiliate confirms it has seen the admin's review notes and is resubmitting. */
   async acknowledgeReview(id: string, userId: string) {
     const task = await this.findOne(id);
-    await this.assertQualifiedAffiliate(userId);
-    if (task.assignedAgentId !== userId) {
+    const me = await this.assertQualifiedAffiliate(userId);
+    const isAssignee =
+      task.assignedAgentId === userId ||
+      (task.assigneeEmail && me?.email && task.assigneeEmail === me.email.toLowerCase());
+    if (!isAssignee) {
       throw new ForbiddenException('You are not assigned to this task');
     }
     if (task.status !== TaskStatus.REVISION_REQUESTED) {
       throw new BadRequestException('Task has no pending review to acknowledge');
+    }
+
+    if (!task.assignedAgentId) {
+      task.assignedAgent = me;
+      task.assignedAgentId = userId;
     }
 
     const history = [...(task.reviewHistory ?? [])];
@@ -340,12 +393,29 @@ export class TasksService {
   private async assertQualifiedAffiliate(userId: string) {
     const user = await this.usersService.findOne(userId);
     if (user.role === UserRole.ADMIN) return user;
-    if (!AFFILIATE_ROLES.includes(user.role)
-      || user.verificationStatus !== VerificationStatus.VERIFIED
-      || !user.isOnboarded
-      || !user.isQuizPassed
-      || !user.skills?.length) {
-      throw new ForbiddenException('Administrator verification, onboarding, assessment, and skill requirements must be complete before affiliate task access.');
+    if (!AFFILIATE_ROLES.includes(user.role)) {
+      throw new ForbiddenException('Only affiliate accounts can access delegated work.');
+    }
+
+    // Agents execute marketplace work and must pass the full qualification
+    // gate. Account managers and consultants are trusted relationship roles:
+    // they can act on work delegated directly to them once onboarding is done.
+    if (user.role === UserRole.AGENT) {
+      if (
+        user.verificationStatus !== VerificationStatus.VERIFIED ||
+        !user.isOnboarded ||
+        !user.isQuizPassed ||
+        !user.skills?.length
+      ) {
+        throw new ForbiddenException(
+          'Administrator verification, onboarding, assessment, and skill requirements must be complete before affiliate task access.',
+        );
+      }
+      return user;
+    }
+
+    if (!user.isOnboarded) {
+      throw new ForbiddenException('Complete onboarding before accessing delegated work.');
     }
     return user;
   }

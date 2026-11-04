@@ -1,9 +1,25 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { CreateCampaignModal } from '@/components/dashboard/CreateCampaignModal';
 import { toast } from 'react-toastify';
+
+const progressForStatus = (status: string) => {
+    switch (status) {
+        case 'open': return 10;
+        case 'assigned': return 25;
+        case 'accepted': return 50;
+        case 'submitted': return 75;
+        case 'revision_requested': return 65;
+        case 'approved':
+        case 'completed': return 100;
+        case 'cancelled':
+        case 'declined': return 0;
+        default: return 25;
+    }
+};
 
 export default function CampaignsPage() {
     const { tasks, isLoading, createTask, isCreating } = useTasks();
@@ -13,6 +29,11 @@ export default function CampaignsPage() {
         const catName = typeof t.category === 'string' ? t.category : t.category?.name;
         return t.type?.toLowerCase() === 'campaign' || catName?.toLowerCase() === 'campaign';
     });
+
+    const totalBudget = campaigns.reduce((sum, campaign) => sum + Number(campaign.budget || 0), 0);
+    const activeCampaigns = campaigns.filter((campaign) => !['completed', 'approved', 'cancelled', 'declined'].includes(campaign.status)).length;
+    const completedCampaigns = campaigns.filter((campaign) => ['completed', 'approved'].includes(campaign.status)).length;
+    const completionRate = campaigns.length ? Math.round((completedCampaigns / campaigns.length) * 100) : 0;
 
     const handleCreateCampaign = async (values: any) => {
         try {
@@ -51,17 +72,17 @@ export default function CampaignsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
                 <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all hover:shadow-lg group">
                     <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-4 italic">Active Operations</p>
-                    <p className="text-5xl font-black text-text-main italic tracking-tighter group-hover:text-primary transition-colors">{campaigns.length}</p>
+                    <p className="text-5xl font-black text-text-main italic tracking-tighter group-hover:text-primary transition-colors">{activeCampaigns}</p>
                 </div>
                 <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all hover:shadow-lg group">
-                    <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-4 italic">Platform Reach</p>
-                    <p className="text-5xl font-black text-text-main italic tracking-tighter group-hover:text-primary transition-colors">1.4M</p>
+                    <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-4 italic">Campaign Budget</p>
+                    <p className="text-5xl font-black text-text-main italic tracking-tighter group-hover:text-primary transition-colors">£{totalBudget.toLocaleString()}</p>
                 </div>
                 <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all hover:shadow-lg group">
-                    <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-4 italic">Conversion Index</p>
+                    <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-4 italic">Completion Rate</p>
                     <div className="flex items-end gap-3">
-                        <p className="text-5xl font-black text-text-main italic tracking-tighter group-hover:text-primary transition-colors">4.8</p>
-                        <span className="text-xs font-black text-green-500 mb-2 uppercase tracking-widest italic">+0.2</span>
+                        <p className="text-5xl font-black text-text-main italic tracking-tighter group-hover:text-primary transition-colors">{completionRate}%</p>
+                        <span className="text-xs font-black text-slate-500 mb-2 uppercase tracking-widest italic">{completedCampaigns}/{campaigns.length}</span>
                     </div>
                 </div>
             </div>
@@ -96,15 +117,15 @@ export default function CampaignsPage() {
                                         <td className="px-10 py-6">
                                             <div className="flex flex-col gap-2">
                                                 <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner border border-slate-200/50">
-                                                    <div className="h-full bg-primary shadow-sm" style={{ width: '75%' }}></div>
+                                                    <div className="h-full bg-primary shadow-sm" style={{ width: `${progressForStatus(campaign.status)}%` }}></div>
                                                 </div>
-                                                <p className="text-[9px] text-text-secondary font-black uppercase tracking-widest italic opacity-60">75% Objective Completion</p>
+                                                <p className="text-[9px] text-text-secondary font-black uppercase tracking-widest italic opacity-60">{progressForStatus(campaign.status)}% status progress</p>
                                             </div>
                                         </td>
                                         <td className="px-10 py-6 text-right">
-                                            <button className="text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5 px-6 py-2.5 rounded-2xl transition-all border border-primary/10 hover:scale-105 active:scale-95">
-                                                Analyze Data
-                                            </button>
+                                            <Link href={`/dashboard/account-manager/tasks/${campaign.id}`} className="text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5 px-6 py-2.5 rounded-2xl transition-all border border-primary/10 hover:scale-105 active:scale-95 inline-block">
+                                                Open task
+                                            </Link>
                                         </td>
                                     </tr>
                                 ))

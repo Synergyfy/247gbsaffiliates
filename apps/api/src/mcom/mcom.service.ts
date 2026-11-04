@@ -285,6 +285,11 @@ export class McomService {
       await this.usersService.update(existing.id, {
         mcomUserId: input.sub,
         ...(normalizedRole && { role: normalizedRole }),
+        ...(input.phone && { phone: input.phone }),
+        ...(input.postcode && { postcode: input.postcode }),
+        ...(input.city && { city: input.city }),
+        ...(input.region && { region: input.region }),
+        ...(input.country && { country: input.country }),
         ...(input.membership && {
           mcomMembershipLevel: input.membership.level ?? null,
           mcomMembershipStatus: input.membership.status ?? null,
@@ -306,6 +311,11 @@ export class McomService {
 
     await this.usersService.update(created.id, {
       mcomUserId: input.sub,
+      phone: input.phone ?? null,
+      postcode: input.postcode ?? null,
+      city: input.city ?? null,
+      region: input.region ?? null,
+      country: input.country ?? null,
       mcomMembershipLevel: input.membership?.level ?? null,
       mcomMembershipStatus: input.membership?.status ?? null,
       mcomCanAccessVcard: Boolean(canAccess),

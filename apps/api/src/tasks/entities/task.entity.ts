@@ -16,6 +16,7 @@ export enum TaskStatus {
 export enum TaskType {
   ONE_TIME = 'one_time',
   RECURRING = 'recurring',
+  CAMPAIGN = 'campaign',
 }
 
 export enum OriginSystem {

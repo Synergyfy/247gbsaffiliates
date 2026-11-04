@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { useAuthStore } from '@/store/useAuthStore';
 import { FormEvent, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 const formatDate = (value?: string | null) => {
     if (!value) return null;
@@ -24,7 +24,7 @@ const statusStyles: Record<string, string> = {
     cancelled: 'bg-red-50 text-red-700 border-red-200',
 };
 
-function TaskCard({ task }: { task: Task }) {
+function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
     const assignedDate = formatDate(task.createdAt);
     const dueDate = formatDate(task.dueDate);
     const isRevision = task.status === 'revision_requested';
@@ -73,7 +73,7 @@ function TaskCard({ task }: { task: Task }) {
                             ? `${task.requiredSkills.length} listed requirement${task.requiredSkills.length === 1 ? '' : 's'}`
                             : 'Review the task instructions for requirements'}
                 </span>
-                <Link href={`/dashboard/agent/tasks/${task.id}`} className="inline-flex min-h-10 items-center gap-1 rounded-lg px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+                <Link href={`${basePath}/tasks/${task.id}`} className="inline-flex min-h-10 items-center gap-1 rounded-lg px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50">
                     {isRevision ? 'Review & resubmit' : 'Open task'} <span className="material-symbols-outlined text-base">arrow_forward</span>
                 </Link>
             </div>
@@ -84,6 +84,8 @@ function TaskCard({ task }: { task: Task }) {
 function AgentTasksContent() {
     const { user } = useAuthStore();
     const router = useRouter();
+    const pathname = usePathname();
+    const basePath = pathname.split('/').slice(0, 3).join('/');
     const searchParams = useSearchParams();
     const search = searchParams.get('search') || '';
     const { tasks, isLoading, isError, error, refetch } = useTasks({
@@ -112,10 +114,12 @@ function AgentTasksContent() {
                     <h1 className="mt-1 text-2xl font-bold text-slate-950">Assigned Tasks</h1>
                     <p className="mt-1 max-w-2xl text-sm text-slate-600">Tasks assigned to you by Central Hub businesses or an administrator, with their current status, deadlines and review feedback.</p>
                 </div>
-                <Link href="/dashboard/agent/my-missions" className="text-sm font-semibold text-blue-700 hover:underline">View my missions</Link>
+                {basePath.endsWith('/agent') && (
+                    <Link href={`${basePath}/my-missions`} className="text-sm font-semibold text-blue-700 hover:underline">View my missions</Link>
+                )}
             </header>
 
-            <form onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const query = String(new FormData(event.currentTarget).get('search') || '').trim(); router.push(query ? `/dashboard/agent/tasks?search=${encodeURIComponent(query)}` : '/dashboard/agent/tasks'); }} className="mb-4 flex items-center gap-2 border border-slate-200 bg-white px-3">
+            <form onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const query = String(new FormData(event.currentTarget).get('search') || '').trim(); router.push(query ? `${basePath}/tasks?search=${encodeURIComponent(query)}` : `${basePath}/tasks`); }} className="mb-4 flex items-center gap-2 border border-slate-200 bg-white px-3">
                 <span className="material-symbols-outlined text-lg text-slate-400">search</span>
                 <input key={search} name="search" defaultValue={search} aria-label="Search assigned tasks" placeholder="Search assigned task titles" className="h-10 min-w-0 flex-1 text-sm outline-none placeholder:text-slate-400" />
                 <button type="submit" className="text-xs font-semibold text-blue-700">Search</button>
@@ -129,14 +133,14 @@ function AgentTasksContent() {
                 </section>
             ) : tasks?.length ? (
                 <div className="space-y-3">
-                    {tasks.map((task) => <TaskCard key={task.id} task={task} />)}
+                    {tasks.map((task) => <TaskCard key={task.id} task={task} basePath={basePath} />)}
                 </div>
             ) : (
                 <section className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
                     <span className="material-symbols-outlined text-4xl text-slate-300">assignment</span>
                     <h2 className="mt-3 font-semibold text-slate-900">{search.trim() ? 'No matching tasks' : 'No tasks assigned yet'}</h2>
                     <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">{search.trim() ? 'Try a different search term.' : 'Tasks delegated by Central Hub businesses or an administrator will appear here when they’re ready for you.'}</p>
-                    <Link href="/dashboard/agent" className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to dashboard</Link>
+                    <Link href={basePath} className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to dashboard</Link>
                 </section>
             )}
         </div>

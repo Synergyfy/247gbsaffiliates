@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   TaskAttachment,
@@ -104,6 +104,8 @@ function ReviewEntry({ entry, latest }: { entry: TaskReviewEntry; latest?: boole
 
 export default function AgentTaskDetailsPage() {
     const params = useParams<{ id: string }>();
+    const pathname = usePathname();
+    const basePath = pathname.split('/').slice(0, 3).join('/');
     const taskId = params.id;
     const { user } = useAuthStore();
     const { data: task, isLoading, isError, error, refetch } = useTask(taskId, Boolean(user?.id));
@@ -138,7 +140,9 @@ export default function AgentTaskDetailsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [task?.id]);
 
-    const isQualified = user?.verificationStatus === 'verified' && user?.isOnboarded === true;
+    const isQualified = user?.role === 'agent'
+        ? user?.verificationStatus === 'verified' && user?.isOnboarded === true && user?.isQuizPassed === true
+        : user?.isOnboarded === true;
 
     const run = async (action: () => Promise<unknown>, successMessage: string) => {
         setActionMessage('');
@@ -200,7 +204,7 @@ export default function AgentTaskDetailsPage() {
     if (isError || !task) {
         return (
             <div className="mx-auto max-w-3xl px-4 py-8">
-                <Link href="/dashboard/agent/tasks" className="text-sm font-semibold text-blue-700 hover:underline">← Back to tasks</Link>
+                <Link href={`${basePath}/tasks`} className="text-sm font-semibold text-blue-700 hover:underline">← Back to tasks</Link>
                 <section className="mt-5 rounded-xl border border-red-200 bg-red-50 p-5" role="alert">
                     <h1 className="font-semibold text-red-900">Task details couldn’t be loaded</h1>
                     <p className="mt-1 text-sm text-red-800">{getErrorMessage(error)}</p>
@@ -223,7 +227,7 @@ export default function AgentTaskDetailsPage() {
 
     return (
         <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-            <Link href="/dashboard/agent/tasks" className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-blue-700 hover:underline">
+            <Link href={`${basePath}/tasks`} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-blue-700 hover:underline">
                 <span className="material-symbols-outlined text-base">arrow_back</span> Back to tasks
             </Link>
 
@@ -333,7 +337,7 @@ export default function AgentTaskDetailsPage() {
 
                 {!isQualified && (canRespond || canSubmit) && (
                     <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                        Your account needs verified status and completed onboarding before you can accept or submit work. <Link href="/dashboard/agent/assessment" className="font-semibold underline">Review qualification</Link>.
+                        Your account needs completed onboarding before you can accept or submit work. <Link href={user?.role === 'agent' ? `${basePath}/assessment` : basePath} className="font-semibold underline">Review qualification</Link>.
                     </div>
                 )}
                 {actionError && <p className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{actionError}</p>}

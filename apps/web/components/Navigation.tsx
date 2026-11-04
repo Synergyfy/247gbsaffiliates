@@ -43,10 +43,12 @@ export default function Navigation() {
                             <Link
                                 href={
                                     user?.role === 'agent' ||
+                                        user?.role === 'account_manager' ||
                                         user?.role === 'account-manager' ||
-                                        user?.role === 'consultant'
-                                        ? `/dashboard/${user.role}`
-                                        : '/dashboard/client'
+                                        user?.role === 'consultant' ||
+                                        user?.role === 'admin'
+                                        ? `/dashboard/${String(user.role).replace('_', '-')}`
+                                        : '/dashboard'
                                 }
                                 className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100 group"
                             >

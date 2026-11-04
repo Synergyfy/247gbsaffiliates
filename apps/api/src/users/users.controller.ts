@@ -4,6 +4,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nes
 import { UserRole } from './entities/user.entity';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('users')
@@ -12,6 +13,19 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Public()
+  @Get('directory')
+  @ApiOperation({ summary: 'Public affiliate directory of verified members' })
+  @ApiResponse({ status: 200, description: 'Verified agents, account managers and consultants' })
+  async directory(
+    @Query('postcode') postcode?: string,
+    @Query('role') role?: string,
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.usersService.findPublicDirectory({ postcode, role, search, limit: Number(limit) || undefined });
+  }
 
   @Get('postal-code-lookup')
   @ApiOperation({ summary: 'Resolve a UK postal code using the CHS Nominatim lookup approach' })

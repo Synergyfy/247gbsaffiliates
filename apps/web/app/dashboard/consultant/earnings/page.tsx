@@ -60,10 +60,10 @@ export default function ConsultantEarningsPage() {
 
                 <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col justify-center text-center">
                     <div className="size-16 rounded-3xl bg-green-50 flex items-center justify-center text-green-600 mb-6 mx-auto shadow-inner">
-                        <span className="material-symbols-outlined text-3xl">moving</span>
+                        <span className="material-symbols-outlined text-3xl">receipt_long</span>
                     </div>
-                    <h3 className="text-3xl font-black text-text-main mb-2 italic">+14.2%</h3>
-                    <p className="text-text-secondary text-[10px] font-black uppercase tracking-[0.2em] italic">Quarterly Yield Slope</p>
+                    <h3 className="text-3xl font-black text-text-main mb-2 italic">{transactions?.length || 0}</h3>
+                    <p className="text-text-secondary text-[10px] font-black uppercase tracking-[0.2em] italic">Ledger transactions</p>
                 </div>
             </div>
 

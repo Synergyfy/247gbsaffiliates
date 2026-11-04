@@ -70,6 +70,24 @@ export class User {
   @Column({ nullable: true })
   portfolioUrl: string;
 
+  // Contact + territory imported from the Central Hub signup. Central collects
+  // the UK postcode for every affiliate role, so the portal never asks for it
+  // a second time during onboarding.
+  @Column({ nullable: true })
+  phone: string;
+
+  @Column({ nullable: true })
+  postcode: string;
+
+  @Column({ nullable: true })
+  city: string;
+
+  @Column({ nullable: true })
+  region: string;
+
+  @Column({ nullable: true })
+  country: string;
+
   // Hierarchy Context for Assessment
   @Column({ nullable: true })
   sectorId: string;

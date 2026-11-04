@@ -179,25 +179,23 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* Network assurances (no fabricated testimonials) */}
       <section className="px-6 lg:px-40 py-24 bg-white overflow-hidden">
         <div className="max-w-[1240px] mx-auto text-center">
-          <span className="text-primary font-bold tracking-widest uppercase text-sm">Testimonials</span>
-          <h2 className="text-4xl lg:text-5xl font-bold font-display text-text-main mb-16 mt-4">What Elite Talent Says</h2>
+          <span className="text-primary font-bold tracking-widest uppercase text-sm">Network standards</span>
+          <h2 className="text-4xl lg:text-5xl font-bold font-display text-text-main mb-16 mt-4">Built on verified work</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             {[
-              { name: "Sarah Jenkins", role: "Elite Merchant", text: "Mcommall transformed how we handle our logistics and partner matching. The verification process gives us immense confidence.", avatar: "https://i.pravatar.cc/150?u=sarah" },
-              { name: "Marcus Chen", role: "Field Agent", text: "The role-based tools are a game changer. I can manage my entire client portfolio from one dashboard with zero friction.", avatar: "https://i.pravatar.cc/150?u=marcus" },
-              { name: "Elena Rodriguez", role: "Consultant", text: "Data-driven matching actually works. I've been connected with higher quality opportunities than ever before.", avatar: "https://i.pravatar.cc/150?u=elena" }
-            ].map((testimonial, i) => (
-              <div key={i} className="p-10 rounded-[2.5rem] bg-background-light border border-primary/5 text-left flex flex-col gap-6">
-                <p className="text-text-secondary text-lg font-medium">"{testimonial.text}"</p>
-                <div className="flex items-center gap-4 mt-auto">
-                  <img src={testimonial.avatar} alt={testimonial.name} className="size-12 rounded-full object-cover" />
-                  <div>
-                    <p className="text-text-main font-bold">{testimonial.name}</p>
-                    <p className="text-primary text-xs font-bold uppercase tracking-widest">{testimonial.role}</p>
-                  </div>
+              { icon: 'verified_user', title: 'Identity verified', text: 'Every profile is reviewed by an administrator before it appears in the marketplace.' },
+              { icon: 'work', title: 'Real delivered work', text: 'Tasks, submissions, reviews and payouts are recorded against live platform records.' },
+              { icon: 'hub', title: 'Central Hub connected', text: 'Account creation, sign-in and membership data come directly from Central Hub Solutions.' },
+            ].map((item) => (
+              <div key={item.title} className="p-10 rounded-[2.5rem] bg-background-light border border-primary/5 text-left flex flex-col gap-6">
+                <span className="material-symbols-outlined text-4xl text-primary">{item.icon}</span>
+                <p className="text-text-secondary text-lg font-medium">{item.text}</p>
+                <div className="mt-auto">
+                  <p className="text-text-main font-bold">{item.title}</p>
+                  <p className="text-primary text-xs font-bold uppercase tracking-widest">247GBS Affiliate</p>
                 </div>
               </div>
             ))}

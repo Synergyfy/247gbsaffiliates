@@ -10,15 +10,6 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getAffiliateRegisterUrl } from '@/lib/centralHub';
 
-interface PostalLookupResult {
-  found: boolean;
-  postalCode?: string;
-  city?: string;
-  region?: string;
-  country?: string;
-  displayName?: string;
-}
-
 interface AgentRecord {
   id: string;
   firstName?: string;
@@ -40,193 +31,13 @@ interface AgentRecord {
   verificationStatus?: string;
   isPaidVisible?: boolean;
   createdAt?: string;
+  postcode?: string | null;
+  city?: string | null;
+  region?: string | null;
+  country?: string | null;
+  languages?: string[];
 }
 
-const DEMO_POSTAL_CODE = 'SW1A 1AA';
-const DEMO_POSTAL_LOCATION: PostalLookupResult = {
-  found: true,
-  postalCode: DEMO_POSTAL_CODE,
-  city: 'London',
-  region: 'Greater London',
-  country: 'United Kingdom',
-};
-
-// 9 Demo affiliate members representing Agents, Account Managers, and Consultants
-const DEMO_AGENTS_LIST: AgentRecord[] = [
-  {
-    id: 'demo-1',
-    firstName: 'Marcus',
-    lastName: 'Vance',
-    email: 'marcus.vance@247gbs.network',
-    profileImage: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=800&auto=format&fit=crop',
-    subTitle: 'Meta Ads & Growth Lead',
-    locationArea: 'London Central',
-    distanceMiles: '2.4 MILES',
-    skills: ['FACEBOOK ADS', 'FUNNEL ARCHITECTURE', 'PAID ACQUISITION'],
-    bio: 'Specialises in paid social scaling, B2B lead generation funnels, and enterprise customer acquisition workflows.',
-    hourlyRate: 85,
-    currency: 'GBP',
-    timezone: 'Europe/London',
-    role: 'account_manager',
-    isOnboarded: true,
-    isQuizPassed: true,
-    verificationStatus: 'verified',
-  },
-  {
-    id: 'demo-2',
-    firstName: 'Eleanor',
-    lastName: 'Wright',
-    email: 'eleanor.wright@247gbs.network',
-    profileImage: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=800&auto=format&fit=crop',
-    subTitle: 'CRO & Analytics Specialist',
-    locationArea: 'Westminster',
-    distanceMiles: '4.1 MILES',
-    skills: ['GA4 MIGRATION', 'CRO AUDITING', 'TAG MANAGER'],
-    bio: 'Helps SaaS and retail brands optimize landing page conversions, audit GA4 tracking pipelines, and reduce checkout drop-off.',
-    hourlyRate: 95,
-    currency: 'GBP',
-    timezone: 'Europe/London',
-    role: 'consultant',
-    isOnboarded: true,
-    isQuizPassed: true,
-    verificationStatus: 'verified',
-  },
-  {
-    id: 'demo-3',
-    firstName: 'Julian',
-    lastName: 'Reed',
-    email: 'julian.reed@247gbs.network',
-    profileImage: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=800&auto=format&fit=crop',
-    subTitle: 'Sales Operations Specialist',
-    locationArea: 'Camden',
-    distanceMiles: '6.8 MILES',
-    skills: ['B2B LEAD QUAL', 'CRM SETUP', 'OUTREACH OPS'],
-    bio: 'Expert in outbound pipeline setup, CRM data hygiene, and automated lead qualification routing for regional businesses.',
-    hourlyRate: 75,
-    currency: 'GBP',
-    timezone: 'Europe/London',
-    role: 'agent',
-    isOnboarded: true,
-    isQuizPassed: true,
-    verificationStatus: 'verified',
-  },
-  {
-    id: 'demo-4',
-    firstName: 'Sophia',
-    lastName: 'Chen',
-    email: 'sophia.chen@247gbs.network',
-    profileImage: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?q=80&w=800&auto=format&fit=crop',
-    subTitle: 'PPC & Search Scaling Lead',
-    locationArea: 'City of London',
-    distanceMiles: '3.2 MILES',
-    skills: ['GOOGLE SEARCH', 'PERFORMANCE MAX', 'PPC SCALING'],
-    bio: 'Performance marketing manager specialized in high-intent search optimization, e-commerce scale, and automated ROAS protection.',
-    hourlyRate: 90,
-    currency: 'GBP',
-    timezone: 'Europe/London',
-    role: 'account_manager',
-    isOnboarded: true,
-    isQuizPassed: true,
-    verificationStatus: 'verified',
-  },
-  {
-    id: 'demo-5',
-    firstName: 'David',
-    lastName: 'Alvarez',
-    email: 'david.alvarez@247gbs.network',
-    profileImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop',
-    subTitle: 'Institutional Escrow Advisor',
-    locationArea: 'Kensington',
-    distanceMiles: '5.5 MILES',
-    skills: ['AFFILIATE ESCROW', 'CONTRACT SLA', 'GOVERNANCE'],
-    bio: 'Advises enterprise partners on affiliate escrow distribution, territorial compliance, and contractual risk management.',
-    hourlyRate: 110,
-    currency: 'GBP',
-    timezone: 'Europe/London',
-    role: 'consultant',
-    isOnboarded: true,
-    isQuizPassed: true,
-    verificationStatus: 'verified',
-  },
-  {
-    id: 'demo-6',
-    firstName: 'Charlotte',
-    lastName: 'Taylor',
-    email: 'charlotte.taylor@247gbs.network',
-    profileImage: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?q=80&w=800&auto=format&fit=crop',
-    subTitle: 'Lifecycle & CRM Architect',
-    locationArea: 'Southwark',
-    distanceMiles: '7.2 MILES',
-    skills: ['HUBSPOT CRM', 'PIPELINE HYGIENE', 'AUTOMATION'],
-    bio: 'Architects enterprise CRM pipelines with automated qualification triggers and scalable lifecycle nurture campaigns.',
-    hourlyRate: 80,
-    currency: 'GBP',
-    timezone: 'Europe/London',
-    role: 'agent',
-    isOnboarded: true,
-    isQuizPassed: true,
-    verificationStatus: 'verified',
-  },
-  {
-    id: 'demo-7',
-    firstName: 'Liam',
-    lastName: 'O’Connor',
-    email: 'liam.oconnor@247gbs.network',
-    profileImage: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop',
-    subTitle: 'Regional Campaign Lead',
-    locationArea: 'Islington',
-    distanceMiles: '8.0 MILES',
-    skills: ['COLD OUTREACH', 'LINKEDIN PROSPECTING', 'B2B CADENCE'],
-    bio: 'Coordinates hyper-targeted account-based outbound campaigns and executive appointment setting for enterprise partners.',
-    hourlyRate: 70,
-    currency: 'GBP',
-    timezone: 'Europe/London',
-    role: 'account_manager',
-    isOnboarded: true,
-    isQuizPassed: true,
-    verificationStatus: 'verified',
-  },
-  {
-    id: 'demo-8',
-    firstName: 'Hannah',
-    lastName: 'Patel',
-    email: 'hannah.patel@247gbs.network',
-    profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=800&auto=format&fit=crop',
-    subTitle: 'Offer & Conversion Strategist',
-    locationArea: 'Greenwich',
-    distanceMiles: '9.4 MILES',
-    skills: ['CONVERSION COPY', 'LANDING PAGE UX', 'A/B TESTING'],
-    bio: 'Drives high-converting offer restructuring, user-experience audit workflows, and revenue optimization for digital partners.',
-    hourlyRate: 85,
-    currency: 'GBP',
-    timezone: 'Europe/London',
-    role: 'agent',
-    isOnboarded: true,
-    isQuizPassed: true,
-    verificationStatus: 'verified',
-  },
-  {
-    id: 'demo-9',
-    firstName: 'Oliver',
-    lastName: 'Brooks',
-    email: 'oliver.brooks@247gbs.network',
-    profileImage: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=800&auto=format&fit=crop',
-    subTitle: 'First-Party Tracking Lead',
-    locationArea: 'Hammersmith',
-    distanceMiles: '10.2 MILES',
-    skills: ['DATA ATTRIBUTION', 'META CAPI', 'SERVER TRACKING'],
-    bio: 'Specialist in server-side event tracking, First-Party data pipelines, and omnichannel attribution governance.',
-    hourlyRate: 95,
-    currency: 'GBP',
-    timezone: 'Europe/London',
-    role: 'consultant',
-    isOnboarded: true,
-    isQuizPassed: true,
-    verificationStatus: 'verified',
-  },
-];
-
-// 5 Featured Hero Carousel Cards (3 visible at once in looping deck)
 interface HeroCarouselCard {
   id: string;
   name: string;
@@ -239,75 +50,15 @@ interface HeroCarouselCard {
   agent: AgentRecord;
 }
 
-const HERO_CAROUSEL_CARDS: HeroCarouselCard[] = [
-  {
-    id: 'hero-1',
-    name: 'Marcus Vance',
-    role: 'Account Manager',
-    locationArea: 'London Central',
-    distance: '2.4 MILES',
-    quote: 'Specialises in paid social scaling, team coordination, and strategic client management.',
-    image: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=400&auto=format&fit=crop',
-    badge: 'VERIFIED MEMBER',
-    agent: DEMO_AGENTS_LIST[0],
-  },
-  {
-    id: 'hero-2',
-    name: 'Eleanor Wright',
-    role: 'Consultant',
-    locationArea: 'Westminster',
-    distance: '4.1 MILES',
-    quote: 'Helps SaaS and retail brands optimize landing page conversions, audit GA4 pipelines, and reduce checkout drop-off.',
-    image: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=400&auto=format&fit=crop',
-    badge: 'VERIFIED MEMBER',
-    agent: DEMO_AGENTS_LIST[1],
-  },
-  {
-    id: 'hero-3',
-    name: 'Julian Reed',
-    role: 'Agent',
-    locationArea: 'Camden',
-    distance: '6.8 MILES',
-    quote: 'Expert in outbound pipeline setup, CRM data hygiene, and automated lead qualification routing.',
-    image: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=400&auto=format&fit=crop',
-    badge: 'VERIFIED MEMBER',
-    agent: DEMO_AGENTS_LIST[2],
-  },
-  {
-    id: 'hero-4',
-    name: 'Sophia Chen',
-    role: 'Account Manager',
-    locationArea: 'City of London',
-    distance: '3.2 MILES',
-    quote: 'Performance marketing manager specialized in high-intent search optimization, e-commerce scale, and ROAS protection.',
-    image: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?q=80&w=400&auto=format&fit=crop',
-    badge: 'VERIFIED MEMBER',
-    agent: DEMO_AGENTS_LIST[3],
-  },
-  {
-    id: 'hero-5',
-    name: 'David Alvarez',
-    role: 'Consultant',
-    locationArea: 'Kensington',
-    distance: '5.5 MILES',
-    quote: 'Advises enterprise partners on affiliate escrow distribution, territorial compliance, and contractual risk management.',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop',
-    badge: 'VERIFIED MEMBER',
-    agent: DEMO_AGENTS_LIST[4],
-  },
-];
-
 type RoleFilterType = 'all' | 'agent' | 'account_manager' | 'consultant';
 
 export default function FindAgentPage() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user } = useAuthStore();
   const reduceMotion = useReducedMotion();
 
   // Search state
   const [postcode, setPostcode] = useState('');
   const [submittedPostcode, setSubmittedPostcode] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [resolvedLocation, setResolvedLocation] = useState<PostalLookupResult | null>(null);
 
   // Role filtering
   const [roleFilter, setRoleFilter] = useState<RoleFilterType>('all');
@@ -330,11 +81,45 @@ export default function FindAgentPage() {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Hero carousel is driven by the live verified directory.
+  const { data: heroDirectory } = useQuery<{ items: AgentRecord[] }>({
+    queryKey: ['public-directory-featured'],
+    queryFn: async () => (await apiClient.get('/users/directory', { params: { limit: 6 } })).data,
+    staleTime: 60 * 1000,
+  });
+
+  const heroCards = useMemo<HeroCarouselCard[]>(() => {
+    const items = heroDirectory?.items ?? [];
+    return items.map((agent) => {
+      const name =
+        `${agent.firstName || ''} ${agent.lastName || ''}`.trim() ||
+        agent.name ||
+        agent.email ||
+        'Accredited member';
+      const role = (agent.role || 'agent').replaceAll('_', ' ');
+      const location =
+        [agent.city, agent.region].filter(Boolean).join(', ') ||
+        agent.country ||
+        'United Kingdom';
+      return {
+        id: agent.id,
+        name,
+        role: role.replace(/\b\w/g, (character) => character.toUpperCase()),
+        locationArea: location,
+        distance: agent.hourlyRate ? `£${agent.hourlyRate}/HR` : '',
+        quote: agent.bio || `Verified ${role} available for delegated work.`,
+        image: agent.profileImage || '',
+        badge: 'VERIFIED MEMBER',
+        agent,
+      };
+    });
+  }, [heroDirectory]);
+
   // Hero Carousel State
   const [heroIndex, setHeroIndex] = useState(0);
   const [carouselPaused, setCarouselPaused] = useState(false);
   const [carouselAnimating, setCarouselAnimating] = useState(false);
-  const carouselTotalCards = HERO_CAROUSEL_CARDS.length; // 5
+  const carouselTotalCards = heroCards.length;
   const carouselPausedRef = useRef(false);
 
   // Keep ref in sync so the interval closure always reads current value
@@ -344,6 +129,7 @@ export default function FindAgentPage() {
 
   // Auto-advance carousel every 5s — interval never restarts, reads ref instead
   useEffect(() => {
+    if (carouselTotalCards < 2) return;
     const timer = setInterval(() => {
       if (carouselPausedRef.current) return;
       setCarouselAnimating(true);
@@ -353,8 +139,7 @@ export default function FindAgentPage() {
       }, 250);
     }, 5000);
     return () => clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [carouselTotalCards]);
 
   const goToCarouselIndex = (idx: number) => {
     if (idx === heroIndex) return;
@@ -371,19 +156,24 @@ export default function FindAgentPage() {
   const resultsSectionRef = useRef<HTMLDivElement>(null);
   const heroSearchInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch real agents from API
-  const { data: realAgents = [] } = useQuery<AgentRecord[]>({
-    queryKey: ['public-agents-directory'],
+  // Live directory results — the API resolves the postcode and returns only
+  // verified, active affiliates in that territory.
+  const { data: directoryResult, isFetching: isSearching } = useQuery<{ items: AgentRecord[] }>({
+    queryKey: ['public-directory', submittedPostcode, roleFilter],
+    enabled: Boolean(submittedPostcode),
     queryFn: async () => {
-      try {
-        const response = await apiClient.get('/users/agents');
-        return Array.isArray(response.data) ? response.data : [];
-      } catch {
-        return [];
-      }
+      const response = await apiClient.get('/users/directory', {
+        params: {
+          postcode: submittedPostcode,
+          role: roleFilter === 'all' ? undefined : roleFilter,
+          limit: 60,
+        },
+      });
+      return response.data;
     },
-    staleTime: 60 * 1000,
   });
+
+  const displayedAgents = directoryResult?.items ?? [];
 
   // Prefill form if user is logged in
   useEffect(() => {
@@ -400,71 +190,19 @@ export default function FindAgentPage() {
     const clean = raw.trim().toUpperCase().replace(/\s+/g, ' ');
     if (clean.length < 2) return;
 
-    setIsSearching(true);
     setSubmittedPostcode(clean);
+    if (!formPostcode) setFormPostcode(clean);
 
     setTimeout(() => {
       resultsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
-
-    setTimeout(async () => {
-      if (clean === DEMO_POSTAL_CODE) {
-        setResolvedLocation(DEMO_POSTAL_LOCATION);
-        if (!formPostcode) setFormPostcode(DEMO_POSTAL_LOCATION.postalCode || clean);
-        setIsSearching(false);
-        return;
-      }
-
-      try {
-        const res = await apiClient.get<PostalLookupResult>('/users/postal-code-lookup', {
-          params: { postcode: clean },
-        });
-        if (res.data?.found) {
-          setResolvedLocation(res.data);
-          if (!formPostcode) setFormPostcode(res.data.postalCode || clean);
-        } else {
-          setResolvedLocation({ found: false, postalCode: clean });
-        }
-      } catch {
-        setResolvedLocation({ found: false, postalCode: clean });
-      }
-
-      setIsSearching(false);
-    }, 600);
   };
-
-  const isDemoPostcode = useMemo(() => {
-    if (!submittedPostcode) return false;
-    const norm = submittedPostcode.toUpperCase().replace(/\s+/g, ' ');
-    return norm === DEMO_POSTAL_CODE;
-  }, [submittedPostcode]);
-
-  // Displayed agents filtered by Role (All, Agents, Account Managers, Consultants)
-  // ONLY populates when submittedPostcode exists!
-  const displayedAgents = useMemo(() => {
-    if (!submittedPostcode || !isDemoPostcode) return [];
-
-    let list: AgentRecord[] = [...realAgents, ...DEMO_AGENTS_LIST];
-
-    // Apply Role Filter
-    if (roleFilter !== 'all') {
-      list = list.filter((item) => {
-        const r = (item.role || 'agent').toLowerCase().replace('-', '_');
-        if (roleFilter === 'agent') return r === 'agent';
-        if (roleFilter === 'account_manager') return r === 'account_manager';
-        if (roleFilter === 'consultant') return r === 'consultant';
-        return true;
-      });
-    }
-
-    return list;
-  }, [submittedPostcode, isDemoPostcode, realAgents, roleFilter]);
 
   const handleOpenRequestModal = (agent: AgentRecord) => {
     setSelectedAgent(agent);
     setFormSubmitted(false);
     setFormError('');
-    if (!formPostcode) setFormPostcode(submittedPostcode || DEMO_POSTAL_CODE);
+    if (!formPostcode) setFormPostcode(submittedPostcode);
     setShowRequestModal(true);
   };
 
@@ -501,17 +239,16 @@ export default function FindAgentPage() {
         description: `Client: ${formFullName}\nCompany: ${formCompany}\nTelephone: ${formPhone}\nPostcode: ${formPostcode}\nTimeline: ${formTimeline}\nBudget: ${formBudget}\nRequested Affiliate: ${selectedAgent ? getAgentDisplayName(selectedAgent) : 'Auto-allocate'}\n\nProject Scope:\n${formScope}`,
         budget: formBudget.includes('3,000') ? 3000 : 1500,
         currency: 'GBP',
-        type: 'one_time',
+        ...(selectedAgent?.email ? { assigneeEmail: selectedAgent.email } : {}),
       };
 
-      if (isAuthenticated) {
-        await apiClient.post('/tasks', payload).catch(() => {});
-      }
+      await apiClient.post('/tasks/requests', payload);
 
       setFormSubmitted(true);
       setFormSubmitting(false);
-    } catch {
-      setFormSubmitted(true);
+    } catch (error: unknown) {
+      const message = (error as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      setFormError(Array.isArray(message) ? message.join(', ') : message || 'The request could not be submitted. Please try again.');
       setFormSubmitting(false);
     }
   };
@@ -619,7 +356,7 @@ export default function FindAgentPage() {
                         type="text"
                         value={postcode}
                         onChange={(e) => setPostcode(e.target.value.toUpperCase())}
-                        placeholder={`e.g. ${DEMO_POSTAL_CODE}`}
+                        placeholder="e.g. EC1A 1BB"
                         className="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 sm:py-2"
                       />
                     </div>
@@ -638,15 +375,8 @@ export default function FindAgentPage() {
                   </div>
 
                   <div className="flex items-center justify-between text-[10px] text-slate-500 sm:text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => { setPostcode(DEMO_POSTAL_CODE); handleSearch(undefined, DEMO_POSTAL_CODE); }}
-                      className="font-medium text-blue-600 hover:underline flex items-center gap-1"
-                    >
-                      <span className="material-symbols-outlined text-sm">my_location</span>
-                      Use demo ({DEMO_POSTAL_CODE})
-                    </button>
-                    <span className="text-slate-400">Regional Directory</span>
+                    <span className="font-medium">Verified regional directory</span>
+                    <span className="text-slate-400">Live data</span>
                   </div>
                 </form>
 
@@ -662,12 +392,13 @@ export default function FindAgentPage() {
               >
                 <div className="relative h-[340px]">
                   {(() => {
+                    if (!heroCards.length) return null;
                     const total = carouselTotalCards;
                     const leftIdx  = (heroIndex - 1 + total) % total;
                     const rightIdx = (heroIndex + 1) % total;
                     const centerIdx = heroIndex;
                     return [leftIdx, rightIdx, centerIdx].map((idx) => {
-                      const card = HERO_CAROUSEL_CARDS[idx];
+                      const card = heroCards[idx];
                       const isCenter = idx === centerIdx;
                       const isLeft   = idx === leftIdx;
                       let positionCls = '';
@@ -699,7 +430,13 @@ export default function FindAgentPage() {
                             </div>
                             <div className="flex items-center gap-3 mb-2.5">
                               <div className="relative size-10 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
-                                <Image src={card.image} alt={card.name} fill className="object-cover" />
+                                {card.image ? (
+                                  <Image src={card.image} alt={card.name} fill className="object-cover" />
+                                ) : (
+                                  <span className="flex size-full items-center justify-center bg-slate-800 text-[11px] font-bold text-blue-100">
+                                    {card.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
+                                  </span>
+                                )}
                               </div>
                               <div>
                                 <h4 className="text-sm font-bold font-display text-slate-900 leading-tight">{card.name}</h4>
@@ -727,7 +464,7 @@ export default function FindAgentPage() {
                   })()}
                 </div>
                 <div className="flex items-center justify-center gap-2 mt-2">
-                  {HERO_CAROUSEL_CARDS.map((_, i) => (
+                  {heroCards.map((_, i) => (
                     <button
                       key={i}
                       onClick={() => goToCarouselIndex(i)}
@@ -752,15 +489,14 @@ export default function FindAgentPage() {
               <h3 className="text-sm font-bold font-display text-slate-900 mb-1">Resolving Jurisdiction & Affiliates</h3>
               <p className="text-xs text-slate-500 max-w-xs">Scanning for verified affiliates in <strong>{submittedPostcode}</strong>...</p>
             </div>
-          ) : !isDemoPostcode || displayedAgents.length === 0 ? (
+          ) : displayedAgents.length === 0 ? (
             <div className="rounded-lg border border-slate-200 bg-white p-7 text-center max-w-md mx-auto shadow-sm">
               <div className="size-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-2.5 border border-amber-100">
                 <span className="material-symbols-outlined text-xl">domain_disabled</span>
               </div>
               <h3 className="text-base font-bold font-display text-slate-900 mb-1">No Verified Affiliates in This Sector</h3>
               <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                No members found for <strong className="text-slate-800">{submittedPostcode}</strong>. Try our demo postcode{' '}
-                <button type="button" onClick={() => { setPostcode(DEMO_POSTAL_CODE); handleSearch(undefined, DEMO_POSTAL_CODE); }} className="font-bold text-blue-600 underline">{DEMO_POSTAL_CODE}</button>.
+                No verified affiliates found for <strong className="text-slate-800">{submittedPostcode}</strong>. Try a nearby postcode or clear the search.
               </p>
               <button
                 type="button"
@@ -811,10 +547,10 @@ export default function FindAgentPage() {
                   const desktopDetailsId = `${detailsId}-desktop`;
                   const isExpanded = expandedAgentId === agentKey;
                   const roleBadge = getAgentRoleBadge(agent);
-                  const subTitle = agent.subTitle || 'Growth & Operations Lead';
-                  const locationArea = agent.locationArea || (index % 2 === 0 ? 'London Central' : 'Westminster');
-                  const distanceMiles = agent.distanceMiles || `${(2.4 + (index % 5) * 1.8).toFixed(1)} MILES`;
-                  const skills = agent.skills && agent.skills.length > 0 ? agent.skills : ['CAMPAIGN OPS', 'CLIENT MANAGEMENT', 'PAID ACQUISITION'];
+                  const subTitle = agent.hourlyRate ? `£${agent.hourlyRate}/hr` : getAgentRoleBadge(agent);
+                  const locationArea = [agent.city, agent.region].filter(Boolean).join(', ') || agent.country || 'United Kingdom';
+                  const rateLabel = agent.hourlyRate ? `£${agent.hourlyRate}/HR` : '';
+                  const skills = agent.skills && agent.skills.length > 0 ? agent.skills : [];
                   const fullProfile = (
                     <>
                       <div className="relative h-48 w-full overflow-hidden bg-slate-100 sm:h-52">
@@ -830,9 +566,11 @@ export default function FindAgentPage() {
                             <span className="size-1.5 rounded-full bg-emerald-600" />Verified
                           </span>
                         </div>
-                        <div className="absolute bottom-2.5 right-2.5 z-10">
-                          <span className="rounded-sm bg-black/75 px-2 py-0.5 font-mono text-[10px] font-bold text-white">{distanceMiles}</span>
-                        </div>
+                        {rateLabel && (
+                          <div className="absolute bottom-2.5 right-2.5 z-10">
+                            <span className="rounded-sm bg-black/75 px-2 py-0.5 font-mono text-[10px] font-bold text-white">{rateLabel}</span>
+                          </div>
+                        )}
                         <button
                           type="button"
                           aria-label={`Collapse ${displayName} profile`}
@@ -850,10 +588,12 @@ export default function FindAgentPage() {
                           </div>
                           <p className="mb-1 flex items-center gap-0.5 text-[11px] font-medium text-slate-500"><span className="material-symbols-outlined text-[12px] text-slate-400">location_on</span>{locationArea}</p>
                           <p className="mb-1.5 text-[11px] font-semibold text-blue-600">{subTitle}</p>
-                          <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-slate-600">{agent.bio || 'Specialises in performance marketing workflows, strategic client management, and enterprise delivery.'}</p>
-                          <div className="mb-3 flex flex-wrap gap-1">
-                            {skills.slice(0, 3).map((skill, sIdx) => <span key={sIdx} className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-700">{skill}</span>)}
-                          </div>
+                          <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-slate-600">{agent.bio || 'No profile summary has been published yet.'}</p>
+                          {skills.length > 0 && (
+                            <div className="mb-3 flex flex-wrap gap-1">
+                              {skills.slice(0, 3).map((skill, sIdx) => <span key={sIdx} className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-700">{skill}</span>)}
+                            </div>
+                          )}
                         </div>
                         <button onClick={() => handleOpenRequestModal(agent)} className="flex w-full items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold tracking-wider text-white shadow-sm transition-all hover:bg-blue-700">
                           <span>View Profile & Request</span><span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -887,7 +627,7 @@ export default function FindAgentPage() {
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-bold text-slate-900">{displayName}</span><span className="material-symbols-outlined shrink-0 text-xl text-slate-500">expand_more</span></span>
                           <span className="mt-0.5 block truncate text-[10px] font-medium leading-4 text-slate-500">{subTitle} · {roleBadge}</span>
-                          <span className="mt-0.5 block line-clamp-1 text-[11px] leading-4 text-slate-600">{agent.bio || 'Specialises in performance marketing workflows, strategic client management, and enterprise delivery.'}</span>
+                          <span className="mt-0.5 block line-clamp-1 text-[11px] leading-4 text-slate-600">{agent.bio || 'No profile summary has been published yet.'}</span>
                           </span>
                         </motion.button>}
                       </AnimatePresence>
@@ -1024,7 +764,7 @@ export default function FindAgentPage() {
           <div className="space-y-2">
             {[
               { q: 'What is the difference between an Agent, Account Manager, and Consultant?', a: 'Agents handle hands-on tactical tasks like running ad sets and lead generation. Account Managers manage multi-agent teams and client campaign delivery. Consultants advise on commercial escrow, tracking architecture, and overall growth strategy.' },
-              { q: 'How does the postal code search work?', a: 'When you enter your postcode (or our demo code SW1A 1AA), the platform scans regional databases to locate accredited affiliates in that territory with verified capacity.' },
+              { q: 'How does the postal code search work?', a: 'When you enter your postcode, the platform scans its verified affiliate directory to locate accredited members in that territory with available capacity.' },
               { q: 'What happens after I submit a work request?', a: 'Your request is dispatched to the selected affiliate and logged in the 247gbs affiliate administrative queue. The affiliate reviews your scope and contacts you to confirm milestones and activation.' },
               { q: 'Are my payments protected?', a: 'Yes. All enterprise contracts utilize 247gbs affiliate milestone escrow. Funds are never released to the affiliate until you review and approve the agreed deliverable.' },
             ].map((faq, i) => {
@@ -1091,7 +831,7 @@ export default function FindAgentPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold font-display text-slate-900">Contact {getAgentDisplayName(selectedAgent)}</h3>
-                  <p className="text-[11px] text-slate-500">{selectedAgent.locationArea || 'London Central'} • {getAgentRoleBadge(selectedAgent)}</p>
+                  <p className="text-[11px] text-slate-500">{[selectedAgent.city, selectedAgent.region].filter(Boolean).join(', ') || selectedAgent.country || 'United Kingdom'} • {getAgentRoleBadge(selectedAgent)}</p>
                 </div>
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed bg-white p-2 rounded border border-slate-200">
@@ -1138,7 +878,7 @@ export default function FindAgentPage() {
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-700 mb-1">Postcode *</label>
-                      <input type="text" required value={formPostcode} onChange={(e) => setFormPostcode(e.target.value.toUpperCase())} placeholder={DEMO_POSTAL_CODE} className="w-full px-3 py-2 rounded-md border border-slate-300 bg-white text-slate-900 text-xs focus:border-blue-600 outline-none" />
+                      <input type="text" required value={formPostcode} onChange={(e) => setFormPostcode(e.target.value.toUpperCase())} placeholder="e.g. EC1A 1BB" className="w-full px-3 py-2 rounded-md border border-slate-300 bg-white text-slate-900 text-xs focus:border-blue-600 outline-none" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">

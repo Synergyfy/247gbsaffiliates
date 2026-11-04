@@ -20,4 +20,11 @@ export class AccountManagerController {
   async getRevenueDashboard(@Request() req) {
     return this.accountManagerService.getRevenueDashboard(req.user.userId);
   }
+
+  @Get('businesses')
+  @ApiOperation({ summary: 'List businesses assigned to the signed-in account manager' })
+  @ApiResponse({ status: 200, description: 'Assigned businesses from Central Hub' })
+  async getAssignedBusinesses(@Request() req) {
+    return this.accountManagerService.getAssignedBusinesses(req.user.userId);
+  }
 }

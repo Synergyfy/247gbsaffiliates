@@ -27,6 +27,7 @@ function OnboardingFlow() {
         clearQuizAnswers,
         retakeAvailableAt,
         role: onboardingRole,
+        basicInfo,
         updateBasicInfo,
         updateProfileInfo,
         resetOnboarding,
@@ -100,6 +101,14 @@ function OnboardingFlow() {
             syncedOnboardingUser.current = user.id ?? null;
             if (onboardingRole && normalizeRole(onboardingRole) !== normalizeRole(user.role)) {
                 resetOnboarding();
+                // Re-apply the authenticated role and the contact details Central
+                // already captured. Without this, the reset runs after the child
+                // BasicInfoStep hydrates and wipes the imported postcode.
+                setRole(user.role);
+                const centralPatch: Partial<typeof basicInfo> = {};
+                if (user.postcode) centralPatch.zipCode = user.postcode;
+                if (user.phone) centralPatch.phone = user.phone;
+                if (Object.keys(centralPatch).length) updateBasicInfo(centralPatch);
             }
         }
 

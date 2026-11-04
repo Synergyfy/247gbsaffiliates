@@ -1,7 +1,18 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useTasks } from '@/hooks/useTasks';
+
+const monthLabel = (value?: string | null) => {
+    const date = value ? new Date(value) : new Date();
+    return Number.isNaN(date.getTime())
+        ? { month: '—', day: '—' }
+        : {
+            month: date.toLocaleString(undefined, { month: 'short' }).toUpperCase(),
+            day: String(date.getDate()),
+        };
+};
 
 export default function SessionsPage() {
     const { tasks, isLoading } = useTasks();
@@ -22,10 +33,10 @@ export default function SessionsPage() {
                     <h1 className="text-3xl font-black text-text-main uppercase tracking-tighter italic">Strategic Sessions</h1>
                     <p className="text-text-secondary text-sm font-medium italic">Manage and execute your elite consulting engagements.</p>
                 </div>
-                <button className="bg-primary text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-primary-hover transition-all shadow-xl shadow-primary/10 flex items-center gap-2">
+                <Link href="/dashboard/consultant/profile" className="bg-primary text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-primary-hover transition-all shadow-xl shadow-primary/10 flex items-center gap-2">
                     <span className="material-symbols-outlined text-lg">calendar_month</span>
-                    Set Tactical Availability
-                </button>
+                    Manage availability
+                </Link>
             </header>
 
             <div className="bg-surface-light rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
@@ -39,35 +50,38 @@ export default function SessionsPage() {
                 </div>
                 <div className="divide-y divide-slate-100">
                     {sessions.length > 0 ? (
-                        sessions.map((session, i) => (
+                        sessions.map((session) => {
+                            const due = monthLabel(session.dueDate);
+                            return (
                             <div key={session.id} className="p-8 flex items-center justify-between hover:bg-white transition-all group border-l-4 border-transparent hover:border-primary">
                                 <div className="flex items-center gap-6">
                                     <div className="size-16 rounded-3xl bg-slate-800 flex flex-col items-center justify-center text-white shadow-inner group-hover:scale-105 transition-transform">
-                                        <span className="text-[10px] font-black uppercase tracking-widest opacity-60">OCT</span>
-                                        <span className="text-2xl font-black italic mt-0.5">{20 + i}</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest opacity-60">{due.month}</span>
+                                        <span className="text-2xl font-black italic mt-0.5">{due.day}</span>
                                     </div>
                                     <div>
                                         <h4 className="font-black text-lg text-text-main uppercase tracking-tighter italic">{session.title}</h4>
-                                        <p className="text-[11px] text-text-secondary font-medium italic mt-1">Strategic topic: <span className="text-text-main font-bold">{(typeof session.category === 'object' ? session.category?.name : session.category) || 'Expert Advisory'}</span> • <span className="text-primary font-black uppercase tracking-widest text-[9px]">{session.priority || 'Critical'}</span></p>
+                                        <p className="text-[11px] text-text-secondary font-medium italic mt-1">Strategic topic: <span className="text-text-main font-bold">{(typeof session.category === 'object' ? session.category?.name : session.category) || session.centralBusinessName || 'Expert Advisory'}</span> • <span className="text-primary font-black uppercase tracking-widest text-[9px]">{session.priority || 'Standard'}</span></p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-6">
                                     <div className="text-right">
                                         <span className="block text-[10px] font-black text-text-main uppercase tracking-widest mb-1 italic">Status Report</span>
                                         <span className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-[0.2em] italic border ${
-                                            session.status === 'in-progress' 
-                                            ? 'bg-green-50 text-green-700 border-green-200' 
+                                            session.status === 'accepted' || session.status === 'completed' || session.status === 'approved'
+                                            ? 'bg-green-50 text-green-700 border-green-200'
                                             : 'bg-amber-50 text-amber-700 border-amber-200'
                                         }`}>
-                                            {session.status}
+                                            {session.status.replaceAll('_', ' ')}
                                         </span>
                                     </div>
-                                    <button className="p-3 text-slate-300 hover:text-primary transition-all hover:bg-slate-50 rounded-2xl">
-                                        <span className="material-symbols-outlined text-2xl">settings_intelligence</span>
-                                    </button>
+                                    <Link href={`/dashboard/consultant/tasks/${session.id}`} className="p-3 text-slate-400 hover:text-primary transition-all hover:bg-slate-50 rounded-2xl">
+                                        <span className="material-symbols-outlined text-2xl">open_in_new</span>
+                                    </Link>
                                 </div>
                             </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <div className="py-24 text-center text-slate-300 font-bold uppercase tracking-[0.3em] text-[10px] italic opacity-50">
                             No upcoming strategic sessions detected.

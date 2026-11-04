@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { BrandLogo } from "../../../components/ui/BrandLogo";
 import { UserMenu } from "@/components/dashboard/UserMenu";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function ConsultantLayout({
     children,
@@ -13,9 +14,19 @@ export default function ConsultantLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const { user } = useAuthStore();
+    const userName = user?.name || "Consultant";
+    const userRole = user?.role ? user.role.replaceAll('_', ' ') : "Consultant";
+    const userInitials = userName
+        .split(/\s+/)
+        .map((part) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || 'C';
 
     const sidebarLinks = [
         { name: "Dashboard", href: "/dashboard/consultant", icon: "dashboard" },
+        { name: "Tasks", href: "/dashboard/consultant/tasks", icon: "assignment" },
         { name: "Sessions", href: "/dashboard/consultant/sessions", icon: "calendar_today" },
         { name: "Messages", href: "/dashboard/consultant/messages", icon: "forum" },
         { name: "Earnings", href: "/dashboard/consultant/earnings", icon: "payments" },
@@ -53,7 +64,7 @@ export default function ConsultantLayout({
                     })}
                 </nav>
                 <div className="p-4 border-t border-slate-100">
-                    <UserMenu name="Sarah Jenkins" role="Senior Consultant" initials="SJ" />
+                    <UserMenu name={userName} role={userRole} initials={userInitials} />
                 </div>
             </aside>
 

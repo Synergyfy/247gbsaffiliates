@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useAuth } from '@/hooks/useAuth';
+import { useWallet } from '@/hooks/useWallet';
 import { useRouter } from 'next/navigation';
 
 interface DashboardLayoutProps {
@@ -16,6 +17,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
     const { user } = useAuthStore();
     const { logout, isLoggingOut } = useAuth();
     const { assessmentSkipped, quizResult, resetOnboarding } = useOnboardingStore();
+    const { wallet } = useWallet();
     const router = useRouter();
 
     const handleLogout = async () => {
@@ -132,7 +134,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role
                         <div className="h-8 w-px bg-slate-100"></div>
                         <div className="flex flex-col text-right">
                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter font-display">Current Balance</span>
-                            <span className="text-sm font-bold text-text-main">£1,240.50</span>
+                            <span className="text-sm font-bold text-text-main">£{Number(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                     </div>
                 </header>

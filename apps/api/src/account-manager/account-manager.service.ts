@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
 import { Task, TaskStatus } from '../tasks/entities/task.entity';
 import { Wallet } from '../wallet/entities/wallet.entity';
 import { Transaction, TransactionType } from '../wallet/entities/transaction.entity';
@@ -8,6 +11,8 @@ import { User, UserRole } from '../users/entities/user.entity';
 
 @Injectable()
 export class AccountManagerService {
+  private readonly logger = new Logger(AccountManagerService.name);
+
   constructor(
     @InjectRepository(Task)
     private tasksRepo: Repository<Task>,
@@ -17,7 +22,34 @@ export class AccountManagerService {
     private transactionRepo: Repository<Transaction>,
     @InjectRepository(User)
     private usersRepo: Repository<User>,
+    private readonly http: HttpService,
+    private readonly config: ConfigService,
   ) {}
+
+  /** Businesses assigned to this account manager in Central Hub. */
+  async getAssignedBusinesses(accountManagerId: string) {
+    const manager = await this.usersRepo.findOne({ where: { id: accountManagerId } });
+    if (!manager?.mcomUserId) return { manager: null, businesses: [], total: 0 };
+
+    const centralUrl =
+      this.config.get<string>('MCOM_CENTRAL_URL') ||
+      'http://localhost:3010/api/v1';
+    const apiKey = this.config.get<string>('INTERNAL_API_KEY');
+
+    try {
+      const response = await firstValueFrom(
+        this.http.get(
+          `${centralUrl.replace(/\/+$/, '')}/affiliate/account-managers/${encodeURIComponent(manager.mcomUserId)}/businesses`,
+          { headers: { 'x-api-key': apiKey }, timeout: 10000 },
+        ),
+      );
+      return response.data?.data ?? response.data ?? { manager: null, businesses: [], total: 0 };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Assigned businesses lookup failed: ${message}`);
+      return { manager: null, businesses: [], total: 0, error: 'Central Hub is unavailable.' };
+    }
+  }
 
   async getRevenueDashboard(accountManagerId: string) {
     const managedAgents = await this.usersRepo.find({

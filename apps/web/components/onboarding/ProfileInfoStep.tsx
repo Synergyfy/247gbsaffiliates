@@ -95,7 +95,8 @@ const ProfileInfoStep: React.FC = () => {
     };
 
     const renderRoleFields = () => {
-        switch (role) {
+        const normalizedRole = (role || '').toLowerCase().replace(/_/g, '-');
+        switch (normalizedRole) {
             case 'agent':
                 return (
                     <>

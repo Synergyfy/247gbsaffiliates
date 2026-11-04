@@ -73,6 +73,22 @@ export class VerificationService {
       ...(user.verificationSubmission || {}),
       ...cleanSubmission,
     };
+
+    // Mirror the public-facing profile fields onto the user row so the
+    // marketplace directory, dashboards and task routing read real data
+    // instead of only the JSONB submission.
+    if (typeof cleanSubmission.bio === 'string') user.bio = cleanSubmission.bio;
+    if (cleanSubmission.hourlyRate !== undefined && cleanSubmission.hourlyRate !== '') {
+      const rate = Number(cleanSubmission.hourlyRate);
+      if (Number.isFinite(rate) && rate >= 0) user.hourlyRate = rate;
+    }
+    if (typeof cleanSubmission.phone === 'string') user.phone = cleanSubmission.phone;
+    if (typeof cleanSubmission.postalCode === 'string') user.postcode = cleanSubmission.postalCode;
+    if (typeof cleanSubmission.city === 'string') user.city = cleanSubmission.city;
+    if (typeof cleanSubmission.region === 'string') user.region = cleanSubmission.region;
+    if (typeof cleanSubmission.country === 'string') user.country = cleanSubmission.country;
+    if (!user.currency) user.currency = 'GBP';
+
     user.verificationDocument = document.buffer;
     user.verificationDocumentName = document.originalname.replace(/[\\/\r\n\0]/g, '_').slice(0, 180);
     user.verificationDocumentMimeType = document.mimetype;
