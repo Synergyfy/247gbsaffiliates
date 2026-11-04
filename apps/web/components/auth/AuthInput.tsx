@@ -7,7 +7,7 @@ export default function AuthInput({ label, icon, ...props }: AuthInputProps) {
     return (
         <div className="space-y-1 md:space-y-2">
             <label className="block text-xs md:text-sm font-bold text-text-main" htmlFor={props.id}>
-                {label}
+                {label}{props.required && <span className="ml-1 text-red-600" aria-hidden="true">*</span>}
             </label>
             <div className="relative group">
                 {icon && (

@@ -5,6 +5,7 @@ export interface Task {
   id: string;
   title: string;
   description: string;
+  executionUrl?: string | null;
   budget: number;
   currency: string;
   status: string;

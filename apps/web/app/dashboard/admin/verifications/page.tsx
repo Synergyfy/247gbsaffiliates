@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
+import { getVisibleSubmissionEntries } from '@/lib/profile-submission';
 
 type VerificationRecord = {
     id: string;
@@ -93,7 +94,7 @@ export default function AdminVerificationsPage() {
                 <div className="space-y-4">
                     {records.map((record) => {
                         const name = `${record.firstName || ''} ${record.lastName || ''}`.trim() || record.email;
-                        const fields = Object.entries(record.verificationSubmission || {});
+                        const fields = getVisibleSubmissionEntries(record.verificationSubmission);
                         return (
                             <article key={record.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
                                 <header className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
@@ -134,7 +135,7 @@ export default function AdminVerificationsPage() {
                                     <input
                                         value={rejectionReasons[record.id] || ''}
                                         onChange={(event) => setRejectionReasons(current => ({ ...current, [record.id]: event.target.value }))}
-                                        placeholder="Reason required if rejecting"
+                                        placeholder="Rejection reason * (required to reject)"
                                         aria-label={`Rejection reason for ${name}`}
                                         className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-xs outline-none focus:border-primary"
                                     />

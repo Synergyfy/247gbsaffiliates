@@ -81,11 +81,12 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
                     />
 
                     <div className="space-y-2">
-                        <label className="text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Mission Briefing (Description)</label>
+                        <label className="text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Mission Briefing (Description) <span className="text-red-600" aria-hidden="true">*</span></label>
                         <textarea 
                             {...register('description')}
                             placeholder="Detailed strategic objectives and deployment parameters..."
                             className={`w-full bg-white border rounded-xl px-5 py-4 text-text-main placeholder-slate-400 outline-none transition-all font-medium min-h-[120px] ${errors.description ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`}
+                            required
                         />
                         {errors.description && <p className="text-xs text-red-500 font-bold ml-1 italic">{errors.description.message}</p>}
                     </div>
@@ -102,6 +103,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
                         <FormSelect 
                             label="Currency"
                             register={register('currency')}
+                            required
                             options={[
                                 { value: 'USD', label: 'USD ($)' },
                                 { value: 'GBP', label: 'GBP (£)' },
@@ -114,6 +116,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
                         <FormSelect 
                             label="Operation Type"
                             register={register('type')}
+                            required
                             options={[
                                 { value: 'campaign', label: 'Strategic Campaign' },
                                 { value: 'one_time', label: 'One-Time Operation' },
@@ -123,6 +126,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
                         <FormSelect 
                             label="Initial Status"
                             register={register('status')}
+                            required
                             options={[
                                 { value: 'active', label: 'Active - Deploy Immediately' },
                                 { value: 'open', label: 'Open - Available for Claim' },

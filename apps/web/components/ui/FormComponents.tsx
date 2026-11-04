@@ -71,6 +71,7 @@ export const FormSelect: React.FC<FormSelectProps> = ({
             </label>
             <div className="relative">
                 <select
+                    required={required}
                     className={`w-full bg-white border rounded-xl px-3.5 py-2.5 md:px-5 md:py-4 text-xs md:text-base text-text-main outline-none transition-all font-medium appearance-none ${error
                             ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
                             : 'border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10'

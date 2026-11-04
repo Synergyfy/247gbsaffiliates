@@ -9,9 +9,6 @@ type ProfileSubmission = {
     bio?: string | null;
     hourlyRate?: string | number | null;
     currency?: string | null;
-    timezone?: string | null;
-    languages?: string[] | string | null;
-    portfolioUrl?: string | null;
 };
 
 type Profile = {
@@ -34,9 +31,6 @@ type Profile = {
     subCategoryId?: string | null;
     hourlyRate?: string | number | null;
     currency?: string | null;
-    timezone?: string | null;
-    languages?: string[] | string | null;
-    portfolioUrl?: string | null;
 };
 
 type Sector = { id: string; name: string; categories?: Category[] };
@@ -122,9 +116,6 @@ export default function AgentProfilePage() {
     const bio = displayValue(profile.bio) || displayValue(submission.bio);
     const hourlyRate = displayValue(profile.hourlyRate) || displayValue(submission.hourlyRate);
     const currency = displayValue(profile.currency) || displayValue(submission.currency);
-    const timezone = displayValue(profile.timezone) || displayValue(submission.timezone);
-    const languages = displayValue(profile.languages) || displayValue(submission.languages);
-    const portfolioUrl = displayValue(profile.portfolioUrl) || displayValue(submission.portfolioUrl);
     const fullName = [profile.firstName, profile.lastName].filter((part) => Boolean(part?.trim())).join(' ').trim() || displayValue(profile.name);
     const nameParts = fullName?.split(/\s+/) || [];
     const initials = nameParts.slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'A';
@@ -149,9 +140,6 @@ export default function AgentProfilePage() {
         { label: 'Category', complete: Boolean(profile.categoryId) },
         { label: 'Sub-category', complete: Boolean(profile.subCategoryId) },
         { label: 'Target hourly rate', complete: Boolean(hourlyRate) },
-        { label: 'Operational timezone', complete: Boolean(timezone) },
-        { label: 'Working languages', complete: Boolean(languages) },
-        { label: 'Portfolio or proof of work', complete: Boolean(portfolioUrl) },
     ];
     const completedCount = completionItems.filter((item) => item.complete).length;
     const completionPercent = Math.round((completedCount / completionItems.length) * 100);
@@ -224,7 +212,7 @@ export default function AgentProfilePage() {
                     <section className="border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="professional-details-title">
                         <div className="mb-2 border-b border-slate-100 pb-3">
                             <h2 id="professional-details-title" className="text-sm font-semibold text-slate-950">Professional Background</h2>
-                            <p className="mt-0.5 text-[11px] text-slate-500">Skills, work preferences and professional links saved to your account.</p>
+                            <p className="mt-0.5 text-[11px] text-slate-500">Skills and professional details saved to your account.</p>
                         </div>
                         {skills.length > 0 && <div className="border-b border-slate-100 py-3">
                             <h3 className="text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-500">Skills</h3>
@@ -236,9 +224,6 @@ export default function AgentProfilePage() {
                             <ProfileField label="Category" value={categoryValue} />
                             <ProfileField label="Sub-category" value={subCategoryValue} />
                             <ProfileField label="Target hourly rate" value={rateValue} />
-                            <ProfileField label="Operational timezone" value={timezone} />
-                            <ProfileField label="Working languages" value={languages} />
-                            <ProfileField label="Portfolio / proof of work" value={portfolioUrl} wide />
                         </dl>
                     </section>
                 </div>

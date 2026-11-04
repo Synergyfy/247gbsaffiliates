@@ -92,7 +92,7 @@ export default function AdminLoginPage() {
               htmlFor="email"
               className="block text-sm font-bold text-text-main mb-2"
             >
-              Email Address
+              Email Address <span className="text-red-600" aria-hidden="true">*</span>
             </label>
             <input
               type="email"
@@ -110,7 +110,7 @@ export default function AdminLoginPage() {
               htmlFor="password"
               className="block text-sm font-bold text-text-main mb-2"
             >
-              Password
+              Password <span className="text-red-600" aria-hidden="true">*</span>
             </label>
             <input
               type="password"

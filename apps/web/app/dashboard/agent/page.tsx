@@ -60,9 +60,9 @@ const statusColor: Record<WorkflowStatus, string> = {
 };
 
 const dotColor: Record<WorkflowStatus, string> = {
-    not_started: 'bg-slate-300',
+    not_started: 'bg-blue-600',
     in_progress: 'bg-blue-600',
-    pending_review: 'bg-amber-500',
+    pending_review: 'bg-blue-600',
     completed: 'bg-emerald-600',
     blocked: 'bg-red-600',
     failed: 'bg-red-600',
@@ -74,15 +74,15 @@ function getDisplayName(profile?: DashboardProfile | null) {
 
 function StageCard({ number, title, description, status, href, slideIndex }: { number: number; title: string; description: string; status: WorkflowStatus; href: string; slideIndex: number }) {
     return (
-        <Link href={href} data-lifecycle-slide={slideIndex} className="group min-h-[136px] w-[min(84vw,320px)] shrink-0 snap-start rounded-lg border border-slate-200 bg-white p-3.5 transition-colors hover:border-blue-300 hover:bg-blue-50/30 sm:w-auto sm:shrink sm:p-4">
+        <Link href={href} data-lifecycle-slide={slideIndex} className="group min-h-[108px] w-[min(40vw,170px)] shrink-0 snap-start rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:border-blue-300 hover:bg-blue-50/30 sm:min-h-[136px] sm:w-auto sm:shrink sm:p-4">
             <div className="flex items-center justify-between gap-2">
                 <span className={`flex size-7 items-center justify-center rounded-full ${status === 'completed' ? 'bg-emerald-700 text-white' : status === 'blocked' || status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
                     <span className="material-symbols-outlined text-[16px]">{status === 'completed' ? 'check' : status === 'blocked' || status === 'failed' ? 'priority_high' : 'arrow_forward'}</span>
                 </span>
-                <span className={`flex items-center gap-1.5 text-[10px] font-semibold ${statusColor[status]}`}><span className={`size-1.5 rounded-full ${dotColor[status]}`} />{statusLabel[status]}</span>
+                <span aria-label={statusLabel[status]} title={statusLabel[status]} className={`size-2.5 rounded-full ${dotColor[status]}`} />
             </div>
-            <h3 className="mt-3 text-xs font-semibold text-slate-950">{number}. {title}</h3>
-            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{description}</p>
+            <h3 className="mt-1.5 text-xs font-semibold text-slate-950 sm:mt-3">{number}. {title}</h3>
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-500 sm:mt-1 sm:leading-relaxed">{description}</p>
         </Link>
     );
 }

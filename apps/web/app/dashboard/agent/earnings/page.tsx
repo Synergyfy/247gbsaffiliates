@@ -1,121 +1,102 @@
 'use client';
 
-import React from 'react';
-import { useWallet, Transaction } from '@/hooks/useWallet';
+import { useWallet, type Transaction } from '@/hooks/useWallet';
+
+function formatAmount(amount: number, currency: string) {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(Number(amount));
+}
+
+function formatTransactionDate(value: string) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+        ? 'Date unavailable'
+        : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
+
+function TransactionRow({ transaction, currency }: { transaction: Transaction; currency: string }) {
+    const incoming = ['deposit', 'payment', 'transfer_in'].includes(transaction.type);
+    const label = transaction.description || transaction.type.replaceAll('_', ' ');
+
+    return (
+        <li className="flex items-center gap-3 border-b border-slate-100 px-4 py-4 last:border-0 sm:px-5">
+            <span className={`flex size-9 shrink-0 items-center justify-center rounded-md ${incoming ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`} aria-hidden="true">
+                <span className="material-symbols-outlined text-[19px]">{incoming ? 'arrow_downward' : 'arrow_upward'}</span>
+            </span>
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium capitalize text-slate-900">{label}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{formatTransactionDate(transaction.createdAt)}</p>
+                {transaction.status && <p className="mt-0.5 text-[11px] capitalize text-slate-500">{transaction.status.replaceAll('_', ' ')}</p>}
+            </div>
+            <p className={`shrink-0 text-sm font-semibold tabular-nums ${incoming ? 'text-emerald-700' : 'text-slate-900'}`}>
+                {incoming ? '+' : '−'}{formatAmount(transaction.amount, currency)}
+            </p>
+        </li>
+    );
+}
 
 export default function AgentEarningsPage() {
-    const { wallet, transactions, isLoading, requestWithdrawal, isWithdrawing } = useWallet();
-
-    const handleWithdraw = async () => {
-        const amount = prompt('Enter amount to withdraw:');
-        if (amount && !isNaN(Number(amount))) {
-            try {
-                await requestWithdrawal(Number(amount));
-                alert('Withdrawal request submitted!');
-            } catch (error) {
-                alert('Failed to submit withdrawal request.');
-            }
-        }
-    };
+    const { wallet, transactions, isLoading, isError, error, refetch } = useWallet();
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary"></div>
+            <div className="flex min-h-[50vh] items-center justify-center gap-3 text-sm text-slate-500" role="status">
+                <span className="size-5 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />
+                Loading your earnings…
             </div>
         );
     }
 
+    const currency = wallet?.currency || 'USD';
+
     return (
-        <div className="p-8 lg:p-10 max-w-7xl mx-auto w-full font-display">
-            <header className="mb-8">
-                <h1 className="text-2xl font-black text-text-main">Earnings Wallet</h1>
-                <p className="text-text-secondary text-sm font-medium italic">Manage your balance and withdrawals.</p>
+        <div className="mx-auto w-full max-w-[1500px] space-y-4 py-5 sm:space-y-5 lg:py-8">
+            <header>
+                <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Affiliate workspace</p>
+                <h1 className="mt-1 text-2xl font-bold text-slate-950">Earnings</h1>
+                <p className="mt-1 max-w-2xl text-sm text-slate-600">View your wallet balance and transaction history.</p>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-                <div className="bg-primary text-white p-8 rounded-3xl shadow-xl relative overflow-hidden">
-                    <div className="relative z-10">
-                        <p className="text-[10px] font-black opacity-80 uppercase tracking-widest mb-2">Available Balance</p>
-                        <h2 className="text-5xl font-black mb-6 italic">
-                            £{(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </h2>
-                        <div className="flex gap-4">
-                            <button 
-                                onClick={handleWithdraw}
-                                disabled={isWithdrawing}
-                                className="bg-white text-primary px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg hover:scale-105 transition-all disabled:opacity-50"
-                            >
-                                {isWithdrawing ? 'Processing...' : 'Withdraw Funds'}
-                            </button>
-                        </div>
-                    </div>
-                    <div className="absolute -right-10 -bottom-10 size-64 bg-white/10 rounded-full blur-3xl"></div>
-                </div>
+            {isError ? (
+                <section className="border-l-4 border-red-600 bg-red-50 p-4" role="alert">
+                    <h2 className="font-semibold text-red-900">Earnings couldn’t be loaded</h2>
+                    <p className="mt-1 text-sm text-red-800">{error instanceof Error ? error.message : 'Check your connection and try again.'}</p>
+                    <button type="button" onClick={() => void refetch()} className="mt-3 min-h-9 rounded-md bg-red-800 px-4 text-sm font-semibold text-white hover:bg-red-900">Try again</button>
+                </section>
+            ) : (
+                <>
+                    <section className="grid gap-3 sm:grid-cols-2" aria-label="Wallet summary">
+                        <article className="border border-slate-200 bg-white p-4 sm:p-5">
+                            <p className="text-xs font-medium text-slate-500">Available balance</p>
+                            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">{formatAmount(Number(wallet?.balance || 0), currency)}</p>
+                        </article>
+                        <article className="border border-slate-200 bg-white p-4 sm:p-5">
+                            <p className="text-xs font-medium text-slate-500">Recorded transactions</p>
+                            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">{transactions?.length || 0}</p>
+                        </article>
+                    </section>
 
-                <div className="bg-surface-light p-8 rounded-3xl border border-slate-200 shadow-sm">
-                    <h3 className="text-lg font-bold text-text-main mb-6">Performance Overview</h3>
-                    <div className="space-y-6">
-                        <div>
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Tasks Reliability</span>
-                                <span className="text-sm font-bold text-text-main">92%</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-primary" style={{ width: '92%' }}></div>
+                    <section aria-labelledby="transactions-heading">
+                        <div className="mb-3 flex items-end justify-between gap-3">
+                            <div>
+                                <h2 id="transactions-heading" className="text-base font-semibold text-slate-950">Transaction history</h2>
+                                <p className="mt-0.5 text-xs text-slate-500">Wallet activity recorded for your account.</p>
                             </div>
                         </div>
-                        <div>
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Target Earnings</span>
-                                <span className="text-sm font-bold text-text-main">£{(wallet?.balance || 0) > 1000 ? '100%' : '75%'}</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-green-500" style={{ width: (wallet?.balance || 0) > 1000 ? '100%' : '75%' }}></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <h3 className="text-lg font-black text-text-main mb-6 uppercase tracking-tighter">Recent Transactions</h3>
-            <div className="bg-surface-light rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="divide-y divide-slate-100">
-                    {transactions && transactions.length > 0 ? (
-                        transactions.map((txn: Transaction) => (
-                            <div key={txn.id} className="p-5 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                                <div className="flex items-center gap-4">
-                                    <div className={`size-10 rounded-full flex items-center justify-center ${
-                                        txn.type === 'deposit' || txn.type === 'payment' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                                    }`}>
-                                        <span className="material-symbols-outlined">
-                                            {txn.type === 'deposit' || txn.type === 'payment' ? 'arrow_downward' : 'arrow_upward'}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-text-main capitalize">{txn.type}</p>
-                                        <p className="text-[10px] text-text-secondary font-medium uppercase tracking-tighter">Ref: #{txn.id.slice(0, 8)}</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <span className={`block text-sm font-black italic ${
-                                        txn.type === 'deposit' || txn.type === 'payment' ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                        {txn.type === 'deposit' || txn.type === 'payment' ? '+' : '-'}£{txn.amount.toLocaleString()}
-                                    </span>
-                                    <span className="text-[10px] font-bold text-text-secondary uppercase">
-                                        {new Date(txn.createdAt).toLocaleDateString()}
-                                    </span>
-                                </div>
+                        {transactions?.length ? (
+                            <ul className="border border-slate-200 bg-white">
+                                {transactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} currency={currency} />)}
+                            </ul>
+                        ) : (
+                            <div className="border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
+                                <span className="material-symbols-outlined text-3xl text-slate-300" aria-hidden="true">account_balance_wallet</span>
+                                <h3 className="mt-2 text-sm font-semibold text-slate-900">No transactions yet</h3>
+                                <p className="mt-1 text-sm text-slate-600">Wallet activity will appear here when transactions are recorded.</p>
                             </div>
-                        ))
-                    ) : (
-                        <div className="py-12 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px] italic">
-                            No transactions found.
-                        </div>
-                    )}
-                </div>
-            </div>
+                        )}
+                    </section>
+                </>
+            )}
         </div>
     );
 }

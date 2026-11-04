@@ -66,6 +66,9 @@ export class Task {
   @Column('text')
   description: string;
 
+  @Column({ nullable: true })
+  executionUrl: string | null;
+
   @Column('decimal', { precision: 10, scale: 2, nullable: true })
   budget: number;
 

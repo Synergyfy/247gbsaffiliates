@@ -8,6 +8,14 @@ type Resource = { id: string; title: string; description: string; targetRoles: s
 type Category = { id: string; name: string; children?: Category[] };
 type ResourceForm = Omit<Resource, 'id' | 'category'> & { id?: string; tagsText: string };
 
+const getSaveErrorMessage = (error: unknown) => {
+    const responseData = (error as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+    const message = responseData?.message;
+    if (Array.isArray(message)) return message.join(' ');
+    if (typeof message === 'string' && message.trim()) return message;
+    return 'The resource could not be saved. Check the required fields and try again.';
+};
+
 const blankForm: ResourceForm = { title: '', description: '', targetRoles: ['agent'], slug: '', videoUrl: '', articleUrl: '', thumbnailUrl: '', priority: 0, isPublished: false, tags: [], tagsText: '', categoryId: '' };
 const flattenCategories = (items: Category[] = []): Category[] => items.flatMap((item) => [item, ...flattenCategories(item.children || [])]);
 
@@ -46,7 +54,7 @@ export default function AdminLearningPage() {
                 queryClient.invalidateQueries({ queryKey: ['learning-resources'] }),
             ]);
         },
-        onError: () => { setSuccessMessage(''); setErrorMessage('The resource could not be saved. Check the fields and try again.'); },
+        onError: (error) => { setSuccessMessage(''); setErrorMessage(getSaveErrorMessage(error)); },
     });
     const categories = useMemo(() => categoriesQuery.data || [], [categoriesQuery.data]);
 
@@ -65,16 +73,16 @@ export default function AdminLearningPage() {
             <form onSubmit={(event) => { event.preventDefault(); setErrorMessage(''); setSuccessMessage(''); if (!form.targetRoles.length) { setErrorMessage('Choose at least one audience role.'); return; } saveMutation.mutate(form); }} className="mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                 <div className="mb-4 flex items-center justify-between"><h2 className="font-bold text-slate-900">{form.id ? 'Edit learning resource' : 'Create learning resource'}</h2>{form.id && <button type="button" onClick={() => setForm(blankForm)} className="text-xs font-semibold text-slate-600 underline">Cancel edit</button>}</div>
                 <div className="grid gap-3 md:grid-cols-2">
-                    <label className="text-xs font-semibold text-slate-700">Title<input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
+                    <label className="text-xs font-semibold text-slate-700">Title <span className="text-red-600" aria-hidden="true">*</span><input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
                     <label className="text-xs font-semibold text-slate-700">Slug<input value={form.slug || ''} onChange={(e) => setForm({ ...form, slug: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
-                    <label className="text-xs font-semibold text-slate-700 md:col-span-2">Description<textarea required rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
+                    <label className="text-xs font-semibold text-slate-700 md:col-span-2">Description <span className="text-red-600" aria-hidden="true">*</span><textarea required rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
                     <label className="text-xs font-semibold text-slate-700">Article URL<input type="url" value={form.articleUrl || ''} onChange={(e) => setForm({ ...form, articleUrl: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
                     <label className="text-xs font-semibold text-slate-700">Video URL<input type="url" value={form.videoUrl || ''} onChange={(e) => setForm({ ...form, videoUrl: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
                     <label className="text-xs font-semibold text-slate-700">Thumbnail URL<input type="url" value={form.thumbnailUrl || ''} onChange={(e) => setForm({ ...form, thumbnailUrl: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
                     <label className="text-xs font-semibold text-slate-700">Category<select value={form.categoryId || ''} onChange={(e) => setForm({ ...form, categoryId: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal"><option value="">No category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
                     <label className="text-xs font-semibold text-slate-700">Priority<input type="number" min="0" value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
                     <label className="text-xs font-semibold text-slate-700">Tags (comma separated)<input value={form.tagsText} onChange={(e) => setForm({ ...form, tagsText: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
-                    <fieldset className="md:col-span-2"><legend className="text-xs font-semibold text-slate-700">Audience roles</legend><div className="mt-2 flex flex-wrap gap-4">{[['agent', 'Agent'], ['account_manager', 'Account manager'], ['consultant', 'Consultant']].map(([value, label]) => <label key={value} className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form.targetRoles.includes(value)} onChange={() => toggleRole(value)} />{label}</label>)}</div></fieldset>
+                    <fieldset className="md:col-span-2" aria-required="true"><legend className="text-xs font-semibold text-slate-700">Audience roles <span className="text-red-600" aria-hidden="true">*</span></legend><p className="mt-1 text-xs font-normal text-slate-500">Choose at least one role.</p><div className="mt-2 flex flex-wrap gap-4">{[['agent', 'Agent'], ['account_manager', 'Account manager'], ['consultant', 'Consultant']].map(([value, label]) => <label key={value} className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form.targetRoles.includes(value)} onChange={() => toggleRole(value)} />{label}</label>)}</div></fieldset>
                     <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 md:col-span-2"><input type="checkbox" checked={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })} />Published and visible in the Learning Hub</label>
                 </div>
                 {errorMessage && <p className="mt-3 text-sm text-red-700" role="alert">{errorMessage}</p>}{successMessage && <p className="mt-3 text-sm text-emerald-700" role="status">{successMessage}</p>}

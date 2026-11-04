@@ -97,6 +97,7 @@ export default function AgentTaskDetailsPage() {
                 <section className="mt-6">
                     <h2 className="text-base font-semibold text-slate-950">Instructions</h2>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{task.description || 'No additional instructions were provided.'}</p>
+                    {task.executionUrl && <a href={task.executionUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800">Open work link<span className="material-symbols-outlined text-base">open_in_new</span></a>}
                 </section>
 
                 <section className="mt-6 border-t border-slate-100 pt-5">

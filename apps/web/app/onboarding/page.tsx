@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -20,16 +20,56 @@ export default function OnboardingPage() {
 }
 
 function OnboardingFlow() {
-    const { currentStep, setRole, setStep, clearQuizAnswers, retakeAvailableAt, role: onboardingRole } = useOnboardingStore();
+    const {
+        currentStep,
+        setRole,
+        setStep,
+        clearQuizAnswers,
+        retakeAvailableAt,
+        role: onboardingRole,
+        updateBasicInfo,
+        updateProfileInfo,
+    } = useOnboardingStore();
     const { user } = useAuthStore();
     const searchParams = useSearchParams();
     const router = useRouter();
     const isRetakeQuiz = searchParams.get('retake') === '1';
     const isEditingProfile = searchParams.get('edit-profile') === '1';
+    const hydratedEditUser = useRef<string | null>(null);
 
     useEffect(() => {
-        if (isEditingProfile) setStep('profile-info');
-    }, [isEditingProfile, setStep]);
+        if (!isEditingProfile || !user?.id || hydratedEditUser.current === user.id) return;
+
+        hydratedEditUser.current = user.id;
+        setStep('basic-info');
+        const submission = user?.verificationSubmission && typeof user.verificationSubmission === 'object'
+            ? user.verificationSubmission
+            : {};
+        const city = typeof submission.city === 'string' ? submission.city : '';
+        const region = typeof submission.region === 'string' ? submission.region : '';
+        const country = typeof submission.country === 'string' ? submission.country : '';
+        const postalCode = typeof submission.postalCode === 'string' ? submission.postalCode : '';
+        const phone = typeof submission.phone === 'string' ? submission.phone : '';
+
+        updateBasicInfo({
+            city,
+            region,
+            country,
+            zipCode: postalCode,
+            phone,
+            location: [city, region].filter(Boolean).join(', '),
+        });
+        updateProfileInfo({
+            role: user?.role || onboardingRole || 'agent',
+            hourlyRate: submission.hourlyRate ?? '',
+            bio: submission.bio ?? '',
+            licenseNumber: submission.licenseNumber ?? '',
+            yearsExperience: submission.yearsExperience ?? '',
+            company: submission.company ?? '',
+            expertise: submission.expertise ?? '',
+            linkedinUrl: submission.linkedinUrl ?? '',
+        });
+    }, [isEditingProfile, onboardingRole, setStep, updateBasicInfo, updateProfileInfo, user]);
 
     useEffect(() => {
         if (isRetakeQuiz) {
@@ -49,7 +89,7 @@ function OnboardingFlow() {
     }, [user, onboardingRole, setRole]);
 
     const renderStep = () => {
-        const stepToRender = isRetakeQuiz ? 'quiz' : isEditingProfile ? 'profile-info' : currentStep;
+        const stepToRender = isRetakeQuiz ? 'quiz' : isEditingProfile && currentStep !== 'basic-info' ? 'profile-info' : currentStep;
         switch (stepToRender) {
             case 'basic-info':
                 return <BasicInfoStep />;

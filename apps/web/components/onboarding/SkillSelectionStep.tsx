@@ -111,7 +111,7 @@ export const SkillSelectionStep: React.FC = () => {
 
             <div className="bg-white p-4 sm:p-6 md:p-8 rounded-2xl md:rounded-4xl border border-slate-100 shadow-sm mb-4 md:mb-8">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm md:text-lg font-bold text-text-main font-display">1. Top Skills (Max 3)</h3>
+                    <h3 className="text-sm md:text-lg font-bold text-text-main font-display">1. Top Skills (Max 3) <span className="text-red-600" aria-hidden="true">*</span></h3>
                     <span className="text-[10px] md:text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full font-display">
                         {selectedSkills.length}/3 selected
                     </span>
@@ -252,9 +252,10 @@ export const SkillSelectionStep: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6 mb-3 md:mb-6">
                     <div className="space-y-1 md:space-y-2">
-                        <label className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Years of Experience</label>
+                        <label className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Years of Experience <span className="text-red-600" aria-hidden="true">*</span></label>
                         <div className="relative">
                             <select
+                                required
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 md:py-4 md:px-4 text-xs md:text-sm focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all font-medium appearance-none pr-8"
                                 value={questionnaireAnswers.yearsExperience || ''}
                                 onChange={(e) => updateQuestionnaireAnswers({ yearsExperience: e.target.value })}
@@ -269,7 +270,7 @@ export const SkillSelectionStep: React.FC = () => {
                         </div>
                     </div>
 
-                    {role === 'account-manager' ? (
+                    {role === 'account-manager' && (
                         <div className="space-y-1 md:space-y-2">
                             <label className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Team Leadership Exp</label>
                             <div className="relative">
@@ -283,24 +284,6 @@ export const SkillSelectionStep: React.FC = () => {
                                     <option value="1-5">Managed 1-5 People</option>
                                     <option value="5-10">Managed 5-10 People</option>
                                     <option value="10+">Managed 10+ People</option>
-                                </select>
-                                <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-base pointer-events-none">expand_more</span>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="space-y-1 md:space-y-2">
-                            <label className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Typical Turnaround</label>
-                            <div className="relative">
-                                <select
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 md:py-4 md:px-4 text-xs md:text-sm focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all font-medium appearance-none pr-8"
-                                    value={questionnaireAnswers.turnaroundTime || ''}
-                                    onChange={(e) => updateQuestionnaireAnswers({ turnaroundTime: e.target.value })}
-                                >
-                                    <option value="">Select turnaround...</option>
-                                    <option value="<24h">Less than 24h</option>
-                                    <option value="24-72h">24-72h</option>
-                                    <option value="3-7 days">3-7 Days</option>
-                                    <option value="1 week+">1 Week +</option>
                                 </select>
                                 <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-base pointer-events-none">expand_more</span>
                             </div>

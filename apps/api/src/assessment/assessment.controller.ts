@@ -55,17 +55,51 @@ export class AssessmentController {
     return this.assessmentService.getAdminAttempts();
   }
 
+  @Post('admin/assignments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Assign an assessment assembled from existing questions to affiliates' })
+  createAssignments(@Request() req: { user: { userId: string } }, @Body() body: { title: string; instructions?: string; dueAt?: string | null; affiliateIds: string[]; questionIds: string[] }) {
+    return this.assessmentService.createAssignments(body, req.user.userId);
+  }
+
+  @Get('admin/assignments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'List standalone assessment assignments and results' })
+  getAdminAssignments() {
+    return this.assessmentService.getAdminAssignments();
+  }
+
+  @Get('assignments')
+  @ApiOperation({ summary: 'List standalone assessments assigned to the signed-in affiliate' })
+  getMyAssignments(@Request() req: { user: { userId: string } }) {
+    return this.assessmentService.getUserAssignments(req.user.userId);
+  }
+
+  @Get('assignments/:id')
+  @ApiOperation({ summary: 'Open an assigned assessment; ownership is enforced by the API' })
+  getMyAssignment(@Request() req: { user: { userId: string } }, @Param('id') id: string) {
+    return this.assessmentService.getUserAssignment(req.user.userId, id);
+  }
+
+  @Post('assignments/:id/submit')
+  @ApiOperation({ summary: 'Submit answers for an owned standalone assessment assignment' })
+  submitAssignment(@Request() req: { user: { userId: string } }, @Param('id') id: string, @Body() body: { answers: { questionId: string; selectedOptionIndex: number }[] }) {
+    return this.assessmentService.submitUserAssignment(req.user.userId, id, body.answers);
+  }
+
   @Get('quiz')
   @ApiOperation({ summary: 'Start a new quiz', description: 'Authenticated user. Returns random questions based on user sector/category context.' })
   @ApiResponse({ status: 200, description: 'Quiz questions', schema: { example: [{ id: 'uuid', text: 'Question 1?', options: ['A', 'B'] }] } })
-  getQuiz(@Request() req) {
+  getQuiz(@Request() req: { user: { userId: string } }) {
     return this.assessmentService.generateQuiz(req.user.userId);
   }
 
   @Get('latest-attempt')
   @ApiOperation({ summary: 'Get the current user’s latest assessment result' })
   @ApiResponse({ status: 200, description: 'Latest result, or null when no assessment has been submitted' })
-  getLatestAttempt(@Request() req) {
+  getLatestAttempt(@Request() req: { user: { userId: string } }) {
     return this.assessmentService.getLatestAttempt(req.user.userId);
   }
 
@@ -73,7 +107,7 @@ export class AssessmentController {
   @ApiOperation({ summary: 'Submit quiz answers', description: 'Authenticated user. Returns score and pass/fail status.' })
   @ApiBody({ schema: { type: 'object', properties: { answers: { type: 'array', items: { type: 'object', properties: { questionId: { type: 'string' }, selectedOptionIndex: { type: 'number' } } } } } } })
   @ApiResponse({ status: 201, description: 'Quiz result', schema: { example: { score: 8, maxScore: 10, percentage: 80, band: 'Partial' } } })
-  submitQuiz(@Request() req, @Body() body: { answers: { questionId: string; selectedOptionIndex: number }[] }) {
+  submitQuiz(@Request() req: { user: { userId: string } }, @Body() body: { answers: { questionId: string; selectedOptionIndex: number }[] }) {
     return this.assessmentService.submitQuiz(req.user.userId, body.answers);
   }
 }

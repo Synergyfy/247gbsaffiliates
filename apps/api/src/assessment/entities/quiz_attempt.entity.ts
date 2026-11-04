@@ -25,7 +25,7 @@ export class QuizAttempt {
   band: string; // 'Pass', 'Fail', 'Partial'
 
   @Column('json')
-  answers: any; // Store user's answers for record
+  answers: { questionId: string; selectedOptionIndex: number }[]; // Store submitted answers for review
 
   @CreateDateColumn()
   createdAt: Date;

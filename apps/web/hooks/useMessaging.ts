@@ -6,13 +6,26 @@ export interface Conversation {
   participantIds: string[];
   lastMessageContent?: string;
   updatedAt: string;
-  participant?: {
+  participants?: ConversationParticipant[];
+  participant?: LegacyConversationParticipant;
+}
+
+export interface ConversationParticipant {
     id: string;
+    name?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string;
+    profileImage?: string | null;
+    role?: string;
+    avatar?: string;
+    status?: 'online' | 'offline';
+}
+
+export interface LegacyConversationParticipant extends ConversationParticipant {
     name: string;
     role: string;
-    avatar?: string;
     status: 'online' | 'offline';
-  };
 }
 
 export interface Message {

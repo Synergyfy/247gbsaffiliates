@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Brackets } from 'typeorm';
 import { Question, TargetingLevel, TargetingType } from './entities/question.entity';
@@ -8,6 +8,8 @@ import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { Category } from '../categories/entities/category.entity';
 import { Sector } from '../sectors/entities/sector.entity';
+import { AssessmentAssignment, AssessmentQuestionSnapshot } from './entities/assessment-assignment.entity';
+import { UserRole } from '../users/entities/user.entity';
 
 @Injectable()
 export class AssessmentService implements OnModuleInit {
@@ -22,6 +24,8 @@ export class AssessmentService implements OnModuleInit {
     private categoryRepo: Repository<Category>,
     @InjectRepository(Sector)
     private sectorRepo: Repository<Sector>,
+    @InjectRepository(AssessmentAssignment)
+    private assignmentRepo: Repository<AssessmentAssignment>,
     private usersService: UsersService,
   ) {}
 
@@ -95,6 +99,125 @@ export class AssessmentService implements OnModuleInit {
       answers: attempt.answers,
       createdAt: attempt.createdAt,
     }));
+  }
+
+  async createAssignments(input: { title: string; instructions?: string; dueAt?: string | null; affiliateIds: string[]; questionIds: string[] }, adminId: string) {
+    const title = String(input?.title ?? '').trim();
+    const affiliateIds = Array.isArray(input?.affiliateIds) ? [...new Set(input.affiliateIds.filter((id) => typeof id === 'string' && id.trim()))] : [];
+    const questionIds = Array.isArray(input?.questionIds) ? [...new Set(input.questionIds.filter((id) => typeof id === 'string' && id.trim()))] : [];
+    if (!title || title.length > 160) throw new BadRequestException('Enter an assessment title of 1 to 160 characters.');
+    if (!affiliateIds.length) throw new BadRequestException('Select at least one affiliate.');
+    if (!questionIds.length) throw new BadRequestException('Select at least one question.');
+    let dueAt: Date | null = null;
+    if (input?.dueAt) {
+      dueAt = new Date(input.dueAt);
+      if (Number.isNaN(dueAt.getTime())) throw new BadRequestException('Enter a valid assessment deadline.');
+    }
+
+    const [users, questions] = await Promise.all([
+      Promise.all(affiliateIds.map((id) => this.usersService.findOne(id))),
+      this.questionRepo.findBy({ id: In(questionIds) }),
+    ]);
+    const affiliateRoles = [UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT];
+    if (users.some((user) => !affiliateRoles.includes(user.role))) throw new BadRequestException('Assessments can only be assigned to affiliate accounts.');
+    if (questions.length !== questionIds.length) throw new BadRequestException('One or more selected questions no longer exist.');
+    const byId = new Map(questions.map((question) => [question.id, question]));
+    const questionSnapshot: AssessmentQuestionSnapshot[] = questionIds.map((id) => {
+      const question = byId.get(id)!;
+      return { id: question.id, text: question.text, type: question.type, options: question.options, correctOptionIndex: question.correctOptionIndex, weight: question.weight };
+    });
+    const assignments = affiliateIds.map((userId) => this.assignmentRepo.create({
+      userId,
+      assignedBy: adminId,
+      title,
+      instructions: typeof input.instructions === 'string' ? input.instructions.trim() || null : null,
+      dueAt,
+      questionSnapshot,
+      status: 'assigned',
+    }));
+    return this.assignmentRepo.save(assignments);
+  }
+
+  async getAdminAssignments() {
+    const assignments = await this.assignmentRepo.createQueryBuilder('assignment')
+      .leftJoinAndSelect('assignment.user', 'user')
+      .orderBy('assignment.createdAt', 'DESC')
+      .take(300)
+      .getMany();
+    return assignments.map((assignment) => this.toAssignmentSummary(assignment, true));
+  }
+
+  async getUserAssignments(userId: string) {
+    const assignments = await this.assignmentRepo.find({ where: { userId }, order: { createdAt: 'DESC' } });
+    return assignments.map((assignment) => this.toAssignmentSummary(assignment));
+  }
+
+  async getUserAssignment(userId: string, assignmentId: string) {
+    const assignment = await this.assignmentRepo.findOne({ where: { id: assignmentId } });
+    if (!assignment) throw new NotFoundException('Assigned assessment not found.');
+    if (assignment.userId !== userId) throw new ForbiddenException('This assessment is assigned to another affiliate.');
+    if (assignment.status === 'assigned') {
+      assignment.status = 'in_progress';
+      await this.assignmentRepo.save(assignment);
+    }
+    return this.toAssignmentDetail(assignment);
+  }
+
+  async submitUserAssignment(userId: string, assignmentId: string, answers: { questionId: string; selectedOptionIndex: number }[]) {
+    const assignment = await this.assignmentRepo.findOne({ where: { id: assignmentId } });
+    if (!assignment) throw new NotFoundException('Assigned assessment not found.');
+    if (assignment.userId !== userId) throw new ForbiddenException('This assessment is assigned to another affiliate.');
+    if (!['assigned', 'in_progress'].includes(assignment.status)) throw new BadRequestException('This assessment has already been submitted.');
+    if (!Array.isArray(answers) || answers.length !== assignment.questionSnapshot.length) throw new BadRequestException('Answer every question before submitting.');
+    const answerMap = new Map<string, number>();
+    for (const answer of answers) {
+      if (!answer || typeof answer.questionId !== 'string' || !Number.isInteger(answer.selectedOptionIndex) || answer.selectedOptionIndex < -1 || answerMap.has(answer.questionId)) {
+        throw new BadRequestException('The submitted answers are invalid.');
+      }
+      answerMap.set(answer.questionId, answer.selectedOptionIndex);
+    }
+    let score = 0;
+    let maxScore = 0;
+    for (const question of assignment.questionSnapshot) {
+      const selected = answerMap.get(question.id);
+      if (selected === undefined || selected >= question.options.length) throw new BadRequestException('The submitted answers are incomplete or invalid.');
+      maxScore += question.weight;
+      if (selected === question.correctOptionIndex) score += question.weight;
+    }
+    const percentage = maxScore ? Math.round(score / maxScore * 100) : 0;
+    assignment.status = percentage >= 85 ? 'pass' : percentage >= 50 ? 'partial' : 'fail';
+    assignment.score = score;
+    assignment.maxScore = maxScore;
+    assignment.percentage = percentage;
+    assignment.answers = answers;
+    assignment.submittedAt = new Date();
+    await this.assignmentRepo.save(assignment);
+    return { id: assignment.id, status: assignment.status, score, maxScore, percentage, submittedAt: assignment.submittedAt };
+  }
+
+  private toAssignmentSummary(assignment: AssessmentAssignment, includeAffiliate = false) {
+    return {
+      id: assignment.id,
+      title: assignment.title,
+      instructions: assignment.instructions,
+      dueAt: assignment.dueAt,
+      questionCount: assignment.questionSnapshot.length,
+      status: assignment.status,
+      score: assignment.score,
+      maxScore: assignment.maxScore,
+      percentage: assignment.percentage,
+      submittedAt: assignment.submittedAt,
+      createdAt: assignment.createdAt,
+      ...(includeAffiliate ? { affiliate: assignment.user ? { id: assignment.user.id, email: assignment.user.email, name: `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email } : null } : {}),
+    };
+  }
+
+  private toAssignmentDetail(assignment: AssessmentAssignment) {
+    return {
+      ...this.toAssignmentSummary(assignment),
+      questions: assignment.questionSnapshot.map(({ id, text, type, options }) => ({ id, text, type, options })),
+      result: assignment.submittedAt ? { answers: assignment.answers, score: assignment.score, maxScore: assignment.maxScore, percentage: assignment.percentage } : null,
+    };
   }
 
   async generateQuiz(userId?: string) {
