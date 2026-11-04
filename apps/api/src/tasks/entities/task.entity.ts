@@ -7,6 +7,7 @@ export enum TaskStatus {
   ACCEPTED = 'accepted',
   DECLINED = 'declined',
   SUBMITTED = 'submitted',
+  REVISION_REQUESTED = 'revision_requested',
   APPROVED = 'approved',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
@@ -21,6 +22,7 @@ export enum OriginSystem {
   INTERNAL = 'INTERNAL',
   MCOM_MALL = 'MCOM_MALL',
   MCOM_LOYALTY = 'MCOM_LOYALTY',
+  MCOM_CENTRAL = 'MCOM_CENTRAL',
 }
 
 @Entity('tasks')
@@ -29,6 +31,7 @@ export class Task {
   id: string;
 
   @Column({ nullable: true })
+  @Index()
   externalTaskId: string; // ID from mcom_central
 
   @Column({ type: 'enum', enum: OriginSystem, default: OriginSystem.INTERNAL })
@@ -36,6 +39,22 @@ export class Task {
 
   @Column({ nullable: true })
   originRequesterId: string;
+
+  // Snapshot of the originating Central business (for the affiliate's context).
+  @Column({ nullable: true })
+  centralBusinessId: string;
+
+  @Column({ nullable: true })
+  centralBusinessName: string;
+
+  // Platform tags the work spans (e.g. mall, rewards).
+  @Column('simple-array', { nullable: true })
+  platforms: string[];
+
+  // Used to route a Central task before the affiliate has SSO'd locally.
+  @Column({ nullable: true })
+  @Index()
+  assigneeEmail: string;
 
   @Column({ nullable: true })
   taskType: string;
@@ -82,6 +101,37 @@ export class Task {
 
   @Column({ nullable: true })
   dueDate: Date;
+
+  // ── Submission + review loop (Central Hub delegated tasks) ──
+  @Column('jsonb', { nullable: true })
+  submissionData: Record<string, any>;
+
+  @Column({ type: 'jsonb', nullable: true })
+  reviewHistory: Array<{
+    round: number;
+    decision: 'APPROVED' | 'CHANGES_REQUESTED';
+    notes?: string | null;
+    reviewedAt: string;
+    acknowledgedAt?: string | null;
+  }>;
+
+  @Column({ nullable: true })
+  reviewNotes: string;
+
+  @Column({ default: 0 })
+  revisionCount: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  submittedAt: Date;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  reviewedAt: Date;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  completedAt: Date;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastCentralSyncAt: Date;
 
   @CreateDateColumn()
   createdAt: Date;

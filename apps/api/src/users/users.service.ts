@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import axios from 'axios';
-import { User, UserRole, VerificationStatus } from './entities/user.entity';
+import { User, UserRole, UserStatus, VerificationStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import * as bcrypt from 'bcrypt';
@@ -167,6 +167,32 @@ export class UsersService {
     return this.usersRepository.find({
       where: { role: UserRole.AGENT },
       select: ['id', 'firstName', 'lastName', 'email', 'profileImage', 'skills', 'isOnboarded', 'isQuizPassed', 'createdAt'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Backend-to-backend directory used by Central Hub to search affiliates by
+   * skill. Returns only non-sensitive profile fields.
+   */
+  async listAffiliateDirectory(): Promise<Array<Partial<User>>> {
+    return this.usersRepository.find({
+      where: {
+        role: In([UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT]),
+        status: UserStatus.ACTIVE,
+      },
+      select: [
+        'id',
+        'firstName',
+        'lastName',
+        'email',
+        'role',
+        'skills',
+        'languages',
+        'verificationStatus',
+        'isOnboarded',
+        'isQuizPassed',
+      ],
       order: { createdAt: 'DESC' },
     });
   }

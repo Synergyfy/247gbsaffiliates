@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { Repository, Like, In } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
@@ -8,6 +8,7 @@ import { Task, TaskStatus } from './entities/task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { CreateTaskFromCentralDto } from './dto/create-task-from-central.dto';
 import { FindTasksQueryDto } from './dto/find-tasks.dto';
+import { SubmitTaskDto } from './dto/task-collaboration.dto';
 import { UsersService } from '../users/users.service';
 import { UserRole, VerificationStatus } from '../users/entities/user.entity';
 
@@ -37,33 +38,89 @@ export class TasksService {
     return this.tasksRepo.save(task);
   }
 
+  /**
+   * Central Hub → Affiliates task intake. Idempotent on `externalTaskId` so a
+   * retried backend-to-backend call never duplicates work. Assignee is resolved
+   * by email (Central and Affiliates issue different local user ids).
+   */
   async createFromCentral(dto: CreateTaskFromCentralDto) {
+    const assignee = dto.assignedAgentEmail
+      ? await this.usersService.findByEmail(dto.assignedAgentEmail)
+      : null;
+
+    const existing = await this.tasksRepo.findOne({ where: { externalTaskId: dto.externalTaskId } });
+
+    const patch: Partial<Task> = {
+      externalTaskId: dto.externalTaskId,
+      originSystem: dto.originSystem,
+      originRequesterId: dto.originRequesterId,
+      centralBusinessId: dto.originRequesterId,
+      centralBusinessName: dto.businessName ?? undefined,
+      taskType: dto.taskType ?? 'CENTRAL_DELEGATION',
+      title: dto.title,
+      description: dto.description,
+      platforms: dto.platforms ?? [],
+      dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+      assigneeEmail: dto.assignedAgentEmail?.toLowerCase() ?? undefined,
+      lastCentralSyncAt: new Date(),
+    };
+
+    if (existing) {
+      // Do not resurrect finished work; only refresh assignment/metadata while
+      // the task is still active on the affiliate side.
+      const active = [TaskStatus.OPEN, TaskStatus.ASSIGNED, TaskStatus.ACCEPTED, TaskStatus.REVISION_REQUESTED].includes(
+        existing.status,
+      );
+      if (active) {
+        if (assignee) {
+          patch.assignedAgent = assignee;
+          patch.assignedAgentId = assignee.id;
+          if (existing.status === TaskStatus.OPEN) patch.status = TaskStatus.ASSIGNED;
+        }
+        return this.tasksRepo.save(this.tasksRepo.merge(existing, patch));
+      }
+      return existing;
+    }
+
     const task = this.tasksRepo.create({
-      ...dto,
-      status: TaskStatus.OPEN,
-    });
-    return this.tasksRepo.save(task);
+      ...(patch as any),
+      assignedAgent: assignee ?? undefined,
+      assignedAgentId: assignee?.id ?? undefined,
+      status: assignee ? TaskStatus.ASSIGNED : TaskStatus.OPEN,
+    } as any) as unknown as Task;
+    const saved = await this.tasksRepo.save(task);
+    this.logger.log(`Received Central task ${saved.externalTaskId} (local ${saved.id})`);
+    return saved;
   }
 
   async findAll(query: FindTasksQueryDto, requesterId?: string, requesterRole?: UserRole) {
     const { page = 1, limit = 10, search, status, assignedAgentId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
-    if (status) where.status = status;
-    if (search) where.title = Like(`%${search}%`);
+    const baseWhere: any = {};
+    if (status) baseWhere.status = status;
+    if (search) baseWhere.title = Like(`%${search}%`);
+
+    let where: any = baseWhere;
+
     if (requesterId && requesterRole && AFFILIATE_ROLES.includes(requesterRole)) {
       await this.assertQualifiedAffiliate(requesterId);
-      if (assignedAgentId || (status && status !== TaskStatus.OPEN)) {
-        // Never trust the affiliate ID supplied in the query string, and never
-        // return another affiliate's assigned/active work.
-        where.assignedAgentId = requesterId;
-      } else if (!status) {
-        // Preserve the existing open-task pool while keeping assigned tasks private.
-        where.status = TaskStatus.OPEN;
+      const me = await this.usersService.findOne(requesterId);
+      const mine = [{ ...baseWhere, assignedAgentId: requesterId }];
+      if (me?.email) mine.push({ ...baseWhere, assigneeEmail: me.email.toLowerCase() });
+
+      if (status) {
+        if (status === TaskStatus.OPEN) {
+          where = { ...baseWhere, assignedAgentId: null };
+        } else {
+          where = mine;
+        }
+      } else {
+        // Default affiliate view: my assigned work + the open task pool.
+        where = [...mine, { ...baseWhere, status: TaskStatus.OPEN, assignedAgentId: null }];
       }
     } else if (assignedAgentId) {
-      where.assignedAgentId = assignedAgentId;
+      where = { ...baseWhere, assignedAgentId };
     }
 
     const [items, total] = await this.tasksRepo.findAndCount({
@@ -96,7 +153,13 @@ export class TasksService {
   async findOneForUser(id: string, requesterId: string, requesterRole: UserRole) {
     if (AFFILIATE_ROLES.includes(requesterRole)) {
       await this.assertQualifiedAffiliate(requesterId);
-      const task = await this.tasksRepo.findOne({ where: { id, assignedAgentId: requesterId } });
+      const me = await this.usersService.findOne(requesterId);
+      const task = await this.tasksRepo.findOne({
+        where: [
+          { id, assignedAgentId: requesterId },
+          ...(me?.email ? [{ id, assigneeEmail: me.email.toLowerCase() }] : []),
+        ],
+      });
       if (!task) throw new NotFoundException('Task not found');
       return task;
     }
@@ -106,7 +169,6 @@ export class TasksService {
   async assign(id: string, agentId: string) {
     const task = await this.findOne(id);
     if (task.status !== TaskStatus.OPEN && task.status !== TaskStatus.DECLINED) {
-       // Allow re-assignment if declined
       throw new BadRequestException('Task is not open for assignment');
     }
 
@@ -118,8 +180,9 @@ export class TasksService {
 
     task.assignedAgent = agent;
     task.assignedAgentId = agentId;
+    task.assigneeEmail = agent.email?.toLowerCase() ?? null;
     task.status = TaskStatus.ASSIGNED;
-    
+
     const savedTask = await this.tasksRepo.save(task);
     this.notifyCentral(savedTask);
     return savedTask;
@@ -128,7 +191,7 @@ export class TasksService {
   async respondToTask(id: string, userId: string, response: 'accept' | 'decline') {
     const task = await this.findOne(id);
     await this.assertQualifiedAffiliate(userId);
-    
+
     if (task.assignedAgentId !== userId) {
       throw new ForbiddenException('You are not assigned to this task');
     }
@@ -139,12 +202,104 @@ export class TasksService {
     if (response === 'accept') {
       task.status = TaskStatus.ACCEPTED;
     } else {
-      task.status = TaskStatus.DECLINED; 
+      task.status = TaskStatus.DECLINED;
     }
 
     const savedTask = await this.tasksRepo.save(task);
     this.notifyCentral(savedTask);
     return savedTask;
+  }
+
+  /**
+   * Submit deliverables for manual Central review. Accepts photos, PDFs, docs
+   * or links — all persisted in `submissionData` and (optionally) as an
+   * attachment list. Review is manual on Central.
+   */
+  async submit(id: string, userId: string, dto: SubmitTaskDto) {
+    const task = await this.findOne(id);
+    const me = await this.usersService.findOne(userId);
+    await this.assertQualifiedAffiliate(userId);
+
+    const isAssignee =
+      task.assignedAgentId === userId ||
+      (task.assigneeEmail && me?.email && task.assigneeEmail === me.email.toLowerCase());
+    if (!isAssignee) {
+      throw new ForbiddenException('You are not assigned to this task');
+    }
+    if (![TaskStatus.ACCEPTED, TaskStatus.REVISION_REQUESTED, TaskStatus.ASSIGNED].includes(task.status)) {
+      throw new BadRequestException('Only accepted or revision-requested tasks can be submitted');
+    }
+
+    const submissionData: Record<string, unknown> = {
+      ...(dto.submissionData ?? {}),
+    };
+    if (dto.notes) submissionData.notes = dto.notes;
+    if (dto.links?.length) submissionData.links = dto.links;
+    if (dto.attachments?.length) submissionData.attachments = dto.attachments;
+
+    task.submissionData = submissionData;
+    task.status = TaskStatus.SUBMITTED;
+    task.submittedAt = new Date();
+
+    const savedTask = await this.tasksRepo.save(task);
+    this.notifyCentral(savedTask);
+    return savedTask;
+  }
+
+  /** Affiliate confirms it has seen the admin's review notes and is resubmitting. */
+  async acknowledgeReview(id: string, userId: string) {
+    const task = await this.findOne(id);
+    await this.assertQualifiedAffiliate(userId);
+    if (task.assignedAgentId !== userId) {
+      throw new ForbiddenException('You are not assigned to this task');
+    }
+    if (task.status !== TaskStatus.REVISION_REQUESTED) {
+      throw new BadRequestException('Task has no pending review to acknowledge');
+    }
+
+    const history = [...(task.reviewHistory ?? [])];
+    if (history.length) history[history.length - 1].acknowledgedAt = new Date().toISOString();
+    task.reviewHistory = history;
+    task.status = TaskStatus.ACCEPTED;
+    const saved = await this.tasksRepo.save(task);
+    this.notifyCentral(saved, { reviewAcknowledged: true });
+    return saved;
+  }
+
+  /**
+   * Central admin review outcome. APPROVED finishes the task locally; changes
+   * requested puts it into a resubmission loop.
+   */
+  async applyReviewFromCentral(
+    externalTaskId: string,
+    input: { decision: 'APPROVED' | 'CHANGES_REQUESTED'; notes?: string; round?: number },
+  ) {
+    const task = await this.tasksRepo.findOne({ where: { externalTaskId } });
+    if (!task) throw new NotFoundException('Task not found');
+
+    const history = [...(task.reviewHistory ?? [])];
+    history.push({
+      round: input.round ?? history.length + 1,
+      decision: input.decision,
+      notes: input.notes ?? null,
+      reviewedAt: new Date().toISOString(),
+      acknowledgedAt: null,
+    });
+    task.reviewHistory = history;
+    task.reviewNotes = input.notes ?? '';
+    task.reviewedAt = new Date();
+
+    if (input.decision === 'APPROVED') {
+      task.status = TaskStatus.COMPLETED;
+      task.completedAt = new Date();
+    } else {
+      task.status = TaskStatus.REVISION_REQUESTED;
+      task.revisionCount = (task.revisionCount ?? 0) + 1;
+    }
+
+    const saved = await this.tasksRepo.save(task);
+    this.logger.log(`Central review (${input.decision}) applied to task ${task.id}`);
+    return saved;
   }
 
   async updateStatus(id: string, status: TaskStatus, userId: string) {
@@ -155,8 +310,11 @@ export class TasksService {
       if (task.assignedAgentId !== userId) {
         throw new ForbiddenException('You are not authorized to update this task.');
       }
-      if (task.status !== TaskStatus.ACCEPTED || status !== TaskStatus.SUBMITTED) {
-        throw new BadRequestException('Affiliates can submit an accepted task for review.');
+      const allowed =
+        (task.status === TaskStatus.ACCEPTED && status === TaskStatus.SUBMITTED) ||
+        (task.status === TaskStatus.REVISION_REQUESTED && status === TaskStatus.SUBMITTED);
+      if (!allowed) {
+        throw new BadRequestException('Affiliates can submit an accepted or revision-requested task for review.');
       }
     } else if (user.role !== UserRole.ADMIN) {
       if (task.assignedAgentId !== userId && task.clientId !== userId) {
@@ -164,9 +322,11 @@ export class TasksService {
       }
     }
     task.status = status;
-    const savedTask = await this.tasksRepo.save(task);
-    this.notifyCentral(savedTask);
-    return savedTask;
+    if (status === TaskStatus.SUBMITTED) task.submittedAt = new Date();
+    if (status === TaskStatus.COMPLETED) task.completedAt = new Date();
+    const saved = await this.tasksRepo.save(task);
+    this.notifyCentral(saved);
+    return saved;
   }
 
   private async assertVerifiedAffiliate(userId: string) {
@@ -190,25 +350,34 @@ export class TasksService {
     return user;
   }
 
-  private async notifyCentral(task: Task) {
-    if (task.externalTaskId) {
-       this.logger.log(`Syncing task ${task.id} (External: ${task.externalTaskId}) status ${task.status} to Central...`);
-       try {
-         await lastValueFrom(
-           this.httpService.patch(`${this.centralUrl}/tasks/${task.externalTaskId}`, {
-             status: task.status,
-             assignedAgentId: task.assignedAgentId
-           }, {
-             headers: {
-               'x-api-key': this.configService.get<string>('INTERNAL_API_KEY'),
-             }
-           })
-         );
-         this.logger.log('Sync successful.');
-       } catch (error) {
-         this.logger.error(`Sync failed: ${error.message}`);
-       }
+  private async notifyCentral(
+    task: Task,
+    extra: { reviewAcknowledged?: boolean } = {},
+  ) {
+    if (!task.externalTaskId) return;
+    this.logger.log(`Syncing Central task ${task.externalTaskId} status ${task.status}...`);
+    try {
+      await lastValueFrom(
+        this.httpService.post(
+          `${this.centralUrl}/affiliate/tasks/${encodeURIComponent(task.externalTaskId)}/status`,
+          {
+            status: task.status,
+            affiliateTaskId: task.id,
+            submissionData: task.submissionData ?? null,
+            reviewAcknowledged: extra.reviewAcknowledged ?? false,
+          },
+          {
+            headers: {
+              'x-api-key': this.configService.get<string>('INTERNAL_API_KEY'),
+            },
+          },
+        ),
+      );
+      task.lastCentralSyncAt = new Date();
+      await this.tasksRepo.update(task.id, { lastCentralSyncAt: task.lastCentralSyncAt });
+      this.logger.log('Sync successful.');
+    } catch (error: any) {
+      this.logger.error(`Sync failed: ${error?.response?.data?.message || error.message}`);
     }
   }
 }
-

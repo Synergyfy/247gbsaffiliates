@@ -9,9 +9,18 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 interface CentralWebhookEvent {
   event?: string;
   type?: string;
+  platform?: string;
+  timestamp?: string;
   user_id?: string;
   mcomUserId?: string;
   membership?: { level?: string; tier?: string; status?: string };
+  data?: {
+    user_id?: string;
+    mcomUserId?: string;
+    membership?: { level?: string; tier?: string; status?: string };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
@@ -38,9 +47,23 @@ export class WebhookController {
     const timestampHeader = req.headers['x-mcom-timestamp'] as
       | string
       | undefined;
+    const webhookSignatureHeader = req.headers['x-mcom-webhook-signature'] as
+      | string
+      | undefined;
 
-    // Verify HMAC when Central signs the request.
-    if (signatureHeader && timestampHeader) {
+    // Verify HMAC. Supports both Central's raw-body scheme
+    // (X-Mcom-Webhook-Signature) and the legacy timestamp.body scheme.
+    if (webhookSignatureHeader) {
+      const valid = this.mcomService.verifyRawBodySignature(
+        rawBody,
+        webhookSignatureHeader,
+      );
+      if (!valid) {
+        this.logger.warn('Webhook raw-body signature verification failed');
+        res.status(401).json({ error: 'Invalid HMAC signature' });
+        return;
+      }
+    } else if (signatureHeader && timestampHeader) {
       const valid = this.mcomService.verifyWebhookSignature(
         rawBody,
         signatureHeader,
@@ -67,7 +90,10 @@ export class WebhookController {
 
     const event = req.body as CentralWebhookEvent;
     const eventType = event.event || event.type || '';
-    const mcomUserId = event.user_id || event.mcomUserId || '';
+    const data = event.data ?? {};
+    const mcomUserId =
+      data.mcomUserId || data.user_id || event.user_id || event.mcomUserId || '';
+    const membership = data.membership || event.membership || {};
 
     this.logger.log(`Webhook received: ${eventType} for user ${mcomUserId}`);
 
@@ -96,14 +122,14 @@ export class WebhookController {
         case 'membership.updated':
         case 'user.updated':
           await this.usersService.update(user.id, {
-            ...(event.membership?.status && {
-              mcomMembershipStatus: event.membership.status,
+            ...(membership.status && {
+              mcomMembershipStatus: membership.status,
             }),
-            ...(event.membership?.level && {
-              mcomMembershipLevel: event.membership.level,
+            ...(membership.level && {
+              mcomMembershipLevel: membership.level,
             }),
-            ...(event.membership?.tier && {
-              mcomMembershipTier: event.membership.tier,
+            ...(membership.tier && {
+              mcomMembershipTier: membership.tier,
             }),
           } as never);
           break;

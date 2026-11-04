@@ -98,7 +98,7 @@ describe('TasksService (AffiliateBackend)', () => {
       title: 'Synced Task',
       description: 'Desc',
     };
-    const result = await service.createFromCentral(dto);
+    const result = (await service.createFromCentral(dto)) as Task;
     expect(mockRepo.create).toHaveBeenCalledWith(expect.objectContaining({ externalTaskId: 'ext-1' }));
     expect(result.status).toBe(TaskStatus.OPEN);
   });
@@ -108,7 +108,9 @@ describe('TasksService (AffiliateBackend)', () => {
     await service.findAll({ assignedAgentId: 'uuid-other-agent' }, 'uuid-agent-1', UserRole.AGENT);
 
     expect(mockRepo.findAndCount).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { assignedAgentId: 'uuid-agent-1' },
+      where: expect.arrayContaining([
+        expect.objectContaining({ assignedAgentId: 'uuid-agent-1' }),
+      ]),
       relations: [],
     }));
   });
@@ -117,7 +119,10 @@ describe('TasksService (AffiliateBackend)', () => {
     await service.findAll({}, 'uuid-agent-1', UserRole.AGENT);
 
     expect(mockRepo.findAndCount).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { status: TaskStatus.OPEN },
+      where: expect.arrayContaining([
+        expect.objectContaining({ assignedAgentId: 'uuid-agent-1' }),
+        expect.objectContaining({ status: TaskStatus.OPEN, assignedAgentId: null }),
+      ]),
     }));
   });
 
@@ -125,7 +130,7 @@ describe('TasksService (AffiliateBackend)', () => {
     await service.findAll({ status: TaskStatus.ASSIGNED, assignedAgentId: 'uuid-other-agent' }, 'uuid-agent-1', UserRole.ACCOUNT_MANAGER);
 
     expect(mockRepo.findAndCount).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { status: TaskStatus.ASSIGNED, assignedAgentId: 'uuid-agent-1' },
+      where: [{ status: TaskStatus.ASSIGNED, assignedAgentId: 'uuid-agent-1' }],
       relations: [],
     }));
   });

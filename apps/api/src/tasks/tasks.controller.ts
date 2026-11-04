@@ -1,14 +1,23 @@
-import { Controller, Get, Post, Body, Param, Query, Patch, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Patch, Request, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { basename, extname, join } from 'path';
+import * as fs from 'fs';
+import type { Response } from 'express';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { CreateTaskFromCentralDto } from './dto/create-task-from-central.dto';
 import { FindTasksQueryDto } from './dto/find-tasks.dto';
+import { ReviewCallbackDto, SubmitTaskDto } from './dto/task-collaboration.dto';
 import { TaskStatus } from './entities/task.entity';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse, ApiBody, ApiHeader } from '@nestjs/swagger';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { UserRole } from '../users/entities/user.entity';
 import { ApiKeyGuard } from '../auth/guards/api-key.guard';
+
+const TASK_UPLOAD_DIR = join(process.cwd(), 'uploads', 'tasks');
+fs.mkdirSync(TASK_UPLOAD_DIR, { recursive: true });
 
 @ApiTags('tasks')
 @Controller('tasks')
@@ -28,6 +37,7 @@ export class TasksController {
   }
 
   @Post('incoming')
+  @Public()
   @UseGuards(ApiKeyGuard)
   @ApiOperation({ 
     summary: 'Receive task from Central', 
@@ -101,6 +111,104 @@ export class TasksController {
   @ApiResponse({ status: 200, description: 'Task declined' })
   decline(@Param('id') id: string, @Request() req) {
     return this.tasksService.respondToTask(id, req.user.userId, 'decline');
+  }
+
+  @Post(':id/submit')
+  @ApiOperation({
+    summary: 'Submit a task for Central review',
+    description: 'Accept an accepted/revision-requested task with notes, links, images, docs or PDFs. Manual admin review follows.',
+  })
+  @ApiBody({ type: SubmitTaskDto })
+  submit(@Param('id') id: string, @Body() dto: SubmitTaskDto, @Request() req) {
+    return this.tasksService.submit(id, req.user.userId, dto);
+  }
+
+  @Post(':id/acknowledge-review')
+  @ApiOperation({
+    summary: 'Acknowledge admin review notes',
+    description: 'Marks the latest review as seen so the affiliate can make changes and resubmit.',
+  })
+  acknowledgeReview(@Param('id') id: string, @Request() req) {
+    return this.tasksService.acknowledgeReview(id, req.user.userId);
+  }
+
+  @Post(':id/attachments')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      dest: TASK_UPLOAD_DIR,
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const allowed = new Set([
+          '.png', '.jpg', '.jpeg', '.gif', '.webp',
+          '.pdf', '.doc', '.docx', '.txt', '.csv', '.xlsx',
+        ]);
+        const ext = extname(file.originalname || '').toLowerCase();
+        if (!allowed.has(ext)) {
+          return cb(new BadRequestException('Unsupported attachment type'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Upload a photo, image, PDF or document for a task submission',
+    description: 'Returns a URL that can be included in the submission attachments array.',
+  })
+  async uploadAttachment(
+    @Param('id') id: string,
+    @UploadedFile() file: any,
+    @Request() req,
+  ) {
+    if (!file) throw new BadRequestException('A file is required');
+    // Only the assignee (or an admin) may attach deliverables.
+    await this.tasksService.findOneForUser(id, req.user.userId, req.user.role);
+
+    // Multer's `dest` names files randomly without an extension — append it so
+    // the served file keeps a correct content type.
+    const ext = extname(file.originalname || '').toLowerCase();
+    const finalPath = `${file.path}${ext}`;
+    fs.renameSync(file.path, finalPath);
+    const filename = basename(finalPath);
+    const base = `${req.protocol}://${req.get('host')}`;
+    const kind = /\.(png|jpe?g|gif|webp)$/i.test(filename) ? 'IMAGE' : 'DOCUMENT';
+    return {
+      url: `${base}/api/v1/tasks/attachments/${filename}`,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      kind,
+    };
+  }
+
+  @Public()
+  @Get('attachments/:filename')
+  @ApiOperation({ summary: 'Serve an uploaded task attachment' })
+  serveAttachment(@Param('filename') filename: string, @Res() res: Response) {
+    // Strict basename check — no path traversal.
+    if (!/^[a-f0-9-]{16,64}\.[a-z0-9]{1,8}$/i.test(filename)) {
+      throw new BadRequestException('Invalid attachment name');
+    }
+    const filePath = join(process.cwd(), 'uploads', 'tasks', filename);
+    if (!fs.existsSync(filePath)) {
+      throw new BadRequestException('Attachment not found');
+    }
+    res.sendFile(filePath);
+  }
+
+  @Post('external/:externalTaskId/review')
+  @Public()
+  @UseGuards(ApiKeyGuard)
+  @ApiHeader({ name: 'x-api-key', required: true })
+  @ApiOperation({
+    summary: 'Apply a Central admin review outcome',
+    description: 'Backend-to-backend: approves or requests changes on a submitted task. Secured by Internal API Key.',
+  })
+  @ApiBody({ type: ReviewCallbackDto })
+  applyReview(@Param('externalTaskId') externalTaskId: string, @Body() dto: ReviewCallbackDto) {
+    return this.tasksService.applyReviewFromCentral(externalTaskId, {
+      decision: dto.decision,
+      notes: dto.notes,
+      round: dto.round,
+    });
   }
 
   @Patch(':id/status')
