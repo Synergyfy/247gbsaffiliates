@@ -416,7 +416,13 @@ export class TasksService {
    */
   async applyReviewFromCentral(
     externalTaskId: string,
-    input: { decision: 'APPROVED' | 'CHANGES_REQUESTED'; notes?: string; round?: number },
+    input: {
+      decision: 'APPROVED' | 'CHANGES_REQUESTED';
+      notes?: string;
+      round?: number;
+      compensationPence?: number;
+      compensationAmount?: number;
+    },
   ) {
     const task = await this.tasksRepo.findOne({ where: { externalTaskId } });
     if (!task) throw new NotFoundException('Task not found');
@@ -432,6 +438,15 @@ export class TasksService {
     task.reviewHistory = history;
     task.reviewNotes = input.notes ?? '';
     task.reviewedAt = new Date();
+
+    // The Central admin may price a membership/access-pass task at approval
+    // time. Mirror the final compensation onto the affiliate's local task so
+    // their dashboard shows what they were paid.
+    if (input.compensationPence != null) {
+      task.compensationAmount = Number(input.compensationPence) / 100;
+    } else if (input.compensationAmount != null) {
+      task.compensationAmount = Number(input.compensationAmount);
+    }
 
     if (input.decision === 'APPROVED') {
       task.status = TaskStatus.COMPLETED;
