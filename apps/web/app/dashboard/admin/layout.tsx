@@ -20,6 +20,7 @@ export default function AdminLayout({
     const sidebarLinks = [
         { name: "Overview", href: "/dashboard/admin", icon: "dashboard" },
         { name: "Affiliates", href: "/dashboard/admin/users", icon: "manage_accounts" },
+        { name: "Business Acquisition", href: "/dashboard/admin/business-acquisition", icon: "storefront" },
         { name: "Verifications", href: "/dashboard/admin/verifications", icon: "verified_user" },
         { name: "Learning Materials", href: "/dashboard/admin/learning", icon: "school" },
         { name: "Assessments", href: "/dashboard/admin/assessments", icon: "quiz" },

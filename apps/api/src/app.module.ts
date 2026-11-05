@@ -19,6 +19,7 @@ import { AccountManagerModule } from './account-manager/account-manager.module';
 import { AdminModule } from './admin/admin.module';
 import { LearningModule } from './learning/learning.module';
 import { McomModule } from './mcom/mcom.module';
+import { BusinessAcquisitionModule } from './business-acquisition/business-acquisition.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { McomModule } from './mcom/mcom.module';
     AdminModule,
     LearningModule,
     McomModule,
+    BusinessAcquisitionModule,
   ],
   controllers: [AppController],
   providers: [

@@ -27,6 +27,7 @@ export default function AccountManagerLayout({
             href: "/dashboard/account-manager",
             icon: "dashboard",
         },
+        { name: "Businesses", href: "/dashboard/account-manager/businesses", icon: "storefront" },
         { name: "Campaigns", href: "/dashboard/account-manager/campaigns", icon: "campaign" },
         { name: "Tasks", href: "/dashboard/account-manager/tasks", icon: "assignment" },
         { name: "Agents", href: "/dashboard/account-manager/agents", icon: "groups" },
