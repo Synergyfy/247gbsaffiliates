@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useAuth } from '@/hooks/useAuth';
+import { useMcomWallet } from '@/hooks/useMcomWallet';
 import { useAuthStore } from '@/store/useAuthStore';
 
 const navigation = [
@@ -27,6 +28,7 @@ const navigation = [
         title: 'Execution',
         items: [
             { name: 'My Tasks', href: '/dashboard/agent/tasks', icon: 'assignment' },
+            { name: 'Earnings', href: '/dashboard/agent/earnings', icon: 'payments' },
             { name: 'Messages', href: '/dashboard/agent/messages', icon: 'mail' },
             { name: 'Notifications', href: '/dashboard/agent/notifications', icon: 'notifications' },
             { name: 'Settings', href: '/dashboard/agent/settings', icon: 'settings' },
@@ -50,6 +52,7 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
     const router = useRouter();
     const { user } = useAuthStore();
     const { logout, isLoggingOut } = useAuth();
+    const { wallet } = useMcomWallet();
     const [moreOpen, setMoreOpen] = useState(false);
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [taskSearch, setTaskSearch] = useState('');
@@ -138,6 +141,12 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
                             <button type="submit" className="text-[11px] font-semibold text-blue-700">Search</button>
                         </form>
                         <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-2">
+                            <Link href="/dashboard/agent/earnings" className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 hover:border-blue-300 sm:gap-2 sm:px-2.5" aria-label="View earnings and MCOM wallet">
+                                <span className="hidden text-[9px] font-semibold uppercase tracking-wide text-slate-500 sm:inline">MCOM</span>
+                                <span className="text-[11px] font-bold tabular-nums text-slate-900 sm:text-xs">
+                                    {Number(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                            </Link>
                             <Link href="/dashboard/agent/notifications" aria-label="Notifications" className="relative flex size-10 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100">
                                 <span className="material-symbols-outlined text-[21px]">notifications</span>
                             </Link>

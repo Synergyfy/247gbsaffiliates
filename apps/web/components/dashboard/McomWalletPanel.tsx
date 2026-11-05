@@ -54,11 +54,21 @@ function TransactionRow({ transaction }: { transaction: McomWalletTransaction })
   );
 }
 
+interface McomWalletPanelProps {
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+}
+
 /**
  * Shared MCOM wallet view for agents, consultants and account managers.
  * Balance and ledger come from Central Hub; 247GBS is display-only.
  */
-export default function McomWalletPanel() {
+export default function McomWalletPanel({
+  eyebrow = 'Affiliate workspace',
+  title = 'Earnings',
+  subtitle = 'Your Central Hub MCOM wallet. Task payments are credited here after the business approves the work; platform fees are deducted from the business charge, never from your payout.',
+}: McomWalletPanelProps = {}) {
   const [page, setPage] = useState(1);
   const { wallet, holds, transactions, totalPages, isLoading, isError, error, refetch, isFetching } =
     useMcomWallet(page);
@@ -76,12 +86,9 @@ export default function McomWalletPanel() {
     <div className="mx-auto w-full max-w-[1500px] space-y-4 py-5 sm:space-y-5 lg:py-8">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Affiliate workspace</p>
-          <h1 className="mt-1 text-2xl font-bold text-slate-950">Earnings</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
-            Your Central Hub MCOM wallet. Task payments are credited here after the business approves the
-            work; platform fees are deducted from the business charge, never from your payout.
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">{eyebrow}</p>
+          <h1 className="mt-1 text-2xl font-bold text-slate-950">{title}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">{subtitle}</p>
         </div>
         <button
           type="button"
