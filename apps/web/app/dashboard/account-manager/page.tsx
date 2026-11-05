@@ -35,7 +35,13 @@ const businessLocation = (business: AssignedBusiness) => {
 
 export default function AccountManagerDashboard() {
     const { user } = useAuthStore();
-    const { tasks, isLoading: isLoadingTasks, isError: tasksError } = useTasks({ limit: 50 });
+    const {
+        tasks,
+        isLoading: isLoadingTasks,
+        isError: tasksError,
+        error: tasksErrorObject,
+        refetch: refetchTasks,
+    } = useTasks({ limit: 50 });
     const { wallet, isLoading: isLoadingWallet } = useWallet();
     const { conversations, sendMessage, isSending } = useMessaging();
     const { data: assignedBusinesses, isLoading: isLoadingBusinesses } = useAssignedBusinesses();
@@ -43,6 +49,24 @@ export default function AccountManagerDashboard() {
     const [replyText, setReplyText] = React.useState('');
 
     const activeConversation = conversations?.find((conversation) => conversation.id === selectedConvId);
+
+    // If an admin verifies the account (or onboarding finishes in another tab),
+    // clear the cached 403 and retry without making the user reload the page.
+    React.useEffect(() => {
+        if (!user?.id) return;
+        void refetchTasks();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.isOnboarded, user?.verificationStatus]);
+
+    const taskError = tasksErrorObject as (Error & { code?: string }) | null;
+    const taskErrorMessage =
+        taskError?.message || 'Tasks could not be loaded. Please try again.';
+    const needsOnboardingSteps = Boolean(
+        user &&
+        (!user.verificationSubmission ||
+            !user.isQuizPassed ||
+            (user.role === 'agent' && !user.skills?.length))
+    );
 
     // Only surface work delegated directly to this account manager. The local
     // API also exposes the open pool, which is not their responsibility.
@@ -193,7 +217,59 @@ export default function AccountManagerDashboard() {
                         {isLoadingTasks ? (
                             <div className="px-6 py-10 text-center text-sm text-slate-500">Loading tasks…</div>
                         ) : tasksError ? (
-                            <div className="px-6 py-8 text-sm text-red-700 bg-red-50">Tasks could not be loaded. Complete onboarding and try again.</div>
+                            <div className="border-t border-amber-100 bg-amber-50 px-6 py-5">
+                                <div className="flex items-start gap-3">
+                                    <span className="material-symbols-outlined mt-0.5 text-xl text-amber-700">
+                                        {user?.verificationStatus === 'verified' ? 'info' : 'verified_user'}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-bold text-amber-950">
+                                            {taskError?.code === 'VERIFICATION_PENDING'
+                                                ? 'Your account is awaiting administrator verification'
+                                                : taskError?.code === 'VERIFICATION_REJECTED'
+                                                    ? 'Your verification needs attention'
+                                                    : taskError?.code === 'ONBOARDING_REQUIRED'
+                                                        ? 'Finish onboarding to unlock delegated tasks'
+                                                        : 'Tasks are temporarily unavailable'}
+                                        </p>
+                                        <p className="mt-1 text-xs leading-5 text-amber-900">{taskErrorMessage}</p>
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => void refetchTasks()}
+                                                className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-amber-700 px-3 text-xs font-bold text-white hover:bg-amber-800"
+                                            >
+                                                <span className="material-symbols-outlined text-base">refresh</span>
+                                                Check again
+                                            </button>
+                                            {user?.verificationStatus !== 'verified' && needsOnboardingSteps && (
+                                                <Link
+                                                    href="/onboarding"
+                                                    className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                                                >
+                                                    Continue onboarding
+                                                </Link>
+                                            )}
+                                            {user?.verificationStatus === 'verified' && !user?.isOnboarded && (
+                                                <Link
+                                                    href="/onboarding"
+                                                    className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                                                >
+                                                    Finish onboarding
+                                                </Link>
+                                            )}
+                                            {user?.verificationStatus === 'rejected' && (
+                                                <Link
+                                                    href="/onboarding?edit-profile=1"
+                                                    className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-red-300 bg-white px-3 text-xs font-bold text-red-800 hover:bg-red-50"
+                                                >
+                                                    Update submission
+                                                </Link>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         ) : myTasks.length === 0 ? (
                             <div className="px-6 py-12 text-center">
                                 <span className="material-symbols-outlined text-4xl text-slate-300">assignment</span>

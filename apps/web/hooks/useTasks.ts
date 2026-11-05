@@ -97,6 +97,26 @@ export interface SubmitTaskInput {
   submissionData?: Record<string, unknown>;
 }
 
+/**
+ * Surface the backend's human-readable message instead of Axios' generic
+ * "Request failed with status code 403". Keeps status/code for callers that
+ * want to tailor the UI (e.g. verification pending vs onboarding incomplete).
+ */
+export const normalizeTaskError = (error: any): Error => {
+  const payload = error?.response?.data;
+  const raw = payload?.message;
+  const message = Array.isArray(raw) ? raw.join(', ') : raw || error?.message || 'The request failed.';
+  const normalized = new Error(message) as Error & {
+    status?: number;
+    code?: string;
+    payload?: any;
+  };
+  normalized.status = error?.response?.status;
+  normalized.code = payload?.code;
+  normalized.payload = payload;
+  return normalized;
+};
+
 const unwrapTask = (payload: any): Task => (payload?.data ?? payload) as Task;
 const unwrapAttachment = (payload: any): TaskAttachment =>
   (payload?.data ?? payload) as TaskAttachment;
@@ -112,14 +132,24 @@ export const useTasks = (filters: TaskFilters = {}) => {
   const { data: tasks, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['tasks', filters],
     enabled: filters.enabled ?? true,
+    // 4xx responses (e.g. verification/onboarding required) are actionable —
+    // do not hammer the API with retries. Transient 5xx errors still retry.
+    retry: (failureCount, queryError) => {
+      const status = (queryError as { status?: number })?.status;
+      return status && status < 500 ? false : failureCount < 2;
+    },
     queryFn: async () => {
-      const { enabled: _enabled, ...params } = filters;
-      const response = await apiClient.get('/tasks', { params });
-      const data = response.data?.data ?? response.data;
-      if (Array.isArray(data)) return data as Task[];
-      if (data && Array.isArray(data.items)) return data.items as Task[];
-      if (data && Array.isArray(data.data)) return data.data as Task[];
-      return [] as Task[];
+      try {
+        const { enabled: _enabled, ...params } = filters;
+        const response = await apiClient.get('/tasks', { params });
+        const data = response.data?.data ?? response.data;
+        if (Array.isArray(data)) return data as Task[];
+        if (data && Array.isArray(data.items)) return data.items as Task[];
+        if (data && Array.isArray(data.data)) return data.data as Task[];
+        return [] as Task[];
+      } catch (error) {
+        throw normalizeTaskError(error);
+      }
     },
   });
 
@@ -229,8 +259,12 @@ export const useTask = (taskId: string, enabled = true) => useQuery({
   queryKey: ['task', taskId],
   enabled: Boolean(taskId) && enabled,
   queryFn: async () => {
-    const response = await apiClient.get(`/tasks/${taskId}`);
-    return unwrapTask(response.data);
+    try {
+      const response = await apiClient.get(`/tasks/${taskId}`);
+      return unwrapTask(response.data);
+    } catch (error) {
+      throw normalizeTaskError(error);
+    }
   },
 });
 
