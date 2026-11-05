@@ -17,6 +17,11 @@ export interface AssignedBusiness {
   membershipPlanName?: string | null;
   membershipExpiresAt?: string | null;
   accountManagerAssignedAt?: string | null;
+  acquiredByAffiliateName?: string | null;
+  acquiredByAffiliateRole?: string | null;
+  acquisitionStatus?: string | null;
+  acquisitionSource?: string | null;
+  acquisitionAttributedAt?: string | null;
   createdAt?: string | null;
   city?: { name?: string | null; region?: string | null; country?: string | null } | null;
   localMall?: { id: string; name: string } | null;

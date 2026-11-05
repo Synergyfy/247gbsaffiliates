@@ -183,6 +183,7 @@ export default function AccountManagerDashboard() {
                                         <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Business</th>
                                         <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Location</th>
                                         <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Membership</th>
+                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Acquired by</th>
                                         <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Assigned</th>
                                     </tr>
                                 </thead>
@@ -198,6 +199,18 @@ export default function AccountManagerDashboard() {
                                                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
                                                     {business.membershipPlanName || business.membershipLevel || 'Standard'}
                                                 </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-xs text-slate-600">
+                                                {business.acquiredByAffiliateName ? (
+                                                    <span className="font-semibold text-slate-800">
+                                                        {business.acquiredByAffiliateName}
+                                                        <span className="ml-1 font-normal capitalize text-slate-400">
+                                                            ({(business.acquiredByAffiliateRole || 'affiliate').replaceAll('_', ' ')})
+                                                        </span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400">Direct signup</span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 text-xs text-slate-600">{formatDate(business.accountManagerAssignedAt)}</td>
                                         </tr>

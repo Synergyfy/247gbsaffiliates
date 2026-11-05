@@ -13,6 +13,7 @@ const navigation = [
         title: 'Core Operations',
         items: [
             { name: 'Overview', href: '/dashboard/agent', icon: 'dashboard' },
+            { name: 'My Businesses', href: '/dashboard/agent/businesses', icon: 'storefront' },
             { name: 'My Profile', href: '/dashboard/agent/profile', icon: 'person' },
             { name: 'Verification', href: '/dashboard/agent/verification', icon: 'verified_user' },
         ],

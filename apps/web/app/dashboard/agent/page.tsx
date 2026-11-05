@@ -123,6 +123,14 @@ export default function AgentDashboard() {
     const learningProgressQuery = useLearningProgress(Boolean(userId && role));
     const hasTaskAccess = Boolean(profile?.verificationStatus === 'verified' && profile.isOnboarded && profile.isQuizPassed && profile.skills?.length);
     const tasksQuery = useTasks({ assignedAgentId: userId, limit: 50, enabled: Boolean(userId && hasTaskAccess) });
+    const acquisitionQuery = useQuery({
+        queryKey: ['business-acquisition-overview'],
+        queryFn: async () => unwrap<{
+            summary: { approached: number; registered: number; onboardingCompleted: number; verified: number };
+            settings: { targetCount: number; dueDate?: string | null };
+        }>((await apiClient.get('/business-acquisition/summary')).data),
+        enabled: Boolean(userId),
+    });
 
     const isLoading = profileQuery.isLoading || attemptQuery.isLoading || resourcesQuery.isLoading || learningProgressQuery.isLoading || (hasTaskAccess && tasksQuery.isLoading);
     const hasAssessmentPassed = Boolean(profile?.isQuizPassed) || ['pass', 'partial'].includes(attemptQuery.data?.band?.toLowerCase() || '');
@@ -172,6 +180,16 @@ export default function AgentDashboard() {
         : verificationStatus === 'rejected' || (verificationStatus === 'pending' && hasProfileSubmission)
             ? 'blocked'
             : profile?.isQuizPassed || hasProfileSubmission
+                ? 'in_progress'
+                : 'not_started';
+
+    const acquisition = acquisitionQuery.data?.summary;
+    const acquisitionTarget = acquisitionQuery.data?.settings?.targetCount ?? 20;
+    const acquisitionStatus: WorkflowStatus = !acquisition
+        ? 'not_started'
+        : acquisition.verified >= acquisitionTarget
+            ? 'completed'
+            : acquisition.approached > 0 || acquisition.registered > 0
                 ? 'in_progress'
                 : 'not_started';
 
@@ -324,6 +342,13 @@ export default function AgentDashboard() {
                     </CapabilityCard>
                     <CapabilityCard icon="assignment" title="Assigned Tasks" status={assignedTaskStatus} href="/dashboard/agent/tasks" action="Open My Tasks">
                         {!isQualified ? 'Task access becomes available after the current qualification requirements are met.' : tasksQuery.isError ? 'Assigned tasks could not be loaded.' : tasks.length ? `${tasks.length} administrator-assigned task${tasks.length === 1 ? '' : 's'} in your task list.` : 'There are no administrator-assigned tasks for your account yet.'}
+                    </CapabilityCard>
+                    <CapabilityCard icon="storefront" title="Business Acquisition" status={acquisitionStatus} href="/dashboard/agent/businesses" action="Open My Businesses">
+                        {acquisitionQuery.isError
+                            ? 'Business acquisition progress could not be loaded.'
+                            : acquisition
+                                ? `${acquisition.approached} approached · ${acquisition.registered} registered · ${acquisition.verified} of ${acquisitionTarget} verified onboardings.`
+                                : `Record local business prospects and work towards ${acquisitionTarget} verified CHS onboardings.`}
                     </CapabilityCard>
                 </div>
             </section>
