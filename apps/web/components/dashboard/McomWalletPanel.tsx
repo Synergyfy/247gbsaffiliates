@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMcomWallet, type McomWalletTransaction } from '@/hooks/useMcomWallet';
+import { useAuthStore } from '@/store/useAuthStore';
 
 function formatCredits(amount: number) {
   return new Intl.NumberFormat(undefined, {
@@ -17,7 +19,13 @@ function formatDate(value: string) {
     : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-function TransactionRow({ transaction }: { transaction: McomWalletTransaction }) {
+function TransactionRow({
+  transaction,
+  taskHrefBase,
+}: {
+  transaction: McomWalletTransaction;
+  taskHrefBase: string;
+}) {
   const incoming = transaction.type === 'CREDIT';
   const label = transaction.description || transaction.category.replaceAll('_', ' ').toLowerCase();
 
@@ -40,6 +48,15 @@ function TransactionRow({ transaction }: { transaction: McomWalletTransaction })
           {transaction.platformName || 'MCOM Central'}
           {transaction.reference ? ` · ${transaction.reference}` : ''}
         </p>
+        {transaction.taskId && (
+          <Link
+            href={`${taskHrefBase}/${transaction.taskId}`}
+            className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-800 transition-colors hover:border-blue-300 hover:bg-blue-100"
+          >
+            <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+            View task{transaction.taskTitle ? `: ${transaction.taskTitle}` : ''}
+          </Link>
+        )}
       </div>
       <div className="shrink-0 text-right">
         <p className={`text-sm font-semibold tabular-nums ${incoming ? 'text-emerald-700' : 'text-slate-900'}`}>
@@ -54,14 +71,33 @@ function TransactionRow({ transaction }: { transaction: McomWalletTransaction })
   );
 }
 
+interface McomWalletPanelProps {
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+}
+
 /**
  * Shared MCOM wallet view for agents, consultants and account managers.
  * Balance and ledger come from Central Hub; 247GBS is display-only.
  */
-export default function McomWalletPanel() {
+export default function McomWalletPanel({
+  eyebrow = 'Affiliate workspace',
+  title = 'Earnings',
+  subtitle = 'Your Central Hub MCOM wallet. Task payments are credited here after the business approves the work; platform fees are deducted from the business charge, never from your payout.',
+}: McomWalletPanelProps = {}) {
   const [page, setPage] = useState(1);
+  const { user } = useAuthStore();
   const { wallet, holds, transactions, totalPages, isLoading, isError, error, refetch, isFetching } =
     useMcomWallet(page);
+
+  const normalizedRole = (user?.role || '').replace(/_/g, '-');
+  const taskHrefBase =
+    normalizedRole === 'account-manager'
+      ? '/dashboard/account-manager/tasks'
+      : normalizedRole === 'consultant'
+        ? '/dashboard/consultant/tasks'
+        : '/dashboard/agent/tasks';
 
   if (isLoading) {
     return (
@@ -76,12 +112,9 @@ export default function McomWalletPanel() {
     <div className="mx-auto w-full max-w-[1500px] space-y-4 py-5 sm:space-y-5 lg:py-8">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Affiliate workspace</p>
-          <h1 className="mt-1 text-2xl font-bold text-slate-950">Earnings</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
-            Your Central Hub MCOM wallet. Task payments are credited here after the business approves the
-            work; platform fees are deducted from the business charge, never from your payout.
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">{eyebrow}</p>
+          <h1 className="mt-1 text-2xl font-bold text-slate-950">{title}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">{subtitle}</p>
         </div>
         <button
           type="button"
@@ -192,7 +225,11 @@ export default function McomWalletPanel() {
             {transactions.length ? (
               <ul className="border border-slate-200 bg-white">
                 {transactions.map((transaction) => (
-                  <TransactionRow key={transaction.id} transaction={transaction} />
+                  <TransactionRow
+                    key={transaction.id}
+                    transaction={transaction}
+                    taskHrefBase={taskHrefBase}
+                  />
                 ))}
               </ul>
             ) : (

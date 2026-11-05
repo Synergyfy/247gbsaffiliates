@@ -23,8 +23,15 @@ export class UsersController {
     @Query('role') role?: string,
     @Query('search') search?: string,
     @Query('limit') limit?: string,
+    @Query('radius') radius?: string,
   ) {
-    return this.usersService.findPublicDirectory({ postcode, role, search, limit: Number(limit) || undefined });
+    return this.usersService.findPublicDirectory({
+      postcode,
+      role,
+      search,
+      limit: Number(limit) || undefined,
+      radiusMiles: Number(radius) || undefined,
+    });
   }
 
   @Get('postal-code-lookup')

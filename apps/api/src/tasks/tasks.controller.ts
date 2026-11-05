@@ -234,6 +234,8 @@ export class TasksController {
       decision: dto.decision,
       notes: dto.notes,
       round: dto.round,
+      compensationPence: dto.compensationPence,
+      compensationAmount: dto.compensationAmount,
     });
   }
 

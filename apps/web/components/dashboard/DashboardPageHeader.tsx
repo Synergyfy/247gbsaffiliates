@@ -4,6 +4,7 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { useMcomWallet } from '@/hooks/useMcomWallet';
 import Link from 'next/link';
 
 const stepsInfo: Record<string, { num: number; name: string; pct: number }> = {
@@ -19,6 +20,15 @@ export const DashboardPageHeader = () => {
     const router = useRouter();
     const { user } = useAuthStore();
     const { currentStep, assessmentSkipped } = useOnboardingStore();
+    const { wallet } = useMcomWallet();
+
+    const earningsHref = pathname.startsWith('/dashboard/agent')
+        ? '/dashboard/agent/earnings'
+        : pathname.startsWith('/dashboard/consultant')
+            ? '/dashboard/consultant/earnings'
+            : pathname.startsWith('/dashboard/account-manager')
+                ? '/dashboard/account-manager/revenue'
+                : '/dashboard';
 
     const isSkipped = Boolean(assessmentSkipped || user?.assessmentSkipped);
     const isOnboarded = Boolean(user?.isOnboarded) && !isSkipped;
@@ -151,6 +161,16 @@ export const DashboardPageHeader = () => {
         <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-20 font-display">
             <h1 className="text-lg font-bold text-text-main">{getPageTitle()}</h1>
             <div className="flex items-center gap-4">
+                <Link
+                    href={earningsHref}
+                    aria-label="View earnings and MCOM wallet"
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 hover:border-primary/40 sm:gap-2 sm:px-2.5"
+                >
+                    <span className="hidden text-[9px] font-bold uppercase tracking-wide text-slate-500 sm:inline">MCOM</span>
+                    <span className="text-[11px] font-bold tabular-nums text-text-main sm:text-xs">
+                        {Number(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                </Link>
                 <button
                     type="button"
                     aria-label="Notifications"

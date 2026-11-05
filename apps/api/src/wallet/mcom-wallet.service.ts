@@ -2,9 +2,10 @@ import { Injectable, Logger, NotFoundException, ServiceUnavailableException } fr
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
 import { User } from '../users/entities/user.entity';
+import { Task } from '../tasks/entities/task.entity';
 
 export interface McomWalletTransaction {
   id: string;
@@ -20,6 +21,9 @@ export interface McomWalletTransaction {
   description?: string | null;
   status: string;
   createdAt: string;
+  /** Local 247GBS task id resolved from the Central settlement reference. */
+  taskId?: string | null;
+  taskTitle?: string | null;
 }
 
 export interface McomWalletSnapshot {
@@ -66,7 +70,20 @@ export class McomWalletService {
     private readonly http: HttpService,
     @InjectRepository(User)
     private readonly usersRepo: Repository<User>,
+    @InjectRepository(Task)
+    private readonly tasksRepo: Repository<Task>,
   ) {}
+
+  /**
+   * Central settlement references look like
+   * `affiliate-task:<centralTaskId>:settle`. The affiliate's local task stores
+   * that id as `externalTaskId`, so we can attach a direct “View task” link.
+   */
+  private centralTaskIdFromReference(reference?: string | null): string | null {
+    if (!reference) return null;
+    const match = /^affiliate-task:([^:]+)(?::|$)/.exec(reference);
+    return match ? match[1] : null;
+  }
 
   async getForUser(localUserId: string, page = 1, limit = 20): Promise<McomWalletSnapshot> {
     const user = await this.usersRepo.findOne({ where: { id: localUserId } });
@@ -110,7 +127,40 @@ export class McomWalletService {
       if (!payload?.wallet) {
         throw new ServiceUnavailableException('Unexpected wallet response from Central Hub.');
       }
-      return payload as McomWalletSnapshot;
+
+      const snapshot = payload as McomWalletSnapshot;
+      const transactions = snapshot.transactions?.data ?? [];
+      if (transactions.length) {
+        const externalIds = Array.from(
+          new Set(
+            transactions
+              .map((transaction) => this.centralTaskIdFromReference(transaction.reference))
+              .filter((value): value is string => Boolean(value)),
+          ),
+        );
+
+        if (externalIds.length) {
+          const tasks = await this.tasksRepo.find({
+            where: { externalTaskId: In(externalIds) },
+            select: ['id', 'externalTaskId', 'title'],
+          });
+          const byExternalId = new Map(
+            tasks.map((task) => [task.externalTaskId, task] as const),
+          );
+
+          snapshot.transactions.data = transactions.map((transaction) => {
+            const externalId = this.centralTaskIdFromReference(transaction.reference);
+            const task = externalId ? byExternalId.get(externalId) : undefined;
+            return {
+              ...transaction,
+              taskId: task?.id ?? null,
+              taskTitle: task?.title ?? null,
+            };
+          });
+        }
+      }
+
+      return snapshot;
     } catch (error: any) {
       if (error instanceof NotFoundException || error instanceof ServiceUnavailableException) {
         throw error;

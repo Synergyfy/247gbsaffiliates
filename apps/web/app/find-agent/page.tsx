@@ -15,7 +15,6 @@ interface AgentRecord {
   firstName?: string;
   lastName?: string;
   name?: string;
-  email?: string;
   profileImage?: string;
   skills?: string[];
   bio?: string;
@@ -25,7 +24,9 @@ interface AgentRecord {
   role?: string;
   subTitle?: string;
   locationArea?: string;
-  distanceMiles?: string;
+  distanceMiles?: number | null;
+  distanceKm?: number | null;
+  distanceLabel?: string | null;
   isOnboarded?: boolean;
   isQuizPassed?: boolean;
   verificationStatus?: string;
@@ -94,7 +95,6 @@ export default function FindAgentPage() {
       const name =
         `${agent.firstName || ''} ${agent.lastName || ''}`.trim() ||
         agent.name ||
-        agent.email ||
         'Accredited member';
       const role = (agent.role || 'agent').replaceAll('_', ' ');
       const location =
@@ -156,9 +156,15 @@ export default function FindAgentPage() {
   const resultsSectionRef = useRef<HTMLDivElement>(null);
   const heroSearchInputRef = useRef<HTMLInputElement>(null);
 
-  // Live directory results — the API resolves the postcode and returns only
-  // verified, active affiliates in that territory.
-  const { data: directoryResult, isFetching: isSearching } = useQuery<{ items: AgentRecord[] }>({
+  // Live directory results — the API geocodes the search postcode and returns
+  // verified, active affiliates sorted by real distance from that territory.
+  const {
+    data: directoryResult,
+    isFetching: isSearching,
+    isError: isDirectoryError,
+    error: directoryError,
+    refetch: refetchDirectory,
+  } = useQuery<{ items: AgentRecord[]; distanceFrom?: string | null }>({
     queryKey: ['public-directory', submittedPostcode, roleFilter],
     enabled: Boolean(submittedPostcode),
     queryFn: async () => {
@@ -174,6 +180,11 @@ export default function FindAgentPage() {
   });
 
   const displayedAgents = directoryResult?.items ?? [];
+  const directoryErrorMessage = (() => {
+    const message = (directoryError as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+    if (Array.isArray(message)) return message.join(', ');
+    return message || 'We could not load the affiliate directory right now. Please try again.';
+  })();
 
   // Prefill form if user is logged in
   useEffect(() => {
@@ -234,12 +245,18 @@ export default function FindAgentPage() {
     setFormSubmitting(true);
 
     try {
+      const budgetValue = (() => {
+        if (formBudget === '£500 - £1,000') return 1000;
+        if (formBudget === '£1,000 - £3,000') return 3000;
+        if (formBudget === '£3,000 - £10,000') return 10000;
+        return 10000; // Enterprise / custom SLA — full amount lives in the description
+      })();
       const payload = {
         title: `[Enterprise Request] ${formCompany} - ${formFullName}`,
         description: `Client: ${formFullName}\nCompany: ${formCompany}\nTelephone: ${formPhone}\nPostcode: ${formPostcode}\nTimeline: ${formTimeline}\nBudget: ${formBudget}\nRequested Affiliate: ${selectedAgent ? getAgentDisplayName(selectedAgent) : 'Auto-allocate'}\n\nProject Scope:\n${formScope}`,
-        budget: formBudget.includes('3,000') ? 3000 : 1500,
+        budget: budgetValue,
         currency: 'GBP',
-        ...(selectedAgent?.email ? { assigneeEmail: selectedAgent.email } : {}),
+        ...(selectedAgent?.id ? { assigneeId: selectedAgent.id } : {}),
       };
 
       await apiClient.post('/tasks/requests', payload);
@@ -397,7 +414,14 @@ export default function FindAgentPage() {
                     const leftIdx  = (heroIndex - 1 + total) % total;
                     const rightIdx = (heroIndex + 1) % total;
                     const centerIdx = heroIndex;
-                    return [leftIdx, rightIdx, centerIdx].map((idx) => {
+                    // With fewer than three cards the left/right indices collide
+                    // with the centre; render only the unique cards.
+                    const indices = total === 1
+                      ? [centerIdx]
+                      : total === 2
+                        ? [centerIdx, rightIdx]
+                        : [leftIdx, rightIdx, centerIdx];
+                    return indices.map((idx) => {
                       const card = heroCards[idx];
                       const isCenter = idx === centerIdx;
                       const isLeft   = idx === leftIdx;
@@ -415,7 +439,7 @@ export default function FindAgentPage() {
                       }
                       return (
                         <div
-                          key={card.id}
+                          key={`${idx}-${card.id}`}
                           className={`${positionCls} transition-all duration-500 ease-in-out ${carouselAnimating && isCenter ? 'opacity-0 scale-95' : 'opacity-100'}`}
                           onClick={() => !isCenter && goToCarouselIndex(idx)}
                           style={{ cursor: isCenter ? 'default' : 'pointer' }}
@@ -483,63 +507,90 @@ export default function FindAgentPage() {
       {/* SECTION 2: RESULTS (only when searched) */}
       {submittedPostcode && (
         <section ref={resultsSectionRef} className="mx-auto max-w-[1240px] scroll-mt-14 px-3 py-3 sm:px-4 sm:py-6 lg:px-16">
+          {/* Header */}
+          <div className="mb-2 flex flex-col justify-between gap-1 border-b border-slate-200 pb-2 sm:mb-4 sm:flex-row sm:items-end sm:gap-3 sm:pb-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 sm:text-lg">
+                Available affiliates <span className="text-slate-400 font-normal text-sm">({submittedPostcode})</span>
+              </h2>
+              <p className="mt-0.5 text-[10px] text-slate-500 sm:text-[11px]">
+                Verified members within 50 miles, nearest first.
+              </p>
+            </div>
+          </div>
+
+          {/* Role filter tabs — always visible so visitors can switch role even
+              when the current role has no nearby matches. */}
+          <div className="mb-2 grid grid-cols-4 gap-1.5 pb-1 sm:mb-4 sm:flex sm:items-center sm:gap-1.5 sm:overflow-x-auto sm:pb-1 scrollbar-none">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'agent', label: 'Agents' },
+              { id: 'account_manager', label: 'Managers' },
+              { id: 'consultant', label: 'Consultants' },
+            ].map((tab) => {
+              const isActive = roleFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setRoleFilter(tab.id as RoleFilterType)}
+                  className={`min-w-0 rounded-md px-1.5 py-1.5 text-[10px] font-semibold transition-all sm:px-3 sm:text-xs ${isActive ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
           {isSearching ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="size-8 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin mb-3" />
               <h3 className="text-sm font-bold font-display text-slate-900 mb-1">Resolving Jurisdiction & Affiliates</h3>
               <p className="text-xs text-slate-500 max-w-xs">Scanning for verified affiliates in <strong>{submittedPostcode}</strong>...</p>
             </div>
+          ) : isDirectoryError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center max-w-md mx-auto shadow-sm">
+              <div className="size-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center mx-auto mb-2.5 border border-red-200">
+                <span className="material-symbols-outlined text-xl">error</span>
+              </div>
+              <h3 className="text-base font-bold font-display text-slate-900 mb-1">Could Not Load the Directory</h3>
+              <p className="text-xs text-slate-600 mb-4 leading-relaxed">{directoryErrorMessage}</p>
+              <button
+                type="button"
+                onClick={() => refetchDirectory()}
+                className="px-4 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-xs font-semibold font-display text-white transition-all"
+              >
+                Try Again
+              </button>
+            </div>
           ) : displayedAgents.length === 0 ? (
             <div className="rounded-lg border border-slate-200 bg-white p-7 text-center max-w-md mx-auto shadow-sm">
               <div className="size-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-2.5 border border-amber-100">
                 <span className="material-symbols-outlined text-xl">domain_disabled</span>
               </div>
-              <h3 className="text-base font-bold font-display text-slate-900 mb-1">No Verified Affiliates in This Sector</h3>
+              <h3 className="text-base font-bold font-display text-slate-900 mb-1">No Verified Affiliates Nearby</h3>
               <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                No verified affiliates found for <strong className="text-slate-800">{submittedPostcode}</strong>. Try a nearby postcode or clear the search.
+                No verified affiliates of this type were found within 50 miles of <strong className="text-slate-800">{submittedPostcode}</strong>. Try a different role above or a nearby postcode.
               </p>
-              <button
-                type="button"
-                onClick={() => { setPostcode(''); setSubmittedPostcode(''); }}
-                className="px-4 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 text-xs font-semibold font-display text-slate-700 transition-all"
-              >
-                Clear Search
-              </button>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                <button
+                  type="button"
+                  onClick={() => setRoleFilter('all')}
+                  className="px-4 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-xs font-semibold font-display text-white transition-all"
+                >
+                  Show All Roles
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPostcode(''); setSubmittedPostcode(''); }}
+                  className="px-4 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 text-xs font-semibold font-display text-slate-700 transition-all"
+                >
+                  Clear Search
+                </button>
+              </div>
             </div>
           ) : (
-            <div>
-              {/* Header + Sort */}
-              <div className="mb-2 flex flex-col justify-between gap-1 border-b border-slate-200 pb-2 sm:mb-4 sm:flex-row sm:items-end sm:gap-3 sm:pb-3">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 sm:text-lg">
-                    Available affiliates <span className="text-slate-400 font-normal text-sm">({submittedPostcode})</span>
-                  </h2>
-                </div>
-              </div>
-
-              {/* Role filter tabs */}
-              <div className="mb-2 grid grid-cols-4 gap-1.5 pb-1 sm:mb-4 sm:flex sm:items-center sm:gap-1.5 sm:overflow-x-auto sm:pb-1 scrollbar-none">
-                {[
-                  { id: 'all', label: 'Affiliates' },
-                  { id: 'agent', label: 'Agents' },
-                  { id: 'account_manager', label: 'Managers' },
-                  { id: 'consultant', label: 'Consultants' },
-                ].map((tab) => {
-                  const isActive = roleFilter === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setRoleFilter(tab.id as RoleFilterType)}
-                      className={`min-w-0 rounded-md px-1.5 py-1.5 text-[10px] font-semibold transition-all sm:px-3 sm:text-xs ${isActive ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Affiliate cards grid — 1 col mobile, 2 tablet, 3 desktop */}
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+            /* Affiliate cards grid — 1 col mobile, 2 tablet, 3 desktop */
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                 {displayedAgents.map((agent, index) => {
                   const displayName = getAgentDisplayName(agent);
                   const agentKey = agent.id || String(index);
@@ -586,7 +637,11 @@ export default function FindAgentPage() {
                             <h3 className="text-sm font-bold text-slate-900">{displayName}</h3>
                             <span className="whitespace-nowrap rounded-sm border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">{roleBadge}</span>
                           </div>
-                          <p className="mb-1 flex items-center gap-0.5 text-[11px] font-medium text-slate-500"><span className="material-symbols-outlined text-[12px] text-slate-400">location_on</span>{locationArea}</p>
+                          <p className="mb-1 flex items-center gap-0.5 text-[11px] font-medium text-slate-500">
+                            <span className="material-symbols-outlined text-[12px] text-slate-400">location_on</span>
+                            {locationArea}
+                            {agent.distanceLabel && <span className="text-slate-400">• {agent.distanceLabel}</span>}
+                          </p>
                           <p className="mb-1.5 text-[11px] font-semibold text-blue-600">{subTitle}</p>
                           <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-slate-600">{agent.bio || 'No profile summary has been published yet.'}</p>
                           {skills.length > 0 && (
@@ -649,7 +704,6 @@ export default function FindAgentPage() {
                   );
                 })}
               </div>
-            </div>
           )}
         </section>
       )}

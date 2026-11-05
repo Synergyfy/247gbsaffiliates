@@ -7,9 +7,64 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import * as bcrypt from 'bcrypt';
 
+interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
+export interface PostalLookupResult {
+  found: boolean;
+  postalCode: string;
+  city?: string;
+  region?: string;
+  country?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  displayName?: string;
+}
+
+interface PostcodesIoResult {
+  postcode?: string;
+  post_town?: string;
+  admin_district?: string;
+  admin_county?: string;
+  region?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface PostcodesIoResponse {
+  result?: PostcodesIoResult;
+}
+
+interface PostcodesIoBulkRow {
+  query?: string;
+  result?: PostcodesIoResult | null;
+}
+
+interface PostcodesIoBulkResponse {
+  result?: PostcodesIoBulkRow[];
+}
+
+interface NominatimMatch {
+  lat?: string;
+  lon?: string;
+  display_name?: string;
+  address?: Record<string, string>;
+}
+
+const GEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_DIRECTORY_RADIUS_MILES = 50;
+const MAX_DIRECTORY_RADIUS_MILES = 500;
+const MAX_DIRECTORY_CANDIDATES = 500;
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+  private readonly geoCache = new Map<
+    string,
+    { at: number; point: GeoPoint | null }
+  >();
 
   constructor(
     @InjectRepository(User)
@@ -76,29 +131,45 @@ export class UsersService {
   }
 
   /**
-   * Public marketplace directory: verified, active affiliates only. The
-   * `postcode` filter resolves the UK postcode to its city/region and matches
-   * the territory stored from Central Hub signup.
+   * Public marketplace directory: verified, active affiliates only. When a
+   * postcode is supplied we geocode it once and rank members by their real
+   * distance from that territory.
+   *
+   * Location data is captured by Central Hub at signup and synced onto the
+   * local user by the SSO provisioner. The old exact-prefix/city/region filter
+   * is intentionally gone: `region` is usually just "England", which matched
+   * every affiliate in the country instead of nearby ones.
    */
   async findPublicDirectory(filters: {
     postcode?: string;
     role?: string;
     search?: string;
     limit?: number;
+    radiusMiles?: number;
   }) {
     const limit = Math.min(100, Math.max(1, Number(filters.limit) || 50));
+    const radiusMiles = Math.min(
+      MAX_DIRECTORY_RADIUS_MILES,
+      Math.max(1, Number(filters.radiusMiles) || DEFAULT_DIRECTORY_RADIUS_MILES),
+    );
     const role = (filters.role || '').toLowerCase().replace('-', '_');
     const search = (filters.search || '').trim().toLowerCase();
 
     let territory: { city?: string; region?: string; postcode?: string } | null = null;
+    let origin: GeoPoint | null = null;
     if (filters.postcode?.trim()) {
       const resolved = await this.lookupPostalCode(filters.postcode);
-      if (!resolved?.found) return { items: [], total: 0, territory: null };
+      if (!resolved?.found) {
+        return { items: [], total: 0, territory: null, distanceFrom: null };
+      }
       territory = {
         city: resolved.city,
         region: resolved.region,
         postcode: resolved.postalCode,
       };
+      if (resolved.latitude != null && resolved.longitude != null) {
+        origin = { lat: resolved.latitude, lng: resolved.longitude };
+      }
     }
 
     const qb = this.usersRepository
@@ -124,99 +195,239 @@ export class UsersService {
       );
     }
 
-    if (territory) {
-      const normalizedPostcode = (territory.postcode || '').toUpperCase().replace(/\s+/g, ' ');
-      const outward = normalizedPostcode.split(' ')[0];
-      const clauses = [
-        `(user.postcode IS NOT NULL AND (
-          UPPER(REPLACE(user.postcode, ' ', '')) = :compactPostcode
-          OR UPPER(user.postcode) LIKE :outwardPrefix
-        ))`,
-      ];
-      const params: Record<string, unknown> = {
-        compactPostcode: normalizedPostcode.replace(/\s+/g, ''),
-        outwardPrefix: `${outward} %`,
+    const users = await qb
+      .orderBy('user.createdAt', 'DESC')
+      .take(origin ? MAX_DIRECTORY_CANDIDATES : limit)
+      .getMany();
+
+    const geoByPostcode = origin
+      ? await this.bulkGeocodePostcodes(users.map((user) => user.postcode))
+      : new Map<string, GeoPoint>();
+
+    const items = users.map((user) => {
+      const point = origin && user.postcode
+        ? geoByPostcode.get(this.compactPostcode(user.postcode)) ?? null
+        : null;
+      const km = origin && point ? this.haversineKm(origin, point) : null;
+      const miles = km != null ? km * 0.621371 : null;
+
+      return {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0],
+        profileImage: user.profileImage,
+        bio: user.bio,
+        skills: user.skills ?? [],
+        languages: user.languages ?? [],
+        hourlyRate: user.hourlyRate,
+        currency: user.currency,
+        timezone: user.timezone,
+        role: user.role,
+        postcode: user.postcode,
+        city: user.city,
+        region: user.region,
+        country: user.country,
+        isOnboarded: user.isOnboarded,
+        isQuizPassed: user.isQuizPassed,
+        verificationStatus: user.verificationStatus,
+        isPaidVisible: user.isPaidVisible,
+        createdAt: user.createdAt,
+        distanceKm: km != null ? Math.round(km * 10) / 10 : null,
+        distanceMiles: miles != null ? Math.round(miles * 10) / 10 : null,
+        distanceLabel: miles != null
+          ? `${Math.max(0.1, Math.round(miles * 10) / 10)} mi away`
+          : origin
+            ? 'Distance unavailable'
+            : null,
       };
-      if (territory.city) {
-        clauses.push('(user.city IS NOT NULL AND LOWER(user.city) = LOWER(:city))');
-        params.city = territory.city;
-      }
-      if (territory.region) {
-        clauses.push('(user.region IS NOT NULL AND LOWER(user.region) = LOWER(:region))');
-        params.region = territory.region;
-      }
-      qb.andWhere(`(${clauses.join(' OR ')})`, params);
-    }
+    });
 
-    const users = await qb.orderBy('user.createdAt', 'DESC').take(limit).getMany();
+    const matching = origin
+      ? items
+        .filter((item) => item.distanceMiles != null && item.distanceMiles <= radiusMiles)
+        .sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity))
+      : items;
 
-    const items = users.map((user) => ({
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0],
-      email: user.email,
-      profileImage: user.profileImage,
-      bio: user.bio,
-      skills: user.skills ?? [],
-      languages: user.languages ?? [],
-      hourlyRate: user.hourlyRate,
-      currency: user.currency,
-      timezone: user.timezone,
-      role: user.role,
-      postcode: user.postcode,
-      city: user.city,
-      region: user.region,
-      country: user.country,
-      isOnboarded: user.isOnboarded,
-      isQuizPassed: user.isQuizPassed,
-      verificationStatus: user.verificationStatus,
-      isPaidVisible: user.isPaidVisible,
-      createdAt: user.createdAt,
-    }));
-
-    return { items, total: items.length, territory };
+    return {
+      items: matching.slice(0, limit),
+      total: matching.length,
+      territory,
+      distanceFrom: territory?.postcode ?? null,
+    };
   }
 
-  async lookupPostalCode(postcode: string) {
-    const normalizedPostcode = String(postcode || '').trim().toUpperCase();
+  private normalizePostcode(postcode?: string | null): string {
+    return (postcode || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  }
+
+  private compactPostcode(postcode?: string | null): string {
+    return this.normalizePostcode(postcode).replace(/\s+/g, '');
+  }
+
+  private haversineKm(a: GeoPoint, b: GeoPoint): number {
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const radius = 6371;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * radius * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  /**
+   * Bulk geocode every affiliate postcode in one or more postcodes.io calls.
+   * Results are cached for a day so repeated directory searches stay cheap.
+   */
+  private async bulkGeocodePostcodes(
+    postcodes: Array<string | null | undefined>,
+  ): Promise<Map<string, GeoPoint>> {
+    const found = new Map<string, GeoPoint>();
+    const unique = Array.from(
+      new Set(postcodes.map((postcode) => this.compactPostcode(postcode)).filter(Boolean)),
+    );
+    if (!unique.length) return found;
+
+    const missing: string[] = [];
+    for (const compact of unique) {
+      const cached = this.geoCache.get(compact);
+      if (cached && Date.now() - cached.at < GEO_CACHE_TTL_MS) {
+        if (cached.point) found.set(compact, cached.point);
+      } else {
+        missing.push(compact);
+      }
+    }
+
+    for (let index = 0; index < missing.length; index += 100) {
+      const chunk = missing.slice(index, index + 100);
+      try {
+        const response = await axios.post<PostcodesIoBulkResponse>(
+          'https://api.postcodes.io/postcodes',
+          { postcodes: chunk },
+          { timeout: 8000 },
+        );
+        const rows = Array.isArray(response.data?.result) ? response.data.result : [];
+        for (const row of rows) {
+          const compact = this.compactPostcode(row?.query || row?.result?.postcode);
+          if (!compact) continue;
+          const lat = row?.result?.latitude;
+          const lng = row?.result?.longitude;
+          const point =
+            typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null;
+          this.geoCache.set(compact, { at: Date.now(), point });
+          if (point) found.set(compact, point);
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Bulk postcode lookup failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    return found;
+  }
+
+  async lookupPostalCode(postcode: string): Promise<PostalLookupResult> {
+    const normalizedPostcode = this.normalizePostcode(postcode);
     if (normalizedPostcode.length < 3) {
       throw new BadRequestException('Enter a valid postal code.');
     }
 
     try {
-      // Match CHS: use Nominatim postal-code search restricted to the UK.
-      const response = await axios.get('https://nominatim.openstreetmap.org/search', {
-        params: {
-          postalcode: normalizedPostcode,
-          country: 'United Kingdom',
-          format: 'json',
-          addressdetails: 1,
-          limit: 1,
-        },
-        headers: { 'User-Agent': '247GBS Affiliates/1.0' },
-        timeout: 8000,
-      });
-      const match = Array.isArray(response.data) ? response.data[0] : null;
-      if (!match) return { found: false, postalCode: normalizedPostcode };
+      // postcodes.io is the primary source used by Central, and returns
+      // coordinates in the same response.
+      return await this.resolveWithPostcodesIo(normalizedPostcode);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return { found: false, postalCode: normalizedPostcode };
+      }
+      this.logger.warn(
+        `postcodes.io lookup failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
 
-      const address = match.address || {};
-      const city = address.city || address.town || address.village || address.municipality || address.suburb || '';
-      const region = address.state || address.county || address.region || address.admin_county || '';
-      const country = address.country || '';
-
-      return {
-        found: Boolean(city || region || country),
-        postalCode: address.postcode || normalizedPostcode,
-        city,
-        region,
-        country,
-        displayName: match.display_name || '',
-      };
+    try {
+      return await this.resolveWithNominatim(normalizedPostcode);
     } catch (error) {
       this.logger.warn(`Postal-code lookup failed: ${error instanceof Error ? error.message : String(error)}`);
       throw new ServiceUnavailableException('Postal-code lookup is unavailable right now. Please try again.');
     }
+  }
+
+  private async resolveWithPostcodesIo(postcode: string): Promise<PostalLookupResult> {
+    const clean = postcode.replace(/\s+/g, '');
+    let response: { data?: PostcodesIoResponse } | undefined;
+    try {
+      response = await axios.get<PostcodesIoResponse>(
+        `https://api.postcodes.io/postcodes/${encodeURIComponent(clean)}`,
+        { timeout: 8000 },
+      );
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        throw new BadRequestException('We could not find that UK postcode.');
+      }
+      throw error;
+    }
+
+    const result = response.data?.result;
+    if (!result) {
+      throw new Error('postcodes.io returned no result payload');
+    }
+
+    const city =
+      result.post_town ||
+      result.admin_district ||
+      result.region ||
+      result.admin_county ||
+      '';
+    const region = result.region || result.admin_county || '';
+
+    return {
+      found: Boolean(city || region),
+      postalCode: result.postcode || postcode,
+      city,
+      region,
+      country: 'United Kingdom',
+      latitude: result.latitude ?? null,
+      longitude: result.longitude ?? null,
+      displayName: [result.postcode, city, 'United Kingdom'].filter(Boolean).join(', '),
+    };
+  }
+
+  private async resolveWithNominatim(postcode: string): Promise<PostalLookupResult> {
+    // Nominatim postal-code search restricted to the UK (fallback only).
+    const response = await axios.get<NominatimMatch[]>('https://nominatim.openstreetmap.org/search', {
+      params: {
+        postalcode: postcode,
+        country: 'United Kingdom',
+        format: 'json',
+        addressdetails: 1,
+        limit: 1,
+      },
+      headers: { 'User-Agent': '247GBS Affiliates/1.0' },
+      timeout: 8000,
+    });
+    const match = Array.isArray(response.data) ? response.data[0] : null;
+    if (!match) return { found: false, postalCode: postcode };
+
+    const address = match.address || {};
+    const city = address.city || address.town || address.village || address.municipality || address.suburb || '';
+    const region = address.state || address.county || address.region || address.admin_county || '';
+    const country = address.country || 'United Kingdom';
+
+    return {
+      found: Boolean(city || region || country),
+      postalCode: address.postcode || postcode,
+      city,
+      region,
+      country,
+      latitude: match.lat != null ? Number(match.lat) : undefined,
+      longitude: match.lon != null ? Number(match.lon) : undefined,
+      displayName: match.display_name || '',
+    };
   }
 
   /**
