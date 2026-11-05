@@ -444,8 +444,10 @@ export class TasksService {
     // their dashboard shows what they were paid.
     if (input.compensationPence != null) {
       task.compensationAmount = Number(input.compensationPence) / 100;
+      task.compensationModel = 'FIXED';
     } else if (input.compensationAmount != null) {
       task.compensationAmount = Number(input.compensationAmount);
+      task.compensationModel = 'FIXED';
     }
 
     if (input.decision === 'APPROVED') {
