@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Request, UseGuards } from '@nestjs/common';
 import { WalletService } from './wallet.service';
+import { McomWalletService } from './mcom-wallet.service';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -8,10 +9,31 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly mcomWalletService: McomWalletService,
+  ) {}
+
+  @Get('mcom')
+  @ApiOperation({
+    summary: 'Get my MCOM wallet',
+    description:
+      'Read-only Central Hub wallet for this affiliate: balance, available balance, active escrow holds and ledger entries.',
+  })
+  getMcomWallet(
+    @Request() req,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.mcomWalletService.getForUser(
+      req.user.userId,
+      Math.max(1, Number(page) || 1),
+      Math.min(50, Math.max(1, Number(limit) || 20)),
+    );
+  }
 
   @Get()
-  @ApiOperation({ summary: 'Get my wallet balance', description: 'Authenticated user. Returns wallet details.' })
+  @ApiOperation({ summary: 'Get my local wallet balance', description: 'Authenticated user. Returns local wallet details.' })
   @ApiResponse({ status: 200, description: 'Wallet details', schema: { example: { id: 'uuid', balance: 100.00, currency: 'USD' } } })
   getMyWallet(@Request() req) {
     return this.walletService.findOneByUserId(req.user.userId);

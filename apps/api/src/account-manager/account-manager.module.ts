@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { HttpModule } from '@nestjs/axios';
 import { AccountManagerController } from './account-manager.controller';
 import { AccountManagerService } from './account-manager.service';
 import { Task } from '../tasks/entities/task.entity';
@@ -8,7 +9,7 @@ import { Transaction } from '../wallet/entities/transaction.entity';
 import { User } from '../users/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Task, Wallet, Transaction, User])],
+  imports: [TypeOrmModule.forFeature([Task, Wallet, Transaction, User]), HttpModule],
   controllers: [AccountManagerController],
   providers: [AccountManagerService],
   exports: [AccountManagerService],

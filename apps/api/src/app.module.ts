@@ -18,27 +18,58 @@ import { SectorsModule } from './sectors/sectors.module';
 import { AccountManagerModule } from './account-manager/account-manager.module';
 import { AdminModule } from './admin/admin.module';
 import { LearningModule } from './learning/learning.module';
+import { McomModule } from './mcom/mcom.module';
+import { BusinessAcquisitionModule } from './business-acquisition/business-acquisition.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_NAME'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: configService.get<boolean>('DB_SYNC'), // Set to false in production
-        logging: configService.get<string>('NODE_ENV') === 'development',
-        ssl: configService.get<boolean>('DB_SSL') ? { rejectUnauthorized: false } : false,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const host =
+          configService.get<string>('POSTGRES_HOST') ??
+          configService.get<string>('DB_HOST') ??
+          'localhost';
+        const rawSsl =
+          configService.get<string>('POSTGRES_SSL') ??
+          configService.get<string>('DB_SSL');
+        const isSsl =
+          rawSsl !== undefined
+            ? String(rawSsl).toLowerCase() === 'true'
+            : host.includes('supabase');
+
+        return {
+          type: 'postgres',
+          host,
+          port: Number(
+            configService.get<number>('POSTGRES_PORT') ??
+              configService.get<number>('DB_PORT') ??
+              5432,
+          ),
+          username:
+            configService.get<string>('POSTGRES_USERNAME') ??
+            configService.get<string>('DB_USERNAME') ??
+            'postgres',
+          password:
+            configService.get<string>('POSTGRES_PASSWORD') ??
+            configService.get<string>('DB_PASSWORD'),
+          database:
+            configService.get<string>('POSTGRES_NAME') ??
+            configService.get<string>('DB_NAME') ??
+            '247gbs-affiliate',
+          extra: configService.get<string>('PGOPTIONS')
+            ? { options: configService.get<string>('PGOPTIONS') }
+            : undefined,
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize:
+            String(configService.get('DB_SYNC')).toLowerCase() === 'true',
+          logging: configService.get<string>('NODE_ENV') === 'development',
+          ssl: isSsl ? { rejectUnauthorized: false } : false,
+        };
+      },
       inject: [ConfigService],
     }),
     AuthModule,
@@ -54,6 +85,8 @@ import { LearningModule } from './learning/learning.module';
     AccountManagerModule,
     AdminModule,
     LearningModule,
+    McomModule,
+    BusinessAcquisitionModule,
   ],
   controllers: [AppController],
   providers: [

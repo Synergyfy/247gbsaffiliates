@@ -1,93 +1,156 @@
 "use client";
 
-import React, { useState } from 'react';
+import Link from 'next/link';
 import { useTasks, Task } from '@/hooks/useTasks';
-import { toast } from 'react-toastify';
+import { useAuthStore } from '@/store/useAuthStore';
+import { FormEvent, Suspense } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-export default function AgentTasksPage() {
-    const { tasks, isLoading, acceptTask } = useTasks();
-    const [processingId, setProcessingId] = useState<string | null>(null);
+const formatDate = (value?: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+};
 
-    const handleAcceptTask = async (taskId: string) => {
-        setProcessingId(taskId);
-        try {
-            await acceptTask(taskId);
-            toast.success('Task accepted successfully!');
-        } catch (error) {
-            toast.error('Failed to accept task. It might have been taken.');
-        } finally {
-            setProcessingId(null);
-        }
-    };
+const statusStyles: Record<string, string> = {
+    open: 'bg-slate-50 text-slate-700 border-slate-200',
+    assigned: 'bg-blue-50 text-blue-800 border-blue-200',
+    accepted: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    declined: 'bg-slate-100 text-slate-600 border-slate-200',
+    submitted: 'bg-amber-50 text-amber-800 border-amber-200',
+    pending_business_approval: 'bg-violet-50 text-violet-800 border-violet-200',
+    revision_requested: 'bg-orange-50 text-orange-800 border-orange-200',
+    approved: 'bg-teal-50 text-teal-800 border-teal-200',
+    completed: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    cancelled: 'bg-red-50 text-red-700 border-red-200',
+};
 
-    if (isLoading) {
+function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
+    const assignedDate = formatDate(task.createdAt);
+    const dueDate = formatDate(task.dueDate);
+    const isRevision = task.status === 'revision_requested';
+    const isCentralTask = task.originSystem === 'MCOM_CENTRAL' || Boolean(task.externalTaskId);
+
+    return (
+        <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-base font-bold text-slate-950">{task.title}</h2>
+                        {isCentralTask && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">Central Hub</span>}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">{task.description || 'No additional description was provided.'}</p>
+                    {(task.centralBusinessName || task.platforms?.length) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {task.centralBusinessName && <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700"><span className="material-symbols-outlined text-sm">storefront</span>{task.centralBusinessName}</span>}
+                            {(task.platforms ?? []).map((platform) => <span key={platform} className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-blue-800">{platform}</span>)}
+                            {task.category && <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-indigo-800">{task.category}</span>}
+                            {task.projectName && <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800"><span className="material-symbols-outlined text-sm">folder</span>{task.projectName}</span>}
+                            {task.chargeApprovalRequired && <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Awaiting charge approval</span>}
+                        </div>
+                    )}
+                </div>
+                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${statusStyles[task.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                    {task.status.replaceAll('_', ' ')}
+                </span>
+            </div>
+
+            {isRevision && (
+                <p className="mt-3 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-xs leading-5 text-orange-900">
+                    <strong className="font-semibold">Changes requested.</strong>{task.reviewNotes ? ` ${task.reviewNotes}` : ' Open the task to review the feedback and resubmit.'}
+                </p>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-600">
+                {assignedDate && <span><strong className="font-semibold text-slate-800">Created:</strong> {assignedDate}</span>}
+                {dueDate && <span><strong className="font-semibold text-slate-800">Deadline:</strong> {dueDate}</span>}
+                {task.estimatedTime && <span><strong className="font-semibold text-slate-800">Estimate:</strong> {task.estimatedTime}</span>}
+                {task.budget != null && <span><strong className="font-semibold text-slate-800">Budget:</strong> {new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'USD' }).format(Number(task.budget))}</span>}
+                {task.submittedAt && <span><strong className="font-semibold text-slate-800">Submitted:</strong> {formatDate(task.submittedAt)}</span>}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                <span className="text-xs text-slate-500">
+                    {task.status === 'submitted'
+                        ? `Awaiting ${isCentralTask ? 'Central Hub' : 'administrator'} review`
+                        : task.requiredSkills?.length
+                            ? `${task.requiredSkills.length} listed requirement${task.requiredSkills.length === 1 ? '' : 's'}`
+                            : 'Review the task instructions for requirements'}
+                </span>
+                <Link href={`${basePath}/tasks/${task.id}`} className="inline-flex min-h-10 items-center gap-1 rounded-lg px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+                    {isRevision ? 'Review & resubmit' : 'Open task'} <span className="material-symbols-outlined text-base">arrow_forward</span>
+                </Link>
+            </div>
+        </article>
+    );
+}
+
+function AgentTasksContent() {
+    const { user } = useAuthStore();
+    const router = useRouter();
+    const pathname = usePathname();
+    const basePath = pathname.split('/').slice(0, 3).join('/');
+    const searchParams = useSearchParams();
+    const search = searchParams.get('search') || '';
+    const { tasks, isLoading, isError, error, refetch } = useTasks({
+        assignedAgentId: user?.id,
+        search: search.trim() || undefined,
+        enabled: Boolean(user?.id),
+        limit: 50,
+    });
+
+    if (!user?.id || isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary"></div>
+            <div className="flex min-h-[50vh] items-center justify-center px-4">
+                <div className="flex items-center gap-3 text-sm font-medium text-slate-500" role="status">
+                    <span className="size-5 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />
+                    Loading assigned tasks…
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="p-8 lg:p-10 max-w-7xl mx-auto w-full font-display">
-            <header className="mb-8 flex items-center justify-between">
+        <div className="mx-auto w-full max-w-[1500px] py-5 lg:py-8">
+            <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-black text-text-main">Available Tasks</h1>
-                    <p className="text-text-secondary text-sm font-medium">Browse and accept new opportunities across the platform.</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Affiliate workspace</p>
+                    <h1 className="mt-1 text-2xl font-bold text-slate-950">Assigned Tasks</h1>
+                    <p className="mt-1 max-w-2xl text-sm text-slate-600">Tasks assigned to you by Central Hub businesses or an administrator, with their current status, deadlines and review feedback.</p>
                 </div>
-                <div className="flex gap-3">
-                    <button className="bg-surface-light border border-slate-200 text-text-secondary px-4 py-2 rounded-xl font-bold text-xs hover:border-primary hover:text-primary transition-all flex items-center gap-2">
-                        <span className="material-symbols-outlined text-lg">filter_list</span>
-                        Sort by Reward
-                    </button>
-                </div>
+                {basePath.endsWith('/agent') && (
+                    <Link href={`${basePath}/my-missions`} className="text-sm font-semibold text-blue-700 hover:underline">View my missions</Link>
+                )}
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {tasks && tasks.length > 0 ? (
-                    tasks.map((task: Task) => (
-                        <div key={task.id} className="bg-white p-6 rounded-2xl border border-slate-200 transition-all cursor-pointer flex flex-col justify-between group hover:shadow-lg hover:-translate-y-0.5 min-h-[200px]">
-                            <div className="flex items-start justify-between">
-                                <div className="size-12 rounded-xl bg-slate-50 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                                    <span className="material-symbols-outlined">
-                                        {task.type === 'writing' ? 'description' : 
-                                         task.type === 'campaign' ? 'campaign' : 
-                                         task.type === 'audit' ? 'rate_review' : 'work'}
-                                    </span>
-                                </div>
-                                <span className="text-lg font-black text-text-main">
-                                    {task.currency === 'GBP' ? '£' : '$'}{Number(task.budget).toLocaleString()}
-                                </span>
-                            </div>
+            <form onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const query = String(new FormData(event.currentTarget).get('search') || '').trim(); router.push(query ? `${basePath}/tasks?search=${encodeURIComponent(query)}` : `${basePath}/tasks`); }} className="mb-4 flex items-center gap-2 border border-slate-200 bg-white px-3">
+                <span className="material-symbols-outlined text-lg text-slate-400">search</span>
+                <input key={search} name="search" defaultValue={search} aria-label="Search assigned tasks" placeholder="Search assigned task titles" className="h-10 min-w-0 flex-1 text-sm outline-none placeholder:text-slate-400" />
+                <button type="submit" className="text-xs font-semibold text-blue-700">Search</button>
+            </form>
 
-                            <div className="mt-4">
-                                <h3 className="font-bold text-text-main text-lg mb-1 group-hover:text-primary transition-colors leading-tight">{task.title}</h3>
-                                <p className="text-xs text-text-secondary font-medium italic">
-                                    {(typeof task.category === 'string' ? task.category : task.category?.name) || 'General Category'} • {task.estimatedTime || 'Flexible'}
-                                </p>
-                            </div>
-
-                            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                    Status: {task.status}
-                                </span>
-                                <button 
-                                    onClick={() => handleAcceptTask(task.id)}
-                                    disabled={processingId !== null}
-                                    className="px-4 py-2 bg-primary text-white hover:bg-primary-hover shadow-lg shadow-primary/10 transition-all text-[10px] font-black uppercase tracking-widest rounded-lg disabled:opacity-50"
-                                >
-                                    {processingId === task.id ? 'Processing...' : 'Accept Task'}
-                                </button>
-                            </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="col-span-full py-24 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                        <span className="material-symbols-outlined text-4xl text-slate-300 mb-3">work_off</span>
-                        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs italic">No active tasks available in the sector.</p>
-                    </div>
-                )}
-            </div>
+            {isError ? (
+                <section className="rounded-xl border border-red-200 bg-red-50 p-5" role="alert">
+                    <h2 className="font-semibold text-red-900">Tasks couldn’t be loaded</h2>
+                    <p className="mt-1 text-sm text-red-800">{error instanceof Error ? error.message : 'Check your connection and try again.'}</p>
+                    <button type="button" onClick={() => refetch()} className="mt-3 rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white hover:bg-red-900">Try again</button>
+                </section>
+            ) : tasks?.length ? (
+                <div className="space-y-3">
+                    {tasks.map((task) => <TaskCard key={task.id} task={task} basePath={basePath} />)}
+                </div>
+            ) : (
+                <section className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
+                    <span className="material-symbols-outlined text-4xl text-slate-300">assignment</span>
+                    <h2 className="mt-3 font-semibold text-slate-900">{search.trim() ? 'No matching tasks' : 'No tasks assigned yet'}</h2>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">{search.trim() ? 'Try a different search term.' : 'Tasks delegated by Central Hub businesses or an administrator will appear here when they’re ready for you.'}</p>
+                    <Link href={basePath} className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to dashboard</Link>
+                </section>
+            )}
         </div>
     );
+}
+
+export default function AgentTasksPage() {
+    return <Suspense fallback={<div className="py-10 text-center text-sm text-slate-500">Loading tasks…</div>}><AgentTasksContent /></Suspense>;
 }

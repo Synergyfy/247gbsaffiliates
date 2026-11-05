@@ -5,18 +5,18 @@ interface AuthInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export default function AuthInput({ label, icon, ...props }: AuthInputProps) {
     return (
-        <div className="space-y-2">
-            <label className="block text-sm font-bold text-text-main" htmlFor={props.id}>
-                {label}
+        <div className="space-y-1 md:space-y-2">
+            <label className="block text-xs md:text-sm font-bold text-text-main" htmlFor={props.id}>
+                {label}{props.required && <span className="ml-1 text-red-600" aria-hidden="true">*</span>}
             </label>
             <div className="relative group">
                 {icon && (
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-primary transition-colors">
-                        <span className="material-symbols-outlined text-xl">{icon}</span>
+                        <span className="material-symbols-outlined text-lg md:text-xl">{icon}</span>
                     </div>
                 )}
                 <input
-                    className={`block w-full ${icon ? "pl-10" : "px-4"} pr-4 py-3 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-text-main placeholder-gray-400 transition-all outline-none font-medium`}
+                    className={`block w-full ${icon ? "pl-9 md:pl-10" : "px-3.5 md:px-4"} pr-3.5 md:pr-4 py-2.5 md:py-3 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-text-main placeholder-gray-400 transition-all outline-none font-medium text-sm md:text-base`}
                     {...props}
                 />
             </div>

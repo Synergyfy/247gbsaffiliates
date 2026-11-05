@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 import Image from "next/image";
 import { HeroCarousel } from "@/components/landing/HeroCarousel";
 import { FaNairaSign } from "react-icons/fa6";
@@ -18,6 +19,7 @@ export default function LandingPage() {
             <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">247gbs affiliate</h2>
           </div>
           <div className="hidden md:flex flex-1 justify-center gap-10">
+            <Link href="/find-agent" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">Find an Agent</Link>
             <Link href="/for-account-manager" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Account Managers</Link>
             <Link href="/for-agent" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Agents</Link>
             <Link href="/for-consultant" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Consultants</Link>
@@ -27,7 +29,7 @@ export default function LandingPage() {
             <Link href="/login" className="hidden sm:flex min-w-[100px] items-center justify-center rounded-xl h-11 px-6 bg-white text-text-main text-sm font-semibold border border-primary/10 hover:bg-slate-50 transition-all font-display">
               Login
             </Link>
-            <Link href="/role-selection" className="flex min-w-[110px] items-center justify-center rounded-xl h-11 px-6 bg-primary text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all font-display">
+            <Link href={getAffiliateRegisterUrl()} className="flex min-w-[110px] items-center justify-center rounded-xl h-11 px-6 bg-primary text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all font-display">
               Get Started
             </Link>
           </div>
@@ -177,25 +179,23 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* Network assurances (no fabricated testimonials) */}
       <section className="px-6 lg:px-40 py-24 bg-white overflow-hidden">
         <div className="max-w-[1240px] mx-auto text-center">
-          <span className="text-primary font-bold tracking-widest uppercase text-sm">Testimonials</span>
-          <h2 className="text-4xl lg:text-5xl font-bold font-display text-text-main mb-16 mt-4">What Elite Talent Says</h2>
+          <span className="text-primary font-bold tracking-widest uppercase text-sm">Network standards</span>
+          <h2 className="text-4xl lg:text-5xl font-bold font-display text-text-main mb-16 mt-4">Built on verified work</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             {[
-              { name: "Sarah Jenkins", role: "Elite Merchant", text: "Mcommall transformed how we handle our logistics and partner matching. The verification process gives us immense confidence.", avatar: "https://i.pravatar.cc/150?u=sarah" },
-              { name: "Marcus Chen", role: "Field Agent", text: "The role-based tools are a game changer. I can manage my entire client portfolio from one dashboard with zero friction.", avatar: "https://i.pravatar.cc/150?u=marcus" },
-              { name: "Elena Rodriguez", role: "Consultant", text: "Data-driven matching actually works. I've been connected with higher quality opportunities than ever before.", avatar: "https://i.pravatar.cc/150?u=elena" }
-            ].map((testimonial, i) => (
-              <div key={i} className="p-10 rounded-[2.5rem] bg-background-light border border-primary/5 text-left flex flex-col gap-6">
-                <p className="text-text-secondary text-lg font-medium">"{testimonial.text}"</p>
-                <div className="flex items-center gap-4 mt-auto">
-                  <img src={testimonial.avatar} alt={testimonial.name} className="size-12 rounded-full object-cover" />
-                  <div>
-                    <p className="text-text-main font-bold">{testimonial.name}</p>
-                    <p className="text-primary text-xs font-bold uppercase tracking-widest">{testimonial.role}</p>
-                  </div>
+              { icon: 'verified_user', title: 'Identity verified', text: 'Every profile is reviewed by an administrator before it appears in the marketplace.' },
+              { icon: 'work', title: 'Real delivered work', text: 'Tasks, submissions, reviews and payouts are recorded against live platform records.' },
+              { icon: 'hub', title: 'Central Hub connected', text: 'Account creation, sign-in and membership data come directly from Central Hub Solutions.' },
+            ].map((item) => (
+              <div key={item.title} className="p-10 rounded-[2.5rem] bg-background-light border border-primary/5 text-left flex flex-col gap-6">
+                <span className="material-symbols-outlined text-4xl text-primary">{item.icon}</span>
+                <p className="text-text-secondary text-lg font-medium">{item.text}</p>
+                <div className="mt-auto">
+                  <p className="text-text-main font-bold">{item.title}</p>
+                  <p className="text-primary text-xs font-bold uppercase tracking-widest">247GBS Affiliate</p>
                 </div>
               </div>
             ))}
@@ -271,7 +271,7 @@ export default function LandingPage() {
             <p className="text-white/90 text-2xl font-medium max-w-[700px] mx-auto">Join hundreds of leading companies already scaling through verified elite talent on 247gbs affiliate.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-8 relative z-10 pt-4">
-            <Link href="/signup" className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Get Started Now</Link>
+            <Link href={getAffiliateRegisterUrl()} className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Get Started Now</Link>
             <Link href="#" className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-14 py-6 rounded-2xl text-xl font-bold hover:bg-white/20 transition-all text-center font-display">Contact Sales</Link>
           </div>
         </div>

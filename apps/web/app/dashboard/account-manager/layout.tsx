@@ -16,10 +16,10 @@ export default function AccountManagerLayout({
     const pathname = usePathname();
     const { user } = useAuthStore();
     
-    // Fallback initials and name
-    const userName = user?.name || "Sarah Jenkins";
-    const userRole = user?.role || "Account Manager";
-    const userInitials = user?.name ? user.name.split(' ').map(n => n[0]).join('') : "SJ";
+    // Fallback initials and name while the session hydrates
+    const userName = user?.name || "Account Manager";
+    const userRole = user?.role ? user.role.replaceAll('_', ' ') : "Account Manager";
+    const userInitials = user?.name ? user.name.split(' ').map(n => n[0]).join('') : "AM";
 
     const sidebarLinks = [
         {
@@ -27,8 +27,11 @@ export default function AccountManagerLayout({
             href: "/dashboard/account-manager",
             icon: "dashboard",
         },
+        { name: "Businesses", href: "/dashboard/account-manager/businesses", icon: "storefront" },
         { name: "Campaigns", href: "/dashboard/account-manager/campaigns", icon: "campaign" },
+        { name: "Tasks", href: "/dashboard/account-manager/tasks", icon: "assignment" },
         { name: "Agents", href: "/dashboard/account-manager/agents", icon: "groups" },
+        { name: "Messages", href: "/dashboard/account-manager/messages", icon: "forum" },
         { name: "Revenue", href: "/dashboard/account-manager/revenue", icon: "payments" },
         { name: "Settings", href: "/dashboard/account-manager/settings", icon: "settings" },
     ];

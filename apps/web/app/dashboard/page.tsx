@@ -2,9 +2,7 @@
 
 import React from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
-import { AgentDashboard } from '@/components/dashboard/AgentDashboard';
-import { AccountManagerDashboard } from '@/components/dashboard/AccountManagerDashboard';
-import { ConsultantDashboard } from '@/components/dashboard/ConsultantDashboard';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
@@ -14,29 +12,40 @@ export default function DashboardPage() {
     React.useEffect(() => {
         if (!isAuthenticated) {
             router.push('/login');
+            return;
         }
-    }, [isAuthenticated, router]);
-
-    if (!isAuthenticated || !user) {
-        return null;
-    }
-
-    const renderDashboard = () => {
-        switch (user.role) {
-            case 'agent':
-                return <AgentDashboard />;
-            case 'account-manager':
-                return <AccountManagerDashboard />;
-            case 'consultant':
-                return <ConsultantDashboard />;
-            default:
-                return <AgentDashboard />;
+        const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
+        const hasSubmittedVerification = Boolean(user?.verificationSubmission);
+        const isAwaitingVerification = ['pending', 'rejected'].includes(user?.verificationStatus || '');
+        if (user && user.role !== 'admin' && !user.isOnboarded && !isSkipped && !(isAwaitingVerification && hasSubmittedVerification)) {
+            router.push('/onboarding');
+            return;
         }
-    };
+        if (user?.role) {
+            switch (user.role) {
+                case 'agent':
+                    router.replace('/dashboard/agent');
+                    break;
+                case 'account-manager':
+                case 'account_manager':
+                    router.replace('/dashboard/account-manager');
+                    break;
+                case 'consultant':
+                    router.replace('/dashboard/consultant');
+                    break;
+                case 'admin':
+                    router.replace('/dashboard/admin');
+                    break;
+                default:
+                    router.replace('/dashboard/agent');
+                    break;
+            }
+        }
+    }, [isAuthenticated, user, router]);
 
     return (
-        <div className="min-h-screen bg-background-light">
-            {renderDashboard()}
+        <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary/20 border-b-primary"></div>
         </div>
     );
 }

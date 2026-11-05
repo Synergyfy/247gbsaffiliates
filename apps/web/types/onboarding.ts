@@ -13,7 +13,7 @@ export interface QuizOption {
 export interface QuizQuestion {
   id: string;
   text: string;
-  options: string[] | QuizOption[]; // Backend returns string[], mock used objects
+  options: string[] | QuizOption[]; // Backend returns string[]; legacy clients may send objects
   correctOptionId?: string;
   type?: 'scenario' | 'knowledge';
 }

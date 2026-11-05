@@ -1,9 +1,10 @@
-import { Controller, Get, Patch, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, Request, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { UserRole } from './entities/user.entity';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('users')
@@ -12,6 +13,33 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Public()
+  @Get('directory')
+  @ApiOperation({ summary: 'Public affiliate directory of verified members' })
+  @ApiResponse({ status: 200, description: 'Verified agents, account managers and consultants' })
+  async directory(
+    @Query('postcode') postcode?: string,
+    @Query('role') role?: string,
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+    @Query('radius') radius?: string,
+  ) {
+    return this.usersService.findPublicDirectory({
+      postcode,
+      role,
+      search,
+      limit: Number(limit) || undefined,
+      radiusMiles: Number(radius) || undefined,
+    });
+  }
+
+  @Get('postal-code-lookup')
+  @ApiOperation({ summary: 'Resolve a UK postal code using the CHS Nominatim lookup approach' })
+  @ApiResponse({ status: 200, description: 'Resolved location or found=false when no match exists' })
+  async lookupPostalCode(@Query('postcode') postcode: string) {
+    return this.usersService.lookupPostalCode(postcode || '');
+  }
 
   @Get('agents')
   @UseGuards(RolesGuard)
@@ -28,5 +56,12 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Skills updated', schema: { example: { id: 'uuid', skills: ['SEO', 'Marketing'], isOnboarded: true } } })
   async updateSkills(@Request() req, @Body() body: { skills: string[] }) {
     return this.usersService.updateSkills(req.user.userId, body.skills);
+  }
+
+  @Patch('complete-onboarding')
+  @ApiOperation({ summary: 'Complete onboarding', description: 'Marks onboarding as completed for the authenticated user.' })
+  @ApiResponse({ status: 200, description: 'Onboarding completed' })
+  async completeOnboarding(@Request() req) {
+    return this.usersService.completeOnboarding(req.user.userId);
   }
 }

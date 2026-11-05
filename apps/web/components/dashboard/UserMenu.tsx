@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
-import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 
 interface UserMenuProps {
     name: string;
@@ -14,7 +14,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ name, role, initials }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const { resetOnboarding } = useOnboardingStore();
-    const router = useRouter();
+    const { logout, isLoggingOut } = useAuth();
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -27,9 +27,9 @@ export const UserMenu: React.FC<UserMenuProps> = ({ name, role, initials }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         resetOnboarding();
-        router.push('/login');
+        await logout();
     };
 
     return (
@@ -49,10 +49,11 @@ export const UserMenu: React.FC<UserMenuProps> = ({ name, role, initials }) => {
                         <div className="h-px bg-slate-100 my-1"></div>
                         <button
                             onClick={handleLogout}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
+                            disabled={isLoggingOut}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left disabled:opacity-50"
                         >
                             <span className="material-symbols-outlined text-lg">logout</span>
-                            Logout
+                            {isLoggingOut ? 'Logging out...' : 'Logout'}
                         </button>
                     </div>
                 </div>

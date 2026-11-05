@@ -20,7 +20,7 @@ export interface Wallet {
 
 export const useWallet = () => {
   const queryClient = useQueryClient();
-  const { data: wallet, isLoading: isLoadingWallet } = useQuery({
+  const walletQuery = useQuery({
     queryKey: ['wallet'],
     queryFn: async () => {
       const response = await apiClient.get('/wallet');
@@ -28,7 +28,7 @@ export const useWallet = () => {
     },
   });
 
-  const { data: transactions, isLoading: isLoadingTransactions } = useQuery({
+  const transactionsQuery = useQuery({
     queryKey: ['wallet-transactions'],
     queryFn: async () => {
       const response = await apiClient.get('/wallet/transactions');
@@ -51,9 +51,14 @@ export const useWallet = () => {
   });
 
   return {
-    wallet,
-    transactions,
-    isLoading: isLoadingWallet || isLoadingTransactions,
+    wallet: walletQuery.data,
+    transactions: transactionsQuery.data,
+    isLoading: walletQuery.isLoading || transactionsQuery.isLoading,
+    isError: walletQuery.isError || transactionsQuery.isError,
+    error: walletQuery.error || transactionsQuery.error,
+    refetch: async () => {
+      await Promise.all([walletQuery.refetch(), transactionsQuery.refetch()]);
+    },
     requestWithdrawal: requestWithdrawal.mutateAsync,
     isWithdrawing: requestWithdrawal.isPending,
   };

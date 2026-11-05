@@ -1,0 +1,13 @@
+{
+  "git": {
+    "deploymentEnabled": {
+      "apps/web": true,
+      "apps/api": false
+    }
+  },
+  "buildCommand": "pnpm --filter @247gbsaffiliates/web build",
+  "devCommand": "pnpm --filter @247gbsaffiliates/web dev",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": "nextjs",
+  "outputDirectory": "apps/web/.next"
+}

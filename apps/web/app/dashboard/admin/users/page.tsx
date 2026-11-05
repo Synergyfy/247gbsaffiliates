@@ -1,124 +1,93 @@
 'use client';
 
-import React, { useState } from 'react';
+import Link from 'next/link';
+import { useState } from 'react';
 import { useAdminUsers } from '@/hooks/useAdminUsers';
-import { User } from '@/types/auth';
 
-export default function UserManagementPage() {
-    const { users, isLoading, updateStatus, isUpdating } = useAdminUsers();
-    const [searchTerm, setSearchTerm] = useState("");
+export default function AdminUsersPage() {
+    const [search, setSearch] = useState('');
+    const [role, setRole] = useState('');
+    const [verificationStatus, setVerificationStatus] = useState('');
+    const [qualification, setQualification] = useState('');
+    const [onboarded, setOnboarded] = useState('');
+    const [assessment, setAssessment] = useState('');
+    const [accountStatus, setAccountStatus] = useState('');
+    const [actionError, setActionError] = useState('');
+    const [actionNotice, setActionNotice] = useState('');
+    const [page, setPage] = useState(1);
+    const { users = [], meta, isLoading, isError, refetch, updateStatus, isUpdating } = useAdminUsers({
+        page,
+        limit: 25,
+        search: search.trim() || undefined,
+        role: role || undefined,
+        verificationStatus: verificationStatus || undefined,
+        qualification: (qualification || undefined) as 'qualified' | 'incomplete' | undefined,
+        isOnboarded: onboarded === '' ? undefined : onboarded === 'true',
+        isQuizPassed: assessment === '' ? undefined : assessment === 'passed',
+        status: accountStatus || undefined,
+    });
 
-    const filteredUsers = (users || []).filter(user =>
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.role.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const handleStatusUpdate = async (userId: string, newStatus: string) => {
+    const suspendOrActivate = async (id: string, status: string) => {
+        setActionError(''); setActionNotice('');
         try {
-            await updateStatus({ userId, status: newStatus });
-        } catch (error) {
-            console.error('Failed to update user status:', error);
+            await updateStatus({ userId: id, status: status === 'active' ? 'suspended' : 'active' });
+            setActionNotice('Affiliate account status updated.');
+        } catch {
+            setActionError('Affiliate account status could not be updated.');
         }
     };
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary"></div>
-            </div>
-        );
-    }
-
     return (
-        <div className="p-8 lg:p-10 font-display">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
+        <div className="mx-auto max-w-[1500px] font-display">
+            <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                    <h1 className="text-3xl font-black text-text-main mb-2">User Management</h1>
-                    <p className="text-text-secondary font-medium italic">Manage user accounts, roles, and verification status across the platform.</p>
+                    <p className="text-xs font-bold uppercase tracking-widest text-primary">Affiliate lifecycle</p>
+                    <h1 className="mt-1 text-2xl font-black text-text-main">Affiliate Management</h1>
+                    <p className="mt-1 text-sm text-text-secondary">Review verification, onboarding, assessment and qualification progress.</p>
                 </div>
-                <div className="flex gap-4">
-                    <div className="relative">
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-                        <input
-                            type="text"
-                            placeholder="Search users..."
-                            className="pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-surface-light focus:outline-none focus:ring-2 focus:ring-primary/10 w-full md:w-64 text-sm font-medium"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </div>
+                {meta && <span className="text-sm text-slate-500">{meta.total.toLocaleString()} affiliates</span>}
+            </header>
+
+            <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
+                <input value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder="Search name or email" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary" />
+                <select aria-label="Filter by role" value={role} onChange={(event) => { setPage(1); setRole(event.target.value); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">All affiliate roles</option><option value="agent">Agent</option><option value="account_manager">Account manager</option><option value="consultant">Consultant</option></select>
+                <select aria-label="Filter by verification" value={verificationStatus} onChange={(event) => { setPage(1); setVerificationStatus(event.target.value); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">All verification statuses</option><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option><option value="unverified">Unverified</option></select>
+                <select aria-label="Filter by qualification" value={qualification} onChange={(event) => { setPage(1); setQualification(event.target.value); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">All qualification progress</option><option value="qualified">Qualified</option><option value="incomplete">Incomplete</option></select>
+                <select aria-label="Filter by onboarding" value={onboarded} onChange={(event) => { setPage(1); setOnboarded(event.target.value); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">All onboarding statuses</option><option value="true">Onboarding complete</option><option value="false">Onboarding incomplete</option></select>
+                <select aria-label="Filter by assessment" value={assessment} onChange={(event) => { setPage(1); setAssessment(event.target.value); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">All assessment results</option><option value="passed">Passed</option><option value="failed">Not passed</option></select>
+                <select aria-label="Filter by account status" value={accountStatus} onChange={(event) => { setPage(1); setAccountStatus(event.target.value); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">All account statuses</option><option value="active">Active</option><option value="pending">Pending</option><option value="suspended">Suspended</option></select>
             </div>
 
-            <div className="bg-surface-light rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                                <th className="py-5 px-8 text-[10px] font-black text-text-secondary uppercase tracking-widest">User Details</th>
-                                <th className="py-5 px-8 text-[10px] font-black text-text-secondary uppercase tracking-widest">Role</th>
-                                <th className="py-5 px-8 text-[10px] font-black text-text-secondary uppercase tracking-widest">Status</th>
-                                <th className="py-5 px-8 text-[10px] font-black text-text-secondary uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
+            {actionError && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{actionError}</p>}
+            {actionNotice && <p role="status" className="mb-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{actionNotice}</p>}
+
+            {isError ? <section className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">Affiliate records could not be loaded. <button onClick={() => void refetch()} className="font-bold underline">Retry</button></section> : isLoading ? <div className="flex min-h-48 items-center justify-center"><span className="size-8 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div> : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <table className="w-full min-w-[1120px] text-left">
+                        <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr>
+                            <th className="px-4 py-3">Affiliate</th><th className="px-4 py-3">Role</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Assessment</th><th className="px-4 py-3">Onboarding</th><th className="px-4 py-3">Qualification</th><th className="px-4 py-3">Learning</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Actions</th>
+                        </tr></thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filteredUsers.length > 0 ? (
-                                filteredUsers.map((user: User) => (
-                                    <tr key={user.id} className="hover:bg-slate-50/50 transition-colors group">
-                                        <td className="py-5 px-8">
-                                            <div className="flex items-center gap-4">
-                                                <div className="size-10 rounded-full bg-slate-800 flex items-center justify-center text-white font-bold text-xs italic shadow-inner">
-                                                    {user.name.slice(0, 2).toUpperCase()}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-text-main text-sm">{user.name}</p>
-                                                    <p className="text-[10px] text-text-secondary font-medium">{user.email}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="py-5 px-8">
-                                            <span className="inline-block px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-wider border border-slate-200">
-                                                {user.role}
-                                            </span>
-                                        </td>
-                                        <td className="py-5 px-8">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`size-1.5 rounded-full ${user.assessmentSkipped === false ? 'bg-green-500' : 'bg-amber-400'}`}></span>
-                                                <span className="text-[10px] font-black uppercase tracking-tighter">
-                                                    {user.assessmentSkipped === false ? 'Verified' : 'Pending'}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="py-5 px-8 text-right">
-                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button 
-                                                    className="p-2 text-primary hover:bg-primary/5 rounded-xl transition-all"
-                                                    title="Approve User"
-                                                >
-                                                    <span className="material-symbols-outlined text-xl">check_circle</span>
-                                                </button>
-                                                <button 
-                                                    className="p-2 text-red-500 hover:bg-red-50/50 rounded-xl transition-all"
-                                                    title="Delete User"
-                                                >
-                                                    <span className="material-symbols-outlined text-xl">delete</span>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={4} className="py-12 text-center text-slate-400 font-bold italic uppercase tracking-widest text-[10px]">
-                                        No platform users found...
-                                    </td>
-                                </tr>
-                            )}
+                            {users.map((affiliate) => <tr key={affiliate.id} className="align-top hover:bg-slate-50/70">
+                                <td className="px-4 py-3"><Link href={`/dashboard/admin/users/${affiliate.id}`} className="font-semibold text-slate-900 hover:text-primary hover:underline">{affiliate.name}</Link><span className="mt-0.5 block text-xs text-slate-500">{affiliate.email}</span></td>
+                                <td className="px-4 py-3 text-xs capitalize text-slate-700">{affiliate.role.replaceAll('_', ' ')}</td>
+                                <td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs capitalize text-slate-700">{affiliate.verificationStatus}</span></td>
+                                <td className="px-4 py-3 text-xs text-slate-700">{affiliate.isQuizPassed ? 'Passed' : 'Not passed'}</td>
+                                <td className="px-4 py-3 text-xs text-slate-700">{affiliate.isOnboarded ? 'Complete' : 'Incomplete'}</td>
+                                <td className="px-4 py-3 text-xs font-semibold capitalize text-slate-700">{affiliate.qualificationStatus}</td>
+                                <td className="px-4 py-3 text-xs capitalize text-slate-700">{affiliate.learningStatus.replaceAll('_', ' ')}{affiliate.learningResourceCount > 0 && <span className="mt-1 block text-[10px] text-slate-500">{affiliate.learningCompletedCount}/{affiliate.learningResourceCount} resources</span>}</td>
+                                <td className="px-4 py-3 text-xs capitalize text-slate-700">{affiliate.status}</td>
+                                <td className="px-4 py-3"><div className="flex items-center gap-2"><Link href={`/dashboard/admin/users/${affiliate.id}`} className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Profile</Link><button disabled={isUpdating} onClick={() => void suspendOrActivate(affiliate.id, affiliate.status)} className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50">{affiliate.status === 'active' ? 'Suspend' : 'Activate'}</button></div></td>
+                            </tr>)}
+                            {!users.length && <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500">No affiliates match these filters.</td></tr>}
                         </tbody>
                     </table>
+                    <footer className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+                        <span>Page {meta?.page ?? page} of {meta?.lastPage ?? 1}</span>
+                        <div className="flex gap-2"><button disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="rounded-md border border-slate-200 px-3 py-1.5 disabled:opacity-40">Previous</button><button disabled={!meta || page >= meta.lastPage} onClick={() => setPage(value => value + 1)} className="rounded-md border border-slate-200 px-3 py-1.5 disabled:opacity-40">Next</button></div>
+                    </footer>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

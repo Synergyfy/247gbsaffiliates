@@ -12,9 +12,11 @@ interface OnboardingState {
     location: string;
     zipCode: string;
     phone: string;
-    headline: string;
+    city: string;
+    region: string;
+    country: string;
   };
-  profileInfo: Record<string, any>;
+  profileInfo: Record<string, unknown>;
   selectedSkills: string[];
   quizAnswers: Record<string, string>;
   quizResult: {
@@ -28,11 +30,8 @@ interface OnboardingState {
 
   questionnaireAnswers: {
     yearsExperience?: string;
-    turnaroundTime?: string;
     availability?: string;
-    portfolioUrl?: string;
     ratePreference?: string;
-    languages?: string[];
     acceptFixedPrice?: boolean;
     agreeTerms?: boolean;
     teamLeadershipExp?: string;
@@ -46,12 +45,13 @@ interface OnboardingState {
   setRole: (role: UserRole) => void;
   setUserName: (name: string) => void;
   updateBasicInfo: (info: Partial<OnboardingState['basicInfo']>) => void;
-  updateProfileInfo: (info: Record<string, any>) => void;
+  updateProfileInfo: (info: Record<string, unknown>) => void;
   updateQuestionnaireAnswers: (answers: Partial<OnboardingState['questionnaireAnswers']>) => void;
   setIsPaidVisibilityRequested: (requested: boolean) => void;
   setProfileStatus: (status: OnboardingState['profileStatus']) => void;
   toggleSkill: (skillId: string) => void;
   setQuizAnswer: (questionId: string, answerId: string) => void;
+  clearQuizAnswers: () => void;
   setQuizResult: (result: OnboardingState['quizResult']) => void;
   setRetakeAvailableAt: (timestamp: number | null) => void;
   setAssessmentSkipped: (skipped: boolean) => void; 
@@ -68,7 +68,9 @@ export const useOnboardingStore = create<OnboardingState>()(
         location: '',
         zipCode: '',
         phone: '',
-        headline: '',
+        city: '',
+        region: '',
+        country: '',
       },
       profileInfo: {},
       questionnaireAnswers: {},
@@ -114,6 +116,8 @@ export const useOnboardingStore = create<OnboardingState>()(
         quizAnswers: { ...state.quizAnswers, [questionId]: answerId }
       })),
 
+      clearQuizAnswers: () => set({ quizAnswers: {} }),
+
       setQuizResult: (result) => set({ quizResult: result, currentStep: 'outcome' }),
 
       setRetakeAvailableAt: (timestamp) => set({ retakeAvailableAt: timestamp }),
@@ -128,7 +132,9 @@ export const useOnboardingStore = create<OnboardingState>()(
           location: '',
           zipCode: '',
           phone: '',
-          headline: '',
+          city: '',
+          region: '',
+          country: '',
         },
         profileInfo: {},
         selectedSkills: [],

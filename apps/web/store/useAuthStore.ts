@@ -6,7 +6,7 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   token: string | null;
-  setAuth: (user: User, token: string) => void;
+  setAuth: (user: User, token?: string | null) => void;
   clearAuth: () => void;
   updateUser: (user: Partial<User>) => void;
 }
@@ -18,13 +18,14 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       token: null,
 
-      setAuth: (user, token) => {
+      setAuth: (user) => {
+        // Auth token is stored exclusively in HttpOnly cookies; scrub any token from localStorage
         if (typeof window !== 'undefined') {
-          localStorage.setItem('auth_token', token);
+          localStorage.removeItem('auth_token');
         }
         set({ 
           user, 
-          token, 
+          token: null, 
           isAuthenticated: true 
         });
       },
@@ -46,6 +47,12 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'artisans-auth',
+      // Strictly exclude any token from localStorage persistence
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
     }
   )
 );
+
