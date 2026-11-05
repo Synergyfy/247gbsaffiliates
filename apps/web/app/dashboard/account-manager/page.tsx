@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { useTasks, Task } from '@/hooks/useTasks';
-import { useWallet } from '@/hooks/useWallet';
+import { useMcomWallet } from '@/hooks/useMcomWallet';
 import { useMessaging } from '@/hooks/useMessaging';
 import { useAssignedBusinesses, AssignedBusiness } from '@/hooks/useAssignedBusinesses';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -42,7 +42,7 @@ export default function AccountManagerDashboard() {
         error: tasksErrorObject,
         refetch: refetchTasks,
     } = useTasks({ limit: 50 });
-    const { wallet, isLoading: isLoadingWallet } = useWallet();
+    const { wallet, isLoading: isLoadingWallet } = useMcomWallet();
     const { conversations, sendMessage, isSending } = useMessaging();
     const { data: assignedBusinesses, isLoading: isLoadingBusinesses } = useAssignedBusinesses();
     const [selectedConvId, setSelectedConvId] = React.useState<string | null>(null);
@@ -144,7 +144,7 @@ export default function AccountManagerDashboard() {
                             <span className="material-symbols-outlined text-primary text-sm">monetization_on</span>
                         </div>
                         <span className="text-2xl font-black text-text-main">
-                            £{Number(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {Number(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} MCOM
                         </span>
                     </div>
                 </div>
