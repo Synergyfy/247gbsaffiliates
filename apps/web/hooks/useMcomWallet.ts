@@ -15,6 +15,9 @@ export interface McomWalletTransaction {
   description?: string | null;
   status: string;
   createdAt: string;
+  /** Local task id resolved from a Central affiliate-task settlement reference. */
+  taskId?: string | null;
+  taskTitle?: string | null;
 }
 
 export interface McomWalletHold {
