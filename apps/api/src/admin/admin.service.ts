@@ -330,7 +330,9 @@ export class AdminService {
 
     if (status === VerificationStatus.REJECTED) {
       user.isOnboarded = false;
-    } else if (user.isQuizPassed && user.skills?.length) {
+    } else if (user.isQuizPassed && (user.role !== UserRole.AGENT || Boolean(user.skills?.length))) {
+      // Account managers and consultants are not marketplace skill matches, so
+      // a missing skill list must not leave a verified relationship role stuck.
       user.isOnboarded = true;
     }
 

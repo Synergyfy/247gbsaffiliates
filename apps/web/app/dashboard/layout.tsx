@@ -14,6 +14,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const isAssessmentStatusPage = pathname === '/dashboard/agent/assessment';
     const isAgentDashboard = pathname.startsWith('/dashboard/agent');
     const [isChecking, setIsChecking] = useState(!user);
+    const [verificationBannerDismissed, setVerificationBannerDismissed] = useState(false);
+
+    const verificationBannerKey = user?.id
+        ? `verification-banner:${user.id}:${user.verificationStatus || 'unverified'}`
+        : null;
+
+    useEffect(() => {
+        if (!verificationBannerKey || typeof window === 'undefined') return;
+        setVerificationBannerDismissed(localStorage.getItem(verificationBannerKey) === '1');
+    }, [verificationBannerKey]);
+
+    const dismissVerificationBanner = () => {
+        setVerificationBannerDismissed(true);
+        if (verificationBannerKey && typeof window !== 'undefined') {
+            localStorage.setItem(verificationBannerKey, '1');
+        }
+    };
 
     useEffect(() => {
         // Scrub legacy auth_token from localStorage
@@ -41,6 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         lastName: profile.lastName ?? user?.lastName,
                         isOnboarded,
                         isQuizPassed,
+                        skills: profile.skills ?? user?.skills,
                         role: profile.role || user?.role,
                         verificationStatus: profile.verificationStatus,
                         verificationNotes: profile.verificationNotes,
@@ -116,12 +134,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
 
     const needsOnboardingSteps = Boolean(user && (
-        !user.verificationSubmission || !user.isQuizPassed || !user.skills?.length
+        !user.verificationSubmission ||
+        !user.isQuizPassed ||
+        (user.role === 'agent' && !user.skills?.length)
     ));
+
+    // Only show the standalone banner for the verified confirmation. Pending
+    // and rejected states are explained by the dashboard header, so repeating
+    // them here just adds noise. The verified confirmation is dismissible.
+    const showVerificationBanner = Boolean(
+        user &&
+        user.role !== 'admin' &&
+        !isAgentDashboard &&
+        user.verificationStatus === 'verified' &&
+        !verificationBannerDismissed
+    );
 
     return (
         <div className="min-h-screen bg-slate-50 font-display">
-            {user && user.role !== 'admin' && !isAgentDashboard && (
+            {showVerificationBanner && user && (
                 <section className="mx-auto w-full max-w-7xl px-4 pt-3 sm:px-6 lg:px-8" aria-live="polite">
                     <div className={`flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between ${user.verificationStatus === 'verified' ? 'border-emerald-200 bg-emerald-50' : user.verificationStatus === 'rejected' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
                         <div className="min-w-0">
@@ -143,6 +174,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         )}
                         {needsOnboardingSteps && user.verificationStatus !== 'rejected' && user.verificationStatus !== 'verified' && (
                             <a href="/onboarding" className="shrink-0 rounded-md bg-amber-700 px-3 py-2 text-center text-[10px] font-bold text-white hover:bg-amber-800">Continue onboarding</a>
+                        )}
+                        {user.verificationStatus === 'verified' && (
+                            <button
+                                type="button"
+                                onClick={dismissVerificationBanner}
+                                aria-label="Dismiss verification notice"
+                                title="Dismiss"
+                                className="inline-flex size-8 shrink-0 items-center justify-center self-start rounded-md text-emerald-800 hover:bg-emerald-100"
+                            >
+                                <span className="material-symbols-outlined text-base">close</span>
+                            </button>
                         )}
                     </div>
                 </section>

@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { useTasks, Task } from '@/hooks/useTasks';
-import { useWallet } from '@/hooks/useWallet';
+import { useMcomWallet } from '@/hooks/useMcomWallet';
 import { useAuthStore } from '@/store/useAuthStore';
 
 const formatDate = (value?: string | null) => {
@@ -29,7 +29,7 @@ const statusStyles: Record<string, string> = {
 export default function ConsultantDashboard() {
     const { user } = useAuthStore();
     const { tasks, isLoading: isLoadingTasks, isError: tasksError } = useTasks({ limit: 50 });
-    const { wallet, isLoading: isLoadingWallet } = useWallet();
+    const { wallet, isLoading: isLoadingWallet } = useMcomWallet();
 
     const myTasks = useMemo(() => {
         if (!user?.id) return [] as Task[];
@@ -107,7 +107,7 @@ export default function ConsultantDashboard() {
                             </div>
                             <div>
                                 <p className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">Account balance</p>
-                                <p className="text-2xl font-black text-text-main">£{Number(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                                <p className="text-2xl font-black text-text-main">{Number(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} MCOM</p>
                             </div>
                         </div>
                         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">

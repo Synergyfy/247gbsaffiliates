@@ -12,13 +12,31 @@ export const OutcomeStep: React.FC = () => {
 
     const handleEnterDashboard = async () => {
         try {
-            const response = await apiClient.get('/auth/profile');
+            let profile = (await apiClient.get('/auth/profile')).data;
+
+            // If the admin already verified the account before the quiz result
+            // was written, complete onboarding now so the task API does not keep
+            // returning "Complete onboarding" after the user has done everything.
+            if (
+                profile?.verificationStatus === 'verified' &&
+                profile?.isQuizPassed &&
+                !profile?.isOnboarded
+            ) {
+                try {
+                    await apiClient.patch('/users/complete-onboarding');
+                    profile = (await apiClient.get('/auth/profile')).data;
+                } catch (completeError) {
+                    console.warn('Could not complete onboarding automatically:', completeError);
+                }
+            }
+
             updateUser({
-                isOnboarded: Boolean(response.data.isOnboarded),
-                isQuizPassed: Boolean(response.data.isQuizPassed),
-                verificationStatus: response.data.verificationStatus,
-                verificationNotes: response.data.verificationNotes,
-                verificationSubmission: response.data.verificationSubmission,
+                isOnboarded: Boolean(profile?.isOnboarded),
+                isQuizPassed: Boolean(profile?.isQuizPassed),
+                skills: profile?.skills,
+                verificationStatus: profile?.verificationStatus,
+                verificationNotes: profile?.verificationNotes,
+                verificationSubmission: profile?.verificationSubmission,
             });
         } catch (err) {
             console.warn('Could not refresh account status:', err);

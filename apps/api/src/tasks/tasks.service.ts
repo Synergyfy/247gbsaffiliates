@@ -486,19 +486,32 @@ export class TasksService {
     return saved;
   }
 
+  /** Reconcile stale onboarding flags when the real service supports it. */
+  private async findAffiliateUser(userId: string) {
+    const service = this.usersService as unknown as {
+      reconcileOnboarding?: (id: string) => Promise<any>;
+    };
+    return typeof service.reconcileOnboarding === 'function'
+      ? service.reconcileOnboarding(userId)
+      : this.usersService.findOne(userId);
+  }
+
   private async assertVerifiedAffiliate(userId: string) {
-    const user = await this.usersService.findOne(userId);
+    const user = await this.findAffiliateUser(userId);
     if (user.role !== UserRole.ADMIN && (user.verificationStatus !== VerificationStatus.VERIFIED || !user.isOnboarded)) {
-      throw new ForbiddenException('Administrator verification and completed onboarding are required for affiliate work.');
+      throw this.taskAccessError(user);
     }
     return user;
   }
 
   private async assertQualifiedAffiliate(userId: string) {
-    const user = await this.usersService.findOne(userId);
+    const user = await this.findAffiliateUser(userId);
     if (user.role === UserRole.ADMIN) return user;
     if (!AFFILIATE_ROLES.includes(user.role)) {
-      throw new ForbiddenException('Only affiliate accounts can access delegated work.');
+      throw new ForbiddenException({
+        code: 'AFFILIATE_ROLE_REQUIRED',
+        message: 'Only agent, account manager and consultant accounts can access delegated work.',
+      });
     }
 
     // Agents execute marketplace work and must pass the full qualification
@@ -511,17 +524,71 @@ export class TasksService {
         !user.isQuizPassed ||
         !user.skills?.length
       ) {
-        throw new ForbiddenException(
-          'Administrator verification, onboarding, assessment, and skill requirements must be complete before affiliate task access.',
-        );
+        throw this.taskAccessError(user);
       }
       return user;
     }
 
     if (!user.isOnboarded) {
-      throw new ForbiddenException('Complete onboarding before accessing delegated work.');
+      throw this.taskAccessError(user);
     }
     return user;
+  }
+
+  /**
+   * Structured access error so the affiliate dashboard can explain the real
+   * blocker (admin verification pending, onboarding incomplete, assessment or
+   * skills missing) instead of showing a generic "complete onboarding" message
+   * even after the user has finished the flow.
+   */
+  private taskAccessError(user: {
+    verificationStatus: VerificationStatus;
+    isOnboarded: boolean;
+    isQuizPassed: boolean;
+    skills?: string[] | null;
+    verificationSubmission?: unknown;
+    verificationDocumentMimeType?: string | null;
+  }): ForbiddenException {
+    const pendingVerification = user.verificationStatus === VerificationStatus.PENDING;
+    const rejected = user.verificationStatus === VerificationStatus.REJECTED;
+    const verified = user.verificationStatus === VerificationStatus.VERIFIED;
+    const hasSubmission = Boolean(user.verificationSubmission);
+    const hasDocument = Boolean(user.verificationDocumentMimeType);
+    const hasSkills = Boolean(user.skills?.length);
+
+    let message: string;
+    if (rejected) {
+      message = 'Your verification was not approved. Update your profile and identity document, then resubmit for review.';
+    } else if (pendingVerification || (!verified && !rejected)) {
+      message = hasSubmission && hasDocument
+        ? 'Your profile is awaiting administrator verification. You will get access to delegated work as soon as it is approved.'
+        : 'Submit your onboarding profile and identity document so an administrator can verify your account.';
+    } else if (!user.isQuizPassed) {
+      message = 'Your account is verified. Complete the assessment to unlock delegated work.';
+    } else if (!user.isOnboarded) {
+      message = 'Your account is verified and your assessment is passed. Finish the remaining onboarding steps to unlock delegated work.';
+    } else if (user.skills && !hasSkills) {
+      message = 'Your account is verified. Add at least one skill so work can be matched to you.';
+    } else {
+      message = 'Administrator verification, onboarding, assessment and skill requirements must be complete before affiliate task access.';
+    }
+
+    return new ForbiddenException({
+      code: pendingVerification
+        ? 'VERIFICATION_PENDING'
+        : rejected
+          ? 'VERIFICATION_REJECTED'
+          : !user.isOnboarded
+            ? 'ONBOARDING_REQUIRED'
+            : 'AFFILIATE_QUALIFICATION_REQUIRED',
+      message,
+      verificationStatus: user.verificationStatus,
+      isOnboarded: user.isOnboarded,
+      isQuizPassed: user.isQuizPassed,
+      hasVerificationSubmission: hasSubmission,
+      hasVerificationDocument: hasDocument,
+      hasSkills,
+    });
   }
 
   private async notifyCentral(

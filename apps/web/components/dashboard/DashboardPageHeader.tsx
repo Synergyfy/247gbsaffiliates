@@ -23,6 +23,14 @@ export const DashboardPageHeader = () => {
     const isSkipped = Boolean(assessmentSkipped || user?.assessmentSkipped);
     const isOnboarded = Boolean(user?.isOnboarded) && !isSkipped;
     const activeStepInfo = stepsInfo[currentStep] || { num: 1, name: 'Basic Info', pct: 20 };
+    const isAwaitingVerification =
+        user?.verificationStatus === 'pending' && Boolean(user?.verificationSubmission);
+    const isRejected = user?.verificationStatus === 'rejected';
+    const stillNeedsOnboardingSteps = Boolean(
+        !user?.verificationSubmission ||
+        !user?.isQuizPassed ||
+        (user?.role === 'agent' && !user?.skills?.length)
+    );
 
     // Standard title when onboarded
     const getPageTitle = () => {
@@ -33,6 +41,44 @@ export const DashboardPageHeader = () => {
             return part.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }).join(' / ');
     };
+
+    // Verification is a separate wait state. Do not send fully-submitted users
+    // back to "Step 1 of 5" just because an administrator has not reviewed them yet.
+    if (!isOnboarded && (isAwaitingVerification || isRejected) && !stillNeedsOnboardingSteps) {
+        const rejected = isRejected;
+        const workspaceBase = pathname.startsWith('/dashboard/agent')
+            ? '/dashboard/agent'
+            : pathname.startsWith('/dashboard/consultant')
+                ? '/dashboard/consultant'
+                : '/dashboard/account-manager';
+        return (
+            <div className={`sticky top-0 z-20 border-b font-display ${rejected ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-6 md:px-8 sm:py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <span className={`material-symbols-outlined text-xl ${rejected ? 'text-red-700' : 'text-amber-700'}`}>
+                            {rejected ? 'report' : 'hourglass_top'}
+                        </span>
+                        <div className="min-w-0">
+                            <h3 className={`text-xs font-bold sm:text-sm ${rejected ? 'text-red-950' : 'text-amber-950'}`}>
+                                {rejected ? 'Verification needs attention' : 'Verification under review'}
+                            </h3>
+                            <p className={`text-[11px] ${rejected ? 'text-red-800' : 'text-amber-800'}`}>
+                                {rejected
+                                    ? user?.verificationNotes || 'Update your profile and identity document, then resubmit for review.'
+                                    : 'Your profile and identity document are with an administrator. No action is needed right now.'}
+                            </p>
+                        </div>
+                    </div>
+                    <Link
+                        href={rejected ? '/onboarding?edit-profile=1' : `${workspaceBase}/settings`}
+                        className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold text-white ${rejected ? 'bg-red-700 hover:bg-red-800' : 'bg-amber-700 hover:bg-amber-800'}`}
+                    >
+                        {rejected ? 'Update submission' : 'View account'}
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     // If onboarding is incomplete, replace duplicated top bar with Onboarding Progress Banner
     if (!isOnboarded) {

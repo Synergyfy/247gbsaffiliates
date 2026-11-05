@@ -219,34 +219,53 @@ export class UsersService {
     }
   }
 
+  /**
+   * A user is ready to work when an administrator has verified their identity,
+   * they submitted their profile + document, and passed the assessment. Agents
+   * additionally need at least one approved skill for marketplace matching.
+   * Account managers/consultants are relationship roles, so a missing skill
+   * list must never leave them permanently locked out after verification.
+   */
+  private meetsOnboardingRequirements(user: User): boolean {
+    return Boolean(
+      user.verificationStatus === VerificationStatus.VERIFIED &&
+        user.verificationSubmission &&
+        user.verificationDocumentMimeType &&
+        user.isQuizPassed &&
+        (user.role !== UserRole.AGENT || (user.skills && user.skills.length > 0)),
+    );
+  }
+
   async completeOnboarding(id: string) {
     const user = await this.findOne(id);
     if (user.verificationStatus !== VerificationStatus.VERIFIED) {
       throw new ForbiddenException('An administrator must verify your account before onboarding can be completed.');
     }
-    if (!user.verificationSubmission || !user.verificationDocumentMimeType || !user.isQuizPassed || !user.skills?.length) {
-      throw new ForbiddenException('Submit your profile and identity document, select your skills, and pass the assessment before completing onboarding.');
+    if (!this.meetsOnboardingRequirements(user)) {
+      throw new ForbiddenException(
+        'Submit your profile and identity document and pass the assessment before completing onboarding.',
+      );
     }
     user.isOnboarded = true;
     return this.usersRepository.save(user);
   }
 
-  private async checkAndSetOnboarding(userId: string) {
-    const user = await this.findOne(userId);
-    // Check if user is already onboarded to avoid redundant updates
-    if (!user.isOnboarded) {
-      if (
-        user.verificationStatus === VerificationStatus.VERIFIED &&
-        user.verificationSubmission &&
-        user.verificationDocumentMimeType &&
-        user.isQuizPassed &&
-        user.skills &&
-        user.skills.length > 0
-      ) {
-        user.isOnboarded = true;
-        await this.usersRepository.save(user);
-      }
+  /**
+   * Self-heal a stale onboarding flag. Verification, assessment and skills can
+   * arrive in a different order (an admin may verify before the quiz result is
+   * written), which previously left a verified user stuck on `isOnboarded=false`.
+   */
+  async reconcileOnboarding(id: string): Promise<User> {
+    const user = await this.findOne(id);
+    if (!user.isOnboarded && this.meetsOnboardingRequirements(user)) {
+      user.isOnboarded = true;
+      return this.usersRepository.save(user);
     }
+    return user;
+  }
+
+  private async checkAndSetOnboarding(userId: string) {
+    await this.reconcileOnboarding(userId);
   }
 
   async findByEmail(email: string): Promise<User | null> {
