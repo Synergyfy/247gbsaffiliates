@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { useAdminUsers } from '@/hooks/useAdminUsers';
+import { getCentralHubUrl } from '@/lib/centralHub';
 
 type TaskForm = { title: string; description: string; executionUrl: string; budget: string; type: 'one_time' | 'recurring'; dueDate: string; requiredSkills: string };
 const blankForm: TaskForm = { title: '', description: '', executionUrl: '', budget: '5', type: 'one_time', dueDate: '', requiredSkills: '' };
@@ -117,7 +118,15 @@ export default function AdminTasksPage() {
                                 <button disabled={!agentSelection[task.id] || isAssigning} onClick={() => void assign(task.id)} className="rounded-md bg-blue-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{isAssigning ? 'Assigning…' : 'Assign task'}</button>
                             </>}
                             {task.status === 'submitted' && (central
-                                ? <span className="text-xs font-semibold text-amber-800">Awaiting Central Hub review</span>
+                                ? <a
+                                    href={`${getCentralHubUrl()}/admin/affiliate-tasks`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex min-h-9 items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100"
+                                  >
+                                    Awaiting Central Hub review — open review queue
+                                    <span className="material-symbols-outlined text-sm">open_in_new</span>
+                                  </a>
                                 : <button disabled={isUpdatingStatus} onClick={() => void updateStatus(task, 'approved')} className="rounded-md border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-800 disabled:opacity-50">Approve submission</button>)}
                             {task.status === 'approved' && <button disabled={isUpdatingStatus} onClick={() => void updateStatus(task, 'completed')} className="rounded-md border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-800 disabled:opacity-50">Mark completed</button>}
                         </div>
