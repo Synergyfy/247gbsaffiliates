@@ -1,10 +1,11 @@
-import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * Public enterprise work request submitted from the Find Affiliates page.
- * The selected affiliate is matched by email; without one the request lands in
- * the open task pool for an administrator to route.
+ * The selected affiliate is matched by local user id (preferred) or email;
+ * without one the request lands in the open task pool for an administrator
+ * to route.
  */
 export class CreateWorkRequestDto {
   @ApiProperty({ example: '[Enterprise Request] Acme Ltd - Jane Doe' })
@@ -26,6 +27,11 @@ export class CreateWorkRequestDto {
   @IsString()
   @IsOptional()
   currency?: string;
+
+  @ApiProperty({ example: 'uuid-of-affiliate', required: false })
+  @IsUUID()
+  @IsOptional()
+  assigneeId?: string;
 
   @ApiProperty({ example: 'agent@example.com', required: false })
   @IsEmail()

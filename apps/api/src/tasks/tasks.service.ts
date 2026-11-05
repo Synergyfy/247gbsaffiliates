@@ -10,7 +10,7 @@ import { CreateTaskFromCentralDto } from './dto/create-task-from-central.dto';
 import { FindTasksQueryDto } from './dto/find-tasks.dto';
 import { SubmitTaskDto } from './dto/task-collaboration.dto';
 import { UsersService } from '../users/users.service';
-import { UserRole, VerificationStatus } from '../users/entities/user.entity';
+import { User, UserRole, UserStatus, VerificationStatus } from '../users/entities/user.entity';
 
 const AFFILIATE_ROLES = [UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT];
 
@@ -51,10 +51,11 @@ export class TasksService {
     description: string;
     budget: number;
     currency?: string;
+    assigneeId?: string;
     assigneeEmail?: string;
   }) {
-    const email = dto.assigneeEmail?.trim().toLowerCase();
-    const assignee = email ? await this.usersService.findByEmail(email) : null;
+    const assignee = await this.resolveWorkRequestAssignee(dto.assigneeId, dto.assigneeEmail);
+    const email = assignee?.email?.toLowerCase() ?? dto.assigneeEmail?.trim().toLowerCase();
 
     const request = this.tasksRepo.create({
       title: dto.title,
@@ -67,10 +68,39 @@ export class TasksService {
       status: assignee ? TaskStatus.ASSIGNED : TaskStatus.OPEN,
       assignedAgent: assignee ?? undefined,
       assignedAgentId: assignee?.id,
+      // Always keep the email routing column in sync with the chosen affiliate
+      // so dashboard queries (which match on assigneeEmail) keep working.
       assigneeEmail: email || null,
     } as never);
 
     return this.tasksRepo.save(request as unknown as Task);
+  }
+
+  /**
+   * Resolve the affiliate a public work request should be routed to. Only
+   * verified, active, onboarded affiliates are assignable; an unknown or
+   * ineligible id falls back to the open pool.
+   */
+  private async resolveWorkRequestAssignee(assigneeId?: string, assigneeEmail?: string): Promise<User | null> {
+    let candidate: User | null = null;
+
+    if (assigneeId) {
+      try {
+        candidate = await this.usersService.findOne(assigneeId);
+      } catch {
+        candidate = null;
+      }
+    } else if (assigneeEmail) {
+      candidate = await this.usersService.findByEmail(assigneeEmail.trim().toLowerCase());
+    }
+
+    if (!candidate) return null;
+    if (!AFFILIATE_ROLES.includes(candidate.role)) return null;
+    if (candidate.status !== UserStatus.ACTIVE) return null;
+    if (candidate.verificationStatus !== VerificationStatus.VERIFIED) return null;
+    if (!candidate.isOnboarded) return null;
+
+    return candidate;
   }
 
   /**

@@ -12,7 +12,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 
 const ProfileInfoStep: React.FC = () => {
     const { role, basicInfo, profileInfo, updateProfileInfo, setStep } = useOnboardingStore();
-    const { updateUser } = useAuthStore();
+    const { user, updateUser } = useAuthStore();
     const [identityDocument, setIdentityDocument] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -27,11 +27,11 @@ const ProfileInfoStep: React.FC = () => {
             role: role || 'agent',
             hourlyRate: String(profileInfo.hourlyRate ?? ''),
             bio: String(profileInfo.bio ?? ''),
-            phone: basicInfo.phone || String(profileInfo.phone ?? ''),
-            postalCode: basicInfo.zipCode || String(profileInfo.postalCode ?? ''),
-            city: basicInfo.city || String(profileInfo.city ?? ''),
-            region: basicInfo.region || String(profileInfo.region ?? ''),
-            country: basicInfo.country || String(profileInfo.country ?? ''),
+            phone: basicInfo.phone || String(profileInfo.phone ?? '') || user?.phone || '',
+            postalCode: basicInfo.zipCode || String(profileInfo.postalCode ?? '') || user?.postcode || user?.postalCode || '',
+            city: basicInfo.city || String(profileInfo.city ?? '') || user?.city || '',
+            region: basicInfo.region || String(profileInfo.region ?? '') || user?.region || '',
+            country: basicInfo.country || String(profileInfo.country ?? '') || user?.country || (basicInfo.zipCode || user?.postcode ? 'United Kingdom' : ''),
             licenseNumber: String(profileInfo.licenseNumber ?? ''),
             yearsExperience: String(profileInfo.yearsExperience ?? ''),
             company: String(profileInfo.company ?? ''),
@@ -53,9 +53,9 @@ const ProfileInfoStep: React.FC = () => {
             'Ghana': '₵',
             'South Africa': 'R',
         };
-        return mapping[country] || '$';
+        return mapping[country] || '£';
     };
-    const currency = watchedCountry ? getCurrencyForCountry(watchedCountry) : '$';
+    const currency = watchedCountry ? getCurrencyForCountry(watchedCountry) : '£';
 
     const onSubmit = async (data: ProfileFormValues) => {
         if (!identityDocument) {

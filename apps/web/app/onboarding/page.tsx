@@ -51,11 +51,18 @@ function OnboardingFlow() {
         const submission = user?.verificationSubmission && typeof user.verificationSubmission === 'object'
             ? user.verificationSubmission
             : {};
-        const city = typeof submission.city === 'string' ? submission.city : '';
-        const region = typeof submission.region === 'string' ? submission.region : '';
-        const country = typeof submission.country === 'string' ? submission.country : '';
-        const postalCode = typeof submission.postalCode === 'string' ? submission.postalCode : '';
-        const phone = typeof submission.phone === 'string' ? submission.phone : '';
+        // Location is captured by Central Hub and synced onto the user at
+        // login. Prefer the synced values and fall back to any older
+        // verification submission for legacy accounts.
+        const city = (typeof submission.city === 'string' && submission.city) || user?.city || '';
+        const region = (typeof submission.region === 'string' && submission.region) || user?.region || '';
+        const country = (typeof submission.country === 'string' && submission.country) || user?.country || '';
+        const postalCode =
+            (typeof submission.postalCode === 'string' && submission.postalCode) ||
+            user?.postcode ||
+            user?.postalCode ||
+            '';
+        const phone = (typeof submission.phone === 'string' && submission.phone) || user?.phone || '';
 
         updateBasicInfo({
             city,
@@ -108,14 +115,33 @@ function OnboardingFlow() {
                 const centralPatch: Partial<typeof basicInfo> = {};
                 if (user.postcode) centralPatch.zipCode = user.postcode;
                 if (user.phone) centralPatch.phone = user.phone;
-                if (Object.keys(centralPatch).length) updateBasicInfo(centralPatch);
+                if (user.city) centralPatch.city = user.city;
+                if (user.region) centralPatch.region = user.region;
+                if (user.country) centralPatch.country = user.country;
+                if (user.postcode && !centralPatch.country) centralPatch.country = 'United Kingdom';
+                if (Object.keys(centralPatch).length) {
+                    centralPatch.location = [centralPatch.city, centralPatch.region].filter(Boolean).join(', ');
+                    updateBasicInfo(centralPatch);
+                }
             }
         }
 
         if (normalizeRole(onboardingRole) !== normalizeRole(user.role)) {
             setRole(user.role);
         }
-    }, [user?.id, user?.role, onboardingRole, setRole, resetOnboarding]);
+    }, [
+        user?.id,
+        user?.role,
+        user?.postcode,
+        user?.phone,
+        user?.city,
+        user?.region,
+        user?.country,
+        onboardingRole,
+        updateBasicInfo,
+        setRole,
+        resetOnboarding,
+    ]);
 
     const renderStep = () => {
         const stepToRender = isRetakeQuiz ? 'quiz' : isEditingProfile && currentStep !== 'basic-info' ? 'profile-info' : currentStep;

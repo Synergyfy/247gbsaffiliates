@@ -59,8 +59,16 @@ export class VerificationService {
     if (typeof cleanSubmission.phone !== 'string' || !cleanSubmission.phone) {
       throw new BadRequestException('A phone number is required to submit your profile.');
     }
-    if (typeof cleanSubmission.postalCode !== 'string' || !cleanSubmission.postalCode) {
-      throw new BadRequestException('A postal code is required to submit your profile.');
+    // Postcode/location is captured by Central Hub at signup and synced onto the
+    // local user at login. Accept the submitted value when present, otherwise
+    // fall back to the already-synced profile so onboarding never asks for it
+    // a second time.
+    const submittedPostalCode =
+      typeof cleanSubmission.postalCode === 'string' ? cleanSubmission.postalCode : '';
+    if (!submittedPostalCode && !user.postcode) {
+      throw new BadRequestException(
+        'A postal code is required to submit your profile. Add it in Central Hub and sign in again.',
+      );
     }
 
     if (Object.keys(cleanSubmission).length === 0) {
@@ -83,10 +91,12 @@ export class VerificationService {
       if (Number.isFinite(rate) && rate >= 0) user.hourlyRate = rate;
     }
     if (typeof cleanSubmission.phone === 'string') user.phone = cleanSubmission.phone;
-    if (typeof cleanSubmission.postalCode === 'string') user.postcode = cleanSubmission.postalCode;
-    if (typeof cleanSubmission.city === 'string') user.city = cleanSubmission.city;
-    if (typeof cleanSubmission.region === 'string') user.region = cleanSubmission.region;
-    if (typeof cleanSubmission.country === 'string') user.country = cleanSubmission.country;
+    if (typeof cleanSubmission.postalCode === 'string' && cleanSubmission.postalCode) {
+      user.postcode = cleanSubmission.postalCode;
+    }
+    if (typeof cleanSubmission.city === 'string' && cleanSubmission.city) user.city = cleanSubmission.city;
+    if (typeof cleanSubmission.region === 'string' && cleanSubmission.region) user.region = cleanSubmission.region;
+    if (typeof cleanSubmission.country === 'string' && cleanSubmission.country) user.country = cleanSubmission.country;
     if (!user.currency) user.currency = 'GBP';
 
     user.verificationDocument = document.buffer;
