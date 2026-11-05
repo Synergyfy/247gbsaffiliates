@@ -75,6 +75,109 @@ export class UsersService {
     return user;
   }
 
+  /**
+   * Public marketplace directory: verified, active affiliates only. The
+   * `postcode` filter resolves the UK postcode to its city/region and matches
+   * the territory stored from Central Hub signup.
+   */
+  async findPublicDirectory(filters: {
+    postcode?: string;
+    role?: string;
+    search?: string;
+    limit?: number;
+  }) {
+    const limit = Math.min(100, Math.max(1, Number(filters.limit) || 50));
+    const role = (filters.role || '').toLowerCase().replace('-', '_');
+    const search = (filters.search || '').trim().toLowerCase();
+
+    let territory: { city?: string; region?: string; postcode?: string } | null = null;
+    if (filters.postcode?.trim()) {
+      const resolved = await this.lookupPostalCode(filters.postcode);
+      if (!resolved?.found) return { items: [], total: 0, territory: null };
+      territory = {
+        city: resolved.city,
+        region: resolved.region,
+        postcode: resolved.postalCode,
+      };
+    }
+
+    const qb = this.usersRepository
+      .createQueryBuilder('user')
+      .where('user.verificationStatus = :verified', { verified: VerificationStatus.VERIFIED })
+      .andWhere('user.status = :active', { active: UserStatus.ACTIVE })
+      .andWhere('user.isOnboarded = true');
+
+    if (role && role !== 'all') {
+      if (role === 'account_manager') qb.andWhere('user.role = :role', { role: UserRole.ACCOUNT_MANAGER });
+      else if (role === 'consultant') qb.andWhere('user.role = :role', { role: UserRole.CONSULTANT });
+      else if (role === 'agent') qb.andWhere('user.role = :role', { role: UserRole.AGENT });
+    } else {
+      qb.andWhere('user.role IN (:...roles)', {
+        roles: [UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT],
+      });
+    }
+
+    if (search) {
+      qb.andWhere(
+        '(LOWER(user.firstName) LIKE :search OR LOWER(user.lastName) LIKE :search OR LOWER(user.email) LIKE :search OR LOWER(COALESCE(user.bio, \'\')) LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    if (territory) {
+      const normalizedPostcode = (territory.postcode || '').toUpperCase().replace(/\s+/g, ' ');
+      const outward = normalizedPostcode.split(' ')[0];
+      const clauses = [
+        `(user.postcode IS NOT NULL AND (
+          UPPER(REPLACE(user.postcode, ' ', '')) = :compactPostcode
+          OR UPPER(user.postcode) LIKE :outwardPrefix
+        ))`,
+      ];
+      const params: Record<string, unknown> = {
+        compactPostcode: normalizedPostcode.replace(/\s+/g, ''),
+        outwardPrefix: `${outward} %`,
+      };
+      if (territory.city) {
+        clauses.push('(user.city IS NOT NULL AND LOWER(user.city) = LOWER(:city))');
+        params.city = territory.city;
+      }
+      if (territory.region) {
+        clauses.push('(user.region IS NOT NULL AND LOWER(user.region) = LOWER(:region))');
+        params.region = territory.region;
+      }
+      qb.andWhere(`(${clauses.join(' OR ')})`, params);
+    }
+
+    const users = await qb.orderBy('user.createdAt', 'DESC').take(limit).getMany();
+
+    const items = users.map((user) => ({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0],
+      email: user.email,
+      profileImage: user.profileImage,
+      bio: user.bio,
+      skills: user.skills ?? [],
+      languages: user.languages ?? [],
+      hourlyRate: user.hourlyRate,
+      currency: user.currency,
+      timezone: user.timezone,
+      role: user.role,
+      postcode: user.postcode,
+      city: user.city,
+      region: user.region,
+      country: user.country,
+      isOnboarded: user.isOnboarded,
+      isQuizPassed: user.isQuizPassed,
+      verificationStatus: user.verificationStatus,
+      isPaidVisible: user.isPaidVisible,
+      createdAt: user.createdAt,
+    }));
+
+    return { items, total: items.length, territory };
+  }
+
   async lookupPostalCode(postcode: string) {
     const normalizedPostcode = String(postcode || '').trim().toUpperCase();
     if (normalizedPostcode.length < 3) {
@@ -148,6 +251,13 @@ export class UsersService {
 
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
+  }
+
+  /** Batch lookup used to map Central Hub participants to local profiles. */
+  async findByMcomUserIds(mcomUserIds: string[]): Promise<User[]> {
+    const ids = Array.from(new Set(mcomUserIds.filter(Boolean)));
+    if (!ids.length) return [];
+    return this.usersRepository.find({ where: { mcomUserId: In(ids) } });
   }
 
   async findOne(id: string): Promise<User> {

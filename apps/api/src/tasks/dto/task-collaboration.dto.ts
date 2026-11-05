@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsObject,
@@ -56,6 +57,25 @@ export class SubmitTaskDto {
   @Type(() => TaskAttachmentInput)
   @IsOptional()
   attachments?: TaskAttachmentInput[];
+}
+
+export class CentralStatusUpdateDto {
+  @ApiPropertyOptional({
+    description: 'Central task status (assigned, accepted, pending_business_approval, completed, cancelled…)',
+  })
+  @IsString()
+  @IsOptional()
+  status?: string;
+
+  @ApiPropertyOptional({ description: 'Set false once the business approves a chargeable task.' })
+  @IsOptional()
+  @IsBoolean()
+  chargeApprovalRequired?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
 }
 
 export class ReviewCallbackDto {

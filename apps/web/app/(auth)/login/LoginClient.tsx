@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthSidebar from "@/components/auth/AuthSidebar";
 import { mcomService } from "@/services/mcom";
@@ -15,6 +15,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   sso_invalid_token: "Sign in failed. Please try again.",
   sso_unauthorized_role: "Access Denied: 247GBS Affiliate is restricted to Agents, Account Managers, and Consultants. Customer/Consumer accounts are not authorized.",
 };
+
+// Module-level guard: survives React StrictMode's mount/unmount cycle in dev,
+// which would otherwise start two SSO handshakes and overwrite the state cookie.
+let autoSsoStarted = false;
 
 export function LoginClient() {
     const searchParams = useSearchParams();
@@ -31,6 +35,23 @@ export function LoginClient() {
             : ERROR_MESSAGES[error],
         );
       }
+    }, [searchParams]);
+
+    // Returning from a successful Central signup: continue straight into SSO
+    // using the freshly-created Central session instead of asking the user to
+    // click again (and instead of reusing a previous affiliate session).
+    const autoStarted = useRef(false);
+    useEffect(() => {
+      if (searchParams.get('auto') !== '1') return;
+      if (autoStarted.current || autoSsoStarted) return;
+      autoStarted.current = true;
+      autoSsoStarted = true;
+      setIsRedirecting(true);
+      mcomService.startLogin().catch((err: unknown) => {
+        autoSsoStarted = false;
+        setIsRedirecting(false);
+        setMcomError(err instanceof Error ? err.message : 'Failed to connect to Central Hub Solutions. Please try again.');
+      });
     }, [searchParams]);
 
     const continueToCentral = async () => {

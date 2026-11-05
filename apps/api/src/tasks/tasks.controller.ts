@@ -6,8 +6,9 @@ import type { Response } from 'express';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { CreateTaskFromCentralDto } from './dto/create-task-from-central.dto';
+import { CreateWorkRequestDto } from './dto/create-work-request.dto';
 import { FindTasksQueryDto } from './dto/find-tasks.dto';
-import { ReviewCallbackDto, SubmitTaskDto } from './dto/task-collaboration.dto';
+import { CentralStatusUpdateDto, ReviewCallbackDto, SubmitTaskDto } from './dto/task-collaboration.dto';
 import { TaskStatus } from './entities/task.entity';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse, ApiBody, ApiHeader } from '@nestjs/swagger';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -27,13 +28,22 @@ export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Create a new task (Admin only)', description: 'Creates a manual task not linked to Central.' })
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNT_MANAGER)
+  @ApiOperation({ summary: 'Create a new task (Admin or Account Manager)', description: 'Creates a manual task not linked to Central.' })
   @ApiBody({ type: CreateTaskDto })
   @ApiResponse({ status: 201, description: 'Task created successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden. Role not authorized.' })
   create(@Request() req, @Body() createTaskDto: CreateTaskDto) {
     return this.tasksService.create(req.user.userId, createTaskDto);
+  }
+
+  @Post('requests')
+  @Public()
+  @ApiOperation({ summary: 'Submit a public enterprise work request from Find Affiliates' })
+  @ApiBody({ type: CreateWorkRequestDto })
+  @ApiResponse({ status: 201, description: 'Work request created' })
+  createWorkRequest(@Body() dto: CreateWorkRequestDto) {
+    return this.tasksService.createWorkRequest(dto);
   }
 
   @Post('incoming')
@@ -192,6 +202,22 @@ export class TasksController {
       throw new BadRequestException('Attachment not found');
     }
     res.sendFile(filePath);
+  }
+
+  @Post('external/:externalTaskId/status')
+  @Public()
+  @UseGuards(ApiKeyGuard)
+  @ApiHeader({ name: 'x-api-key', required: true })
+  @ApiOperation({
+    summary: 'Apply a Central status/charge-approval update',
+    description: 'Backend-to-backend: lifts the chargeable-work hold, cancels or closes a task.',
+  })
+  @ApiBody({ type: CentralStatusUpdateDto })
+  applyStatus(
+    @Param('externalTaskId') externalTaskId: string,
+    @Body() dto: CentralStatusUpdateDto,
+  ) {
+    return this.tasksService.applyStatusFromCentral(externalTaskId, dto);
   }
 
   @Post('external/:externalTaskId/review')

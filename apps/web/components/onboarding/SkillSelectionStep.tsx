@@ -38,6 +38,7 @@ export const SkillSelectionStep: React.FC = () => {
     const filteredSkills = skills?.filter((skill: { name: string }) =>
         skill.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
+    const normalizedRole = (role || '').toLowerCase().replace(/_/g, '-');
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -270,7 +271,7 @@ export const SkillSelectionStep: React.FC = () => {
                         </div>
                     </div>
 
-                    {role === 'account-manager' && (
+                    {normalizedRole === 'account-manager' && (
                         <div className="space-y-1 md:space-y-2">
                             <label className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Team Leadership Exp</label>
                             <div className="relative">
@@ -385,7 +386,7 @@ export const SkillSelectionStep: React.FC = () => {
                 </button>
 
                 <div className="flex items-center gap-2 sm:gap-4 flex-1 sm:flex-none justify-end">
-                    {!isPaidVisibilityRequested && role !== 'consultant' && (
+                    {!isPaidVisibilityRequested && normalizedRole !== 'consultant' && (
                         <button
                             type="button"
                             onClick={() => {

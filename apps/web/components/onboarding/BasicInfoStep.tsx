@@ -1,7 +1,8 @@
 'use client';
 
-import React, { FormEvent, useEffect, useState } from 'react';
+import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import AuthInput from '@/components/auth/AuthInput';
 import apiClient from '@/lib/apiClient';
 
@@ -15,46 +16,48 @@ interface PostalLookupResult {
     country?: string;
 }
 
-// Temporary demo resolution kept local so this example does not depend on the
-// external geocoding service. Remove this entry when the live lookup is reliable.
-const DEMO_POSTAL_CODE = 'SW1A 1AA';
-const DEMO_POSTAL_LOCATION: PostalLookupResult = {
-    found: true,
-    postalCode: DEMO_POSTAL_CODE,
-    city: 'London',
-    region: 'Greater London',
-    country: 'United Kingdom',
-};
-
 const BasicInfoStep: React.FC = () => {
     const { basicInfo, updateBasicInfo, setStep } = useOnboardingStore();
+    const { user } = useAuthStore();
     const [lookupState, setLookupState] = useState<LookupState>('idle');
     const [lookupMessage, setLookupMessage] = useState('');
     const [showValidation, setShowValidation] = useState(false);
     const [retryLookup, setRetryLookup] = useState(0);
+    const hydratedFromCentral = useRef(false);
+    const [importedFromCentral, setImportedFromCentral] = useState(false);
+    const autoAdvanced = useRef(false);
+
+    // Central Hub already captured the affiliate's UK postcode (and phone)
+    // during registration. Hydrate the onboarding draft once so they never
+    // have to enter the same details twice.
+    useEffect(() => {
+        if (hydratedFromCentral.current || !user?.id) return;
+        hydratedFromCentral.current = true;
+        const centralPostcode = (user.postalCode || user.postcode || '').trim();
+        const centralPhone = (user.phone || '').trim();
+        if (!centralPostcode && !centralPhone) return;
+
+        const next: Partial<typeof basicInfo> = {};
+        if (!basicInfo.zipCode.trim() && centralPostcode) next.zipCode = centralPostcode;
+        if (!basicInfo.phone.trim() && centralPhone) next.phone = centralPhone;
+        if (Object.keys(next).length) {
+            updateBasicInfo(next);
+            if (centralPostcode) setImportedFromCentral(true);
+        }
+    }, [user?.id, user?.postalCode, user?.postcode, user?.phone, basicInfo.zipCode, basicInfo.phone, updateBasicInfo]);
+
+    // Once the imported postcode resolves, skip the redundant Basic Info step.
+    useEffect(() => {
+        if (!importedFromCentral || autoAdvanced.current) return;
+        if (lookupState === 'success' && basicInfo.zipCode.trim() && basicInfo.phone.trim()) {
+            autoAdvanced.current = true;
+            setStep('profile-info');
+        }
+    }, [importedFromCentral, lookupState, basicInfo.zipCode, basicInfo.phone, setStep]);
 
     useEffect(() => {
         const postcode = basicInfo.zipCode.trim();
         if (postcode.length < 3) return;
-
-        const normalizedPostcode = postcode.toUpperCase().replace(/\s+/g, ' ');
-        if (normalizedPostcode === DEMO_POSTAL_CODE) {
-            const timeout = setTimeout(() => {
-                const { city = '', region = '', country = '' } = DEMO_POSTAL_LOCATION;
-                const location = [city, region].filter(Boolean).join(', ');
-                updateBasicInfo({
-                    zipCode: DEMO_POSTAL_LOCATION.postalCode,
-                    city,
-                    region,
-                    country,
-                    location,
-                });
-                setLookupState('success');
-                setLookupMessage([location, country].filter(Boolean).join(', '));
-            }, 0);
-
-            return () => clearTimeout(timeout);
-        }
 
         let isCurrentLookup = true;
         const timeout = setTimeout(async () => {

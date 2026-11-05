@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import apiClient from '@/lib/apiClient';
+import { ChatNotificationToasts } from '@/components/chat/ChatNotificationToasts';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { user, isAuthenticated, updateUser } = useAuthStore();
@@ -30,6 +31,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     const isQuizPassed = Boolean(profile.isQuizPassed);
 
                     updateUser({
+                        id: profile.id || user?.id,
+                        email: profile.email || user?.email,
+                        name:
+                            [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim() ||
+                            profile.name ||
+                            user?.name,
+                        firstName: profile.firstName ?? user?.firstName,
+                        lastName: profile.lastName ?? user?.lastName,
                         isOnboarded,
                         isQuizPassed,
                         role: profile.role || user?.role,
@@ -37,11 +46,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         verificationNotes: profile.verificationNotes,
                         verificationSubmission: profile.verificationSubmission,
                         verificationReviewedAt: profile.verificationReviewedAt,
+                        phone: profile.phone ?? null,
+                        postcode: profile.postcode ?? null,
+                        city: profile.city ?? null,
+                        region: profile.region ?? null,
+                        country: profile.country ?? null,
                     });
 
                     const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
                     const hasSubmittedVerification = Boolean(profile.verificationSubmission);
                     const isAwaitingVerification = ['pending', 'rejected'].includes(profile.verificationStatus);
+
+                    // Keep each affiliate inside their own role workspace.
+                    const section = pathname.startsWith('/dashboard/') ? pathname.split('/')[2] : null;
+                    const expectedRole =
+                        section === 'agent' ? 'agent'
+                        : section === 'account-manager' ? 'account_manager'
+                        : section === 'consultant' ? 'consultant'
+                        : section === 'admin' ? 'admin'
+                        : null;
+                    const actualRole = String(profile.role || '').replace(/-/g, '_');
+                    if (expectedRole && actualRole !== expectedRole) {
+                        const targetRole = String(profile.role || 'agent').replace(/_/g, '-');
+                        router.replace(`/dashboard/${targetRole}`);
+                        return;
+                    }
+
                     if (profile.role !== 'admin' && !isOnboarded && !isSkipped && !isAssessmentStatusPage && !(isAwaitingVerification && hasSubmittedVerification)) {
                         router.push('/onboarding');
                         return;
@@ -72,7 +102,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         };
 
         checkStatus();
-    }, [isAuthenticated, user, router, updateUser, isAssessmentStatusPage]);
+    }, [isAuthenticated, user?.id, router, updateUser, isAssessmentStatusPage, pathname]);
 
     if (isChecking) {
         return (
@@ -117,6 +147,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                 </section>
             )}
+            <ChatNotificationToasts />
             {children}
         </div>
     );

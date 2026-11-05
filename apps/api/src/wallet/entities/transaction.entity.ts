@@ -35,6 +35,10 @@ export class Transaction {
   @Column({ nullable: true })
   description: string;
 
+  // Idempotency key for Central Hub task settlement (one payment per task).
+  @Column({ nullable: true, unique: true })
+  reference: string;
+
   @Column({ type: 'enum', enum: TransactionStatus, default: TransactionStatus.COMPLETED })
   status: TransactionStatus;
 

@@ -95,7 +95,8 @@ const ProfileInfoStep: React.FC = () => {
     };
 
     const renderRoleFields = () => {
-        switch (role) {
+        const normalizedRole = (role || '').toLowerCase().replace(/_/g, '-');
+        switch (normalizedRole) {
             case 'agent':
                 return (
                     <>
@@ -154,7 +155,12 @@ const ProfileInfoStep: React.FC = () => {
                     Professional Profile
                 </span>
                 <h1 className="text-base sm:text-lg md:text-3xl font-display font-bold text-text-main mb-0.5 md:mb-3">
-                    {role === 'agent' ? 'Agent' : role === 'account-manager' ? 'Account Manager' : 'Consultant'} Quick Profile
+                    {(() => {
+                        const normalized = (role || '').toLowerCase().replace(/_/g, '-');
+                        if (normalized === 'agent') return 'Agent';
+                        if (normalized === 'account-manager') return 'Account Manager';
+                        return 'Consultant';
+                    })()} Quick Profile
                 </h1>
                 <p className="text-[11px] md:text-sm text-slate-500 max-w-xs sm:max-w-md mx-auto leading-normal">
                     Provide specific details about your professional background and expertise.

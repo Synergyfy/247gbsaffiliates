@@ -69,6 +69,11 @@ export function AuthCallbackClient() {
           verificationNotes: profile.data?.verificationNotes,
           verificationSubmission,
           verificationReviewedAt: profile.data?.verificationReviewedAt,
+          phone: profile.data?.phone ?? null,
+          postcode: profile.data?.postcode ?? null,
+          city: profile.data?.city ?? null,
+          region: profile.data?.region ?? null,
+          country: profile.data?.country ?? null,
         });
 
         const hasSubmittedVerification = Boolean(verificationSubmission);

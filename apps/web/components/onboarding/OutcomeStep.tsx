@@ -3,14 +3,12 @@
 import React from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export const OutcomeStep: React.FC = () => {
     const { quizResult, role, resetOnboarding, isPaidVisibilityRequested } = useOnboardingStore();
     const { updateUser, user } = useAuthStore();
-    const router = useRouter();
 
     const handleEnterDashboard = async () => {
         try {
@@ -27,15 +25,14 @@ export const OutcomeStep: React.FC = () => {
         }
         const targetRole = role;
         resetOnboarding();
-        if (targetRole === 'agent') {
-            router.push('/dashboard/agent');
-        } else if (targetRole === 'account-manager' || targetRole === 'account_manager') {
-            router.push('/dashboard/account-manager');
-        } else if (targetRole === 'consultant') {
-            router.push('/dashboard/consultant');
-        } else {
-            router.push('/dashboard');
-        }
+        const target =
+            targetRole === 'agent' ? '/dashboard/agent'
+            : targetRole === 'account-manager' || targetRole === 'account_manager' ? '/dashboard/account-manager'
+            : targetRole === 'consultant' ? '/dashboard/consultant'
+            : '/dashboard';
+        // Full navigation avoids racing the dashboard session check with the
+        // just-cleared onboarding draft.
+        window.location.assign(target);
     };
 
     if (!quizResult) return null;
@@ -239,14 +236,14 @@ export const OutcomeStep: React.FC = () => {
                         <span className="text-base md:text-lg font-bold text-emerald-700 font-display mt-0.5">{percentage}%</span>
                     </div>
                     <div className="rounded-xl p-3 flex flex-col items-center text-center bg-emerald-50/60 border border-emerald-100/80">
-                        <span className="material-symbols-outlined text-base mb-1 text-emerald-600">speed</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-display">Speed</span>
-                        <span className="text-base md:text-lg font-bold text-text-main font-display mt-0.5">95%</span>
+                        <span className="material-symbols-outlined text-base mb-1 text-emerald-600">check_circle</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-display">Correct</span>
+                        <span className="text-base md:text-lg font-bold text-text-main font-display mt-0.5">{quizResult.score}/{quizResult.maxScore}</span>
                     </div>
                     <div className="rounded-xl p-3 flex flex-col items-center text-center bg-emerald-50/60 border border-emerald-100/80">
-                        <span className="material-symbols-outlined text-base mb-1 text-emerald-600">analytics</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-display">Strategy</span>
-                        <span className="text-base md:text-lg font-bold text-text-main font-display mt-0.5">92%</span>
+                        <span className="material-symbols-outlined text-base mb-1 text-emerald-600">target</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-display">Pass Mark</span>
+                        <span className="text-base md:text-lg font-bold text-text-main font-display mt-0.5">85%</span>
                     </div>
                 </div>
             </div>

@@ -4,7 +4,7 @@ import { Repository, Like, In } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
-import { Task, TaskStatus } from './entities/task.entity';
+import { Task, TaskStatus, TaskType, TaskCategory, OriginSystem } from './entities/task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { CreateTaskFromCentralDto } from './dto/create-task-from-central.dto';
 import { FindTasksQueryDto } from './dto/find-tasks.dto';
@@ -30,12 +30,47 @@ export class TasksService {
   }
 
   async create(userId: string, createTaskDto: CreateTaskDto) {
-    await this.assertVerifiedAffiliate(userId);
+    const creator = await this.usersService.findOne(userId);
+    if (creator.role !== UserRole.ADMIN) {
+      await this.assertQualifiedAffiliate(userId);
+    }
     const task = this.tasksRepo.create({
       ...createTaskDto,
       clientId: userId,
     });
     return this.tasksRepo.save(task);
+  }
+
+  /**
+   * Public enterprise request from the marketplace. Creates real, routable
+   * work: assigned straight to the chosen affiliate when they still exist,
+   * otherwise left in the open pool.
+   */
+  async createWorkRequest(dto: {
+    title: string;
+    description: string;
+    budget: number;
+    currency?: string;
+    assigneeEmail?: string;
+  }) {
+    const email = dto.assigneeEmail?.trim().toLowerCase();
+    const assignee = email ? await this.usersService.findByEmail(email) : null;
+
+    const request = this.tasksRepo.create({
+      title: dto.title,
+      description: dto.description,
+      budget: dto.budget,
+      currency: dto.currency || 'GBP',
+      type: TaskType.ONE_TIME,
+      taskType: 'WORK_REQUEST',
+      originSystem: OriginSystem.INTERNAL,
+      status: assignee ? TaskStatus.ASSIGNED : TaskStatus.OPEN,
+      assignedAgent: assignee ?? undefined,
+      assignedAgentId: assignee?.id,
+      assigneeEmail: email || null,
+    } as never);
+
+    return this.tasksRepo.save(request as unknown as Task);
   }
 
   /**
@@ -50,7 +85,7 @@ export class TasksService {
 
     const existing = await this.tasksRepo.findOne({ where: { externalTaskId: dto.externalTaskId } });
 
-    const patch: Partial<Task> = {
+    const patch: any = {
       externalTaskId: dto.externalTaskId,
       originSystem: dto.originSystem,
       originRequesterId: dto.originRequesterId,
@@ -59,6 +94,23 @@ export class TasksService {
       taskType: dto.taskType ?? 'CENTRAL_DELEGATION',
       title: dto.title,
       description: dto.description,
+      category: (dto.category as TaskCategory) ?? TaskCategory.EXTERNAL,
+      projectId: dto.projectId ?? undefined,
+      projectName: dto.projectName ?? undefined,
+      requiredSkills: dto.requiredSkills ?? [],
+      deliverables: dto.deliverables ?? [],
+      materials: dto.materials ?? undefined,
+      prerequisiteExternalTaskId: dto.prerequisiteExternalTaskId ?? undefined,
+      compensationModel: dto.compensationModel ?? undefined,
+      compensationAmount: dto.compensationAmount ?? undefined,
+      compensationCurrency: dto.compensationCurrency ?? 'GBP',
+      billableToBusiness: dto.billableToBusiness ?? false,
+      businessChargeAmount: dto.businessChargeAmount ?? undefined,
+      businessChargeCurrency: dto.businessChargeCurrency ?? 'GBP',
+      chargeApprovalRequired: dto.chargeApprovalRequired ?? false,
+      ...(dto.chargeApprovalRequired === false
+        ? { chargeApprovedAt: new Date() }
+        : {}),
       platforms: dto.platforms ?? [],
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
       assigneeEmail: dto.assignedAgentEmail?.toLowerCase() ?? undefined,
@@ -66,17 +118,44 @@ export class TasksService {
     };
 
     if (existing) {
+      // Declined work returns for reassignment: a fresh Central assignment
+      // reactivates the same local record instead of creating a duplicate.
+      if (existing.status === TaskStatus.DECLINED) {
+        if (assignee) {
+          patch.assignedAgent = assignee;
+          patch.assignedAgentId = assignee.id;
+        }
+        patch.status = TaskStatus.ASSIGNED;
+        patch.submissionData = null;
+        patch.reviewNotes = null;
+        patch.reviewHistory = [];
+        patch.revisionCount = 0;
+        patch.submittedAt = null;
+        patch.completedAt = null;
+        return this.tasksRepo.save(this.tasksRepo.merge(existing, patch));
+      }
+
       // Do not resurrect finished work; only refresh assignment/metadata while
       // the task is still active on the affiliate side.
-      const active = [TaskStatus.OPEN, TaskStatus.ASSIGNED, TaskStatus.ACCEPTED, TaskStatus.REVISION_REQUESTED].includes(
-        existing.status,
-      );
+      const active = [
+        TaskStatus.OPEN,
+        TaskStatus.ASSIGNED,
+        TaskStatus.ACCEPTED,
+        TaskStatus.SUBMITTED,
+        TaskStatus.PENDING_BUSINESS_APPROVAL,
+        TaskStatus.REVISION_REQUESTED,
+      ].includes(existing.status);
       if (active) {
         if (assignee) {
           patch.assignedAgent = assignee;
           patch.assignedAgentId = assignee.id;
           if (existing.status === TaskStatus.OPEN) patch.status = TaskStatus.ASSIGNED;
         }
+        // Never clear an existing submission on a routine metadata refresh.
+        delete patch.submissionData;
+        delete patch.reviewNotes;
+        delete patch.reviewHistory;
+        delete patch.revisionCount;
         return this.tasksRepo.save(this.tasksRepo.merge(existing, patch));
       }
       return existing;
@@ -190,17 +269,44 @@ export class TasksService {
 
   async respondToTask(id: string, userId: string, response: 'accept' | 'decline') {
     const task = await this.findOne(id);
-    await this.assertQualifiedAffiliate(userId);
+    const me = await this.assertQualifiedAffiliate(userId);
 
-    if (task.assignedAgentId !== userId) {
+    const isAssignee =
+      task.assignedAgentId === userId ||
+      (task.assigneeEmail && me?.email && task.assigneeEmail === me.email.toLowerCase());
+    if (!isAssignee) {
       throw new ForbiddenException('You are not assigned to this task');
     }
     if (task.status !== TaskStatus.ASSIGNED) {
       throw new BadRequestException('Task is not in ASSIGNED state');
     }
 
+    // Central may have delegated before this affiliate completed their local
+    // SSO signup; bind the local user id now that they are known.
+    if (!task.assignedAgentId) {
+      task.assignedAgent = me;
+      task.assignedAgentId = userId;
+    }
+
     if (response === 'accept') {
+      if (task.chargeApprovalRequired) {
+        throw new BadRequestException(
+          'The business must approve the charge for this task before work begins.',
+        );
+      }
+      if (task.prerequisiteExternalTaskId) {
+        const prerequisite = await this.tasksRepo.findOne({
+          where: { externalTaskId: task.prerequisiteExternalTaskId },
+          select: ['id', 'status', 'title'],
+        });
+        if (prerequisite && prerequisite.status !== TaskStatus.COMPLETED) {
+          throw new BadRequestException(
+            `This task cannot start until "${prerequisite.title}" is completed and approved.`,
+          );
+        }
+      }
       task.status = TaskStatus.ACCEPTED;
+      task.acceptedAt = new Date();
     } else {
       task.status = TaskStatus.DECLINED;
     }
@@ -249,12 +355,20 @@ export class TasksService {
   /** Affiliate confirms it has seen the admin's review notes and is resubmitting. */
   async acknowledgeReview(id: string, userId: string) {
     const task = await this.findOne(id);
-    await this.assertQualifiedAffiliate(userId);
-    if (task.assignedAgentId !== userId) {
+    const me = await this.assertQualifiedAffiliate(userId);
+    const isAssignee =
+      task.assignedAgentId === userId ||
+      (task.assigneeEmail && me?.email && task.assigneeEmail === me.email.toLowerCase());
+    if (!isAssignee) {
       throw new ForbiddenException('You are not assigned to this task');
     }
     if (task.status !== TaskStatus.REVISION_REQUESTED) {
       throw new BadRequestException('Task has no pending review to acknowledge');
+    }
+
+    if (!task.assignedAgentId) {
+      task.assignedAgent = me;
+      task.assignedAgentId = userId;
     }
 
     const history = [...(task.reviewHistory ?? [])];
@@ -302,6 +416,49 @@ export class TasksService {
     return saved;
   }
 
+  /**
+   * Central status push (charge approval, cancellation, business approval).
+   * Keeps the affiliate copy in step without ever re-opening finished work.
+   */
+  async applyStatusFromCentral(
+    externalTaskId: string,
+    input: { status?: string; chargeApprovalRequired?: boolean; note?: string },
+  ) {
+    const task = await this.tasksRepo.findOne({ where: { externalTaskId } });
+    if (!task) throw new NotFoundException('Task not found');
+
+    const map: Record<string, TaskStatus> = {
+      open: TaskStatus.OPEN,
+      assigned: TaskStatus.ASSIGNED,
+      accepted: TaskStatus.ACCEPTED,
+      submitted: TaskStatus.SUBMITTED,
+      pending_business_approval: TaskStatus.PENDING_BUSINESS_APPROVAL,
+      revision_requested: TaskStatus.REVISION_REQUESTED,
+      completed: TaskStatus.COMPLETED,
+      cancelled: TaskStatus.CANCELLED,
+      declined: TaskStatus.DECLINED,
+    };
+
+    if (input.chargeApprovalRequired === false) {
+      task.chargeApprovalRequired = false;
+      task.chargeApprovedAt = new Date();
+    }
+    if (input.chargeApprovalRequired === true) {
+      task.chargeApprovalRequired = true;
+    }
+
+    const next = input.status ? map[input.status.toLowerCase()] : undefined;
+    if (next) {
+      task.status = next;
+      if (next === TaskStatus.COMPLETED) task.completedAt = new Date();
+      if (next === TaskStatus.ACCEPTED && !task.acceptedAt) task.acceptedAt = new Date();
+    }
+    if (input.note) task.reviewNotes = input.note;
+
+    task.lastCentralSyncAt = new Date();
+    return this.tasksRepo.save(task);
+  }
+
   async updateStatus(id: string, status: TaskStatus, userId: string) {
     const task = await this.findOne(id);
     const user = await this.usersService.findOne(userId);
@@ -340,12 +497,29 @@ export class TasksService {
   private async assertQualifiedAffiliate(userId: string) {
     const user = await this.usersService.findOne(userId);
     if (user.role === UserRole.ADMIN) return user;
-    if (!AFFILIATE_ROLES.includes(user.role)
-      || user.verificationStatus !== VerificationStatus.VERIFIED
-      || !user.isOnboarded
-      || !user.isQuizPassed
-      || !user.skills?.length) {
-      throw new ForbiddenException('Administrator verification, onboarding, assessment, and skill requirements must be complete before affiliate task access.');
+    if (!AFFILIATE_ROLES.includes(user.role)) {
+      throw new ForbiddenException('Only affiliate accounts can access delegated work.');
+    }
+
+    // Agents execute marketplace work and must pass the full qualification
+    // gate. Account managers and consultants are trusted relationship roles:
+    // they can act on work delegated directly to them once onboarding is done.
+    if (user.role === UserRole.AGENT) {
+      if (
+        user.verificationStatus !== VerificationStatus.VERIFIED ||
+        !user.isOnboarded ||
+        !user.isQuizPassed ||
+        !user.skills?.length
+      ) {
+        throw new ForbiddenException(
+          'Administrator verification, onboarding, assessment, and skill requirements must be complete before affiliate task access.',
+        );
+      }
+      return user;
+    }
+
+    if (!user.isOnboarded) {
+      throw new ForbiddenException('Complete onboarding before accessing delegated work.');
     }
     return user;
   }

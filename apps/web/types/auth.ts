@@ -26,6 +26,12 @@ export interface User {
   mcomMembershipTier?: string | null;
   mcomMembershipStatus?: string | null;
   mcomCanAccessVcard?: boolean;
+  phone?: string | null;
+  postcode?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  region?: string | null;
+  country?: string | null;
   stats?: {
     tasksCompleted?: number;
     rating?: number;

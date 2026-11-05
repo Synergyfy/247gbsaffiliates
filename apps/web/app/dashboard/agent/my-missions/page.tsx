@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { useTasks, type Task } from '@/hooks/useTasks';
 import { useAuthStore } from '@/store/useAuthStore';
 
-const activeStatuses = new Set(['accepted', 'in_progress', 'submitted']);
+const activeStatuses = new Set(['accepted', 'in_progress', 'submitted', 'revision_requested']);
 
 const missionStatusStyles: Record<string, string> = {
     accepted: 'bg-blue-50 text-blue-800 border-blue-200',
     in_progress: 'bg-blue-50 text-blue-800 border-blue-200',
     submitted: 'bg-amber-50 text-amber-800 border-amber-200',
+    revision_requested: 'bg-orange-50 text-orange-800 border-orange-200',
 };
 
 function formatDate(value?: string | null) {
@@ -29,25 +30,40 @@ function formatBudget(task: Task) {
 function MissionCard({ task }: { task: Task }) {
     const deadline = formatDate(task.dueDate);
     const budget = formatBudget(task);
+    const isRevision = task.status === 'revision_requested';
+    const isCentralTask = task.originSystem === 'MCOM_CENTRAL' || Boolean(task.externalTaskId);
 
     return (
         <article className="border border-slate-200 bg-white p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-blue-700">Active mission</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-blue-700">{isCentralTask ? 'Central Hub mission' : 'Active mission'}</p>
                     <h2 className="mt-1 text-base font-semibold text-slate-950">{task.title}</h2>
                     <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-600">{task.description || 'No additional instructions were provided.'}</p>
+                    {(task.centralBusinessName || task.platforms?.length) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {task.centralBusinessName && <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700"><span className="material-symbols-outlined text-sm">storefront</span>{task.centralBusinessName}</span>}
+                            {(task.platforms ?? []).map((platform) => <span key={platform} className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-blue-800">{platform}</span>)}
+                        </div>
+                    )}
                 </div>
                 <span className={`shrink-0 border px-2.5 py-1 text-xs font-medium capitalize ${missionStatusStyles[task.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}>
                     {task.status.replaceAll('_', ' ')}
                 </span>
             </div>
 
-            {(deadline || task.estimatedTime || budget) && (
+            {isRevision && (
+                <p className="mt-3 border-l-4 border-orange-400 bg-orange-50 px-3 py-2 text-xs leading-5 text-orange-900">
+                    <strong className="font-semibold">Changes requested.</strong>{task.reviewNotes ? ` ${task.reviewNotes}` : ' Open the mission to review the feedback and resubmit.'}
+                </p>
+            )}
+
+            {(deadline || task.estimatedTime || budget || task.submittedAt) && (
                 <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-slate-100 pt-3 text-xs">
                     {deadline && <div className="flex gap-1.5"><dt className="text-slate-500">Deadline</dt><dd className="font-medium text-slate-800">{deadline}</dd></div>}
                     {task.estimatedTime && <div className="flex gap-1.5"><dt className="text-slate-500">Estimate</dt><dd className="font-medium text-slate-800">{task.estimatedTime}</dd></div>}
                     {budget && <div className="flex gap-1.5"><dt className="text-slate-500">Budget</dt><dd className="font-medium text-slate-800">{budget}</dd></div>}
+                    {task.submittedAt && <div className="flex gap-1.5"><dt className="text-slate-500">Submitted</dt><dd className="font-medium text-slate-800">{formatDate(task.submittedAt)}</dd></div>}
                 </dl>
             )}
 

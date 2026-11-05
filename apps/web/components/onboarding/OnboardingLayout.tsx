@@ -21,18 +21,23 @@ const steps = [
 ];
 
 export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children, hideSkipToDashboard = false }) => {
-    const { currentStep, role, setAssessmentSkipped } = useOnboardingStore();
-    const { updateUser } = useAuthStore();
+    const { currentStep, role: onboardingRole, setAssessmentSkipped } = useOnboardingStore();
+    const { user, updateUser } = useAuthStore();
     const router = useRouter();
 
+    // Prefer the authenticated user's role: the persisted onboarding store can
+    // still hold the previous account's role until it re-syncs.
+    const role = user?.role || onboardingRole;
     const currentStepIndex = steps.findIndex(s => s.id === currentStep);
 
     const handleSkipToDashboard = () => {
         setAssessmentSkipped(true);
         updateUser({ assessmentSkipped: true, isOnboarded: false });
-        if (role === 'agent') router.push('/dashboard/agent');
-        else if (role === 'account-manager' || role === 'account_manager') router.push('/dashboard/account-manager');
-        else if (role === 'consultant') router.push('/dashboard/consultant');
+        const normalized = (role || '').toLowerCase().replace(/_/g, '-');
+        if (normalized === 'agent') router.push('/dashboard/agent');
+        else if (normalized === 'account-manager') router.push('/dashboard/account-manager');
+        else if (normalized === 'consultant') router.push('/dashboard/consultant');
+        else if (normalized === 'admin') router.push('/dashboard/admin');
         else router.push('/dashboard');
     };
 

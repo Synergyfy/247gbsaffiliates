@@ -140,6 +140,7 @@ export default function AgentDashboard() {
             ? 'in_progress'
             : 'not_started';
     const tasks = tasksQuery.tasks || [];
+    const revisionTasks = tasks.filter((task) => task.status === 'revision_requested');
     const assignedTaskStatus: WorkflowStatus = !isQualified
         ? 'blocked'
         : tasks.length === 0
@@ -201,8 +202,10 @@ export default function AgentDashboard() {
         nextAction = { ...nextAction, title: 'Complete your assessment', description: 'Your profile is verified. Take the existing affiliate assessment to continue toward qualification.', href: '/dashboard/agent/assessment', action: 'Open assessment', icon: 'quiz' };
     } else if (!isQualified && hasAssessmentPassed) {
         nextAction = { ...nextAction, title: 'Complete the remaining qualification requirements', description: missingQualificationRequirements.length ? `Still required: ${missingQualificationRequirements.join(', ')}.` : 'Finish the remaining onboarding checks before taking on assigned work.', href: '/dashboard/agent/qualification', action: 'Review qualification', icon: 'workspace_premium' };
+    } else if (isQualified && revisionTasks.length > 0) {
+        nextAction = { ...nextAction, title: 'Changes requested on your work', description: `You have ${revisionTasks.length} task${revisionTasks.length === 1 ? '' : 's'} needing changes. Review the feedback and resubmit.`, href: '/dashboard/agent/tasks', action: 'Review changes', icon: 'rate_review' };
     } else if (isQualified && tasks.length > 0) {
-        nextAction = { ...nextAction, title: 'Review your administrator-assigned tasks', description: `You have ${tasks.length} assigned task${tasks.length === 1 ? '' : 's'}. Check the instructions and current status in My Tasks.`, href: '/dashboard/agent/tasks', action: 'Open My Tasks', icon: 'assignment' };
+        nextAction = { ...nextAction, title: 'Review your assigned tasks', description: `You have ${tasks.length} assigned task${tasks.length === 1 ? '' : 's'}. Check the instructions and current status in My Tasks.`, href: '/dashboard/agent/tasks', action: 'Open My Tasks', icon: 'assignment' };
     } else if (isQualified) {
         nextAction = { ...nextAction, title: 'Your profile is ready for assigned work', description: 'You have met the current qualification checks. Administrators assign tasks through the platform when work is available.', href: '/dashboard/agent/tasks', action: 'View My Tasks', icon: 'assignment' };
     }
