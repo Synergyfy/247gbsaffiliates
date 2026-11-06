@@ -39,6 +39,15 @@ export class CreateTaskDto {
   @IsOptional()
   requiredSkills?: string[];
 
+  @ApiProperty({
+    example: 'uuid-agent',
+    required: false,
+    description: 'Optional affiliate (agent, account manager or consultant) to assign immediately.',
+  })
+  @IsString()
+  @IsOptional()
+  assignedAgentId?: string;
+
   @ApiProperty({ example: '2024-12-31T23:59:59Z' })
   @IsDateString()
   @IsOptional()

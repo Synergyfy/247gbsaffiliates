@@ -348,7 +348,8 @@ export interface ManagedProject {
 
 export interface DirectoryAffiliate {
   id: string;
-  centralUserId?: string;
+  mcomUserId?: string | null;
+  centralUserId?: string | null;
   name: string;
   email: string;
   role: string;
@@ -358,6 +359,11 @@ export interface DirectoryAffiliate {
   region?: string | null;
   hourlyRate?: number | null;
   currency?: string | null;
+  assessmentScore?: number | null;
+  completedTasksCount?: number;
+  activeTasksCount?: number;
+  onTimeRate?: number | null;
+  averageResponseTimeHours?: number | null;
 }
 
 const unwrapManagedList = <T,>(payload: unknown, label: string): T[] => {
@@ -617,9 +623,37 @@ export const useManagedProjects = (
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['managed-projects'] }),
   });
 
+  const createProjectTask = useMutation({
+    mutationFn: async ({
+      projectId,
+      ...task
+    }: {
+      projectId: string;
+      title: string;
+      description: string;
+      assigneeUserId?: string;
+      dueAt?: string;
+      requiredSkills?: string[];
+      deliverables?: string;
+      materials?: string;
+    }) => {
+      const response = await apiClient.post(
+        `/account-manager/managed-projects/${encodeURIComponent(projectId)}/tasks`,
+        task,
+      );
+      return unwrapManagedRecord<ManagedTask>(response.data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managed-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-tasks'] });
+    },
+  });
+
   return {
     ...query,
     closeProject: closeProject.mutateAsync,
     isClosingProject: closeProject.isPending,
+    createProjectTask: createProjectTask.mutateAsync,
+    isCreatingProjectTask: createProjectTask.isPending,
   };
 };

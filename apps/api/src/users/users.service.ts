@@ -5,6 +5,8 @@ import axios from 'axios';
 import { User, UserRole, UserStatus, VerificationStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
+import { Task, TaskStatus } from '../tasks/entities/task.entity';
+import { QuizAttempt } from '../assessment/entities/quiz_attempt.entity';
 import * as bcrypt from 'bcrypt';
 
 interface GeoPoint {
@@ -69,6 +71,10 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(Task)
+    private tasksRepository: Repository<Task>,
+    @InjectRepository(QuizAttempt)
+    private quizAttemptRepository: Repository<QuizAttempt>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -143,6 +149,7 @@ export class UsersService {
   async findPublicDirectory(filters: {
     postcode?: string;
     role?: string;
+    roles?: string;
     search?: string;
     limit?: number;
     radiusMiles?: number;
@@ -152,8 +159,8 @@ export class UsersService {
       MAX_DIRECTORY_RADIUS_MILES,
       Math.max(1, Number(filters.radiusMiles) || DEFAULT_DIRECTORY_RADIUS_MILES),
     );
-    const role = (filters.role || '').toLowerCase().replace('-', '_');
     const search = (filters.search || '').trim().toLowerCase();
+    const allowedRoles = this.parseDirectoryRoles(filters.role, filters.roles);
 
     let territory: { city?: string; region?: string; postcode?: string } | null = null;
     let origin: GeoPoint | null = null;
@@ -183,10 +190,8 @@ export class UsersService {
       .createQueryBuilder('user')
       .where('user.status = :active', { active: UserStatus.ACTIVE });
 
-    if (role && role !== 'all') {
-      if (role === 'account_manager') qb.andWhere('user.role = :role', { role: UserRole.ACCOUNT_MANAGER });
-      else if (role === 'consultant') qb.andWhere('user.role = :role', { role: UserRole.CONSULTANT });
-      else if (role === 'agent') qb.andWhere('user.role = :role', { role: UserRole.AGENT });
+    if (allowedRoles.length) {
+      qb.andWhere('user.role IN (:...allowedRoles)', { allowedRoles });
     } else {
       qb.andWhere('user.role IN (:...roles)', {
         roles: [UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT],
@@ -209,6 +214,9 @@ export class UsersService {
     const geoByPostcode = origin
       ? await this.bulkGeocodePostcodes(users.map((user) => user.postcode))
       : new Map<string, GeoPoint>();
+    const metricsByUser = await this.loadDirectoryMetrics(
+      users.map((user) => user.id),
+    );
 
     const items = users.map((user) => {
       const point = origin && user.postcode
@@ -216,9 +224,12 @@ export class UsersService {
         : null;
       const km = origin && point ? this.haversineKm(origin, point) : null;
       const miles = km != null ? km * 0.621371 : null;
+      const metrics = metricsByUser.get(user.id);
 
       return {
         id: user.id,
+        mcomUserId: user.mcomUserId ?? null,
+        centralUserId: user.mcomUserId ?? null,
         firstName: user.firstName,
         lastName: user.lastName,
         name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0],
@@ -239,6 +250,13 @@ export class UsersService {
         verificationStatus: user.verificationStatus,
         isPaidVisible: user.isPaidVisible,
         createdAt: user.createdAt,
+        // Live database metrics for the public affiliate profile modal.
+        assessmentScore: metrics?.assessmentScore ?? null,
+        latestAssessmentBand: metrics?.latestAssessmentBand ?? null,
+        completedTasksCount: metrics?.completedTasksCount ?? 0,
+        activeTasksCount: metrics?.activeTasksCount ?? 0,
+        onTimeRate: metrics?.onTimeRate ?? null,
+        averageResponseTimeHours: metrics?.averageResponseTimeHours ?? null,
         distanceKm: km != null ? Math.round(km * 10) / 10 : null,
         distanceMiles: miles != null ? Math.round(miles * 10) / 10 : null,
         distanceLabel: miles != null
@@ -279,6 +297,150 @@ export class UsersService {
       territory,
       distanceFrom: territory?.postcode ?? null,
     };
+  }
+
+  private parseDirectoryRoles(role?: string, roles?: string): UserRole[] {
+    const values = `${role ?? ''},${roles ?? ''}`
+      .split(',')
+      .map((value) => value.trim().toLowerCase().replace(/[-\s]+/g, '_'))
+      .filter(Boolean);
+    if (!values.length || values.includes('all')) return [];
+
+    const aliases: Record<string, UserRole> = {
+      agent: UserRole.AGENT,
+      agents: UserRole.AGENT,
+      account_manager: UserRole.ACCOUNT_MANAGER,
+      account_managers: UserRole.ACCOUNT_MANAGER,
+      manager: UserRole.ACCOUNT_MANAGER,
+      managers: UserRole.ACCOUNT_MANAGER,
+      consultant: UserRole.CONSULTANT,
+      consultants: UserRole.CONSULTANT,
+    };
+
+    return Array.from(
+      new Set(
+        values
+          .map((value) => aliases[value])
+          .filter((value): value is UserRole => Boolean(value)),
+      ),
+    );
+  }
+
+  /**
+   * Live public-profile metrics: latest passed assessment and real task
+   * performance (completed count, on-time rate, average acceptance time).
+   */
+  private async loadDirectoryMetrics(userIds: string[]) {
+    const metrics = new Map<
+      string,
+      {
+        assessmentScore: number | null;
+        latestAssessmentBand: string | null;
+        completedTasksCount: number;
+        activeTasksCount: number;
+        onTimeRate: number | null;
+        averageResponseTimeHours: number | null;
+      }
+    >();
+    if (!userIds.length) return metrics;
+
+    const activeStatuses = [
+      TaskStatus.ASSIGNED,
+      TaskStatus.ACCEPTED,
+      TaskStatus.SUBMITTED,
+      TaskStatus.PENDING_BUSINESS_APPROVAL,
+      TaskStatus.REVISION_REQUESTED,
+      TaskStatus.APPROVED,
+    ];
+
+    const [attempts, taskRows] = await Promise.all([
+      this.quizAttemptRepository.find({
+        where: { userId: In(userIds) },
+        order: { createdAt: 'DESC' },
+        select: ['id', 'userId', 'percentage', 'band', 'createdAt'],
+      }),
+      this.tasksRepository
+        .createQueryBuilder('task')
+        .select('task.assignedAgentId', 'agentId')
+        .addSelect(
+          'COUNT(*) FILTER (WHERE task.status = :completedStatus)',
+          'completedTasks',
+        )
+        .addSelect(
+          'COUNT(*) FILTER (WHERE task.status IN (:...activeStatuses))',
+          'activeTasks',
+        )
+        .addSelect(
+          'COUNT(*) FILTER (WHERE task.status = :completedStatus AND task.dueDate IS NOT NULL)',
+          'completedWithDueDate',
+        )
+        .addSelect(
+          'COUNT(*) FILTER (WHERE task.status = :completedStatus AND task.dueDate IS NOT NULL AND task.completedAt <= task.dueDate)',
+          'completedOnTime',
+        )
+        .addSelect(
+          'AVG(EXTRACT(EPOCH FROM (task.acceptedAt - task.createdAt))) FILTER (WHERE task.acceptedAt IS NOT NULL)',
+          'averageResponseSeconds',
+        )
+        .where('task.assignedAgentId IN (:...userIds)', { userIds })
+        .setParameters({
+          completedStatus: TaskStatus.COMPLETED,
+          activeStatuses,
+        })
+        .groupBy('task.assignedAgentId')
+        .getRawMany<{
+          agentId: string;
+          completedTasks: string;
+          activeTasks: string;
+          completedWithDueDate: string;
+          completedOnTime: string;
+          averageResponseSeconds: string | null;
+        }>(),
+    ]);
+
+    const latestAttempt = new Map<string, QuizAttempt>();
+    const latestPassedAttempt = new Map<string, QuizAttempt>();
+    for (const attempt of attempts) {
+      if (!latestAttempt.has(attempt.userId)) {
+        latestAttempt.set(attempt.userId, attempt);
+      }
+      if (
+        !latestPassedAttempt.has(attempt.userId) &&
+        String(attempt.band || '').toLowerCase() !== 'fail'
+      ) {
+        latestPassedAttempt.set(attempt.userId, attempt);
+      }
+    }
+
+    const taskStats = new Map(
+      taskRows.map((row) => [row.agentId, row] as const),
+    );
+
+    for (const userId of userIds) {
+      const row = taskStats.get(userId);
+      const latest = latestAttempt.get(userId);
+      const passed = latestPassedAttempt.get(userId);
+      const withDue = Number(row?.completedWithDueDate ?? 0);
+      const onTime = Number(row?.completedOnTime ?? 0);
+      const averageSeconds = row?.averageResponseSeconds != null
+        ? Number(row.averageResponseSeconds)
+        : null;
+
+      metrics.set(userId, {
+        assessmentScore: passed?.percentage ?? latest?.percentage ?? null,
+        latestAssessmentBand: latest?.band ?? null,
+        completedTasksCount: Number(row?.completedTasks ?? 0),
+        activeTasksCount: Number(row?.activeTasks ?? 0),
+        onTimeRate:
+          withDue > 0 ? Math.round((onTime / withDue) * 1000) / 10 : null,
+        averageResponseTimeHours:
+          averageSeconds != null && Number.isFinite(averageSeconds)
+            ? Math.round((averageSeconds / 3600) * 10) / 10
+            : null,
+      });
+    }
+
+    return metrics;
   }
 
   private normalizePostcode(postcode?: string | null): string {
@@ -497,6 +659,91 @@ export class UsersService {
       return this.usersRepository.save(user);
     }
     return user;
+  }
+
+  /**
+   * Authenticated profile response with a role-specific qualification
+   * checklist. Qualification is derived from persisted verification,
+   * onboarding, assessment and skills state so every role (not just agents)
+   * gets an explicit readiness signal.
+   */
+  async getProfile(id: string) {
+    const user = await this.reconcileOnboarding(id);
+    return this.toProfileResponse(user);
+  }
+
+  private toProfileResponse(user: User) {
+    const {
+      password: _password,
+      mcomAccessToken: _mcomAccessToken,
+      mcomRefreshToken: _mcomRefreshToken,
+      currentHashedRefreshToken: _currentHashedRefreshToken,
+      ...profile
+    } = user;
+
+    const isAgent = user.role === UserRole.AGENT;
+    const verified = user.verificationStatus === VerificationStatus.VERIFIED;
+    const hasProfileSubmission = Boolean(
+      user.verificationSubmission && user.verificationDocumentMimeType,
+    );
+    const hasSkills = Boolean(user.skills?.length);
+    const requirements = [
+      {
+        key: 'verification',
+        label: 'Identity verified by an administrator',
+        completed: verified,
+      },
+      {
+        key: 'profile',
+        label: 'Profile and identity document submitted',
+        completed: hasProfileSubmission,
+      },
+      {
+        key: 'assessment',
+        label: 'Assessment passed',
+        completed: Boolean(user.isQuizPassed),
+      },
+      ...(isAgent
+        ? [
+            {
+              key: 'skills',
+              label: 'At least one approved skill',
+              completed: hasSkills,
+            },
+          ]
+        : []),
+      {
+        key: 'onboarding',
+        label: 'Onboarding completed',
+        completed: Boolean(user.isOnboarded),
+      },
+    ];
+
+    const isQualified =
+      user.role === UserRole.ADMIN
+        ? true
+        : verified &&
+          Boolean(user.isOnboarded) &&
+          Boolean(user.isQuizPassed) &&
+          (!isAgent || hasSkills);
+
+    return {
+      ...profile,
+      name:
+        [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+        user.email,
+      isQualified,
+      qualificationStatus: isQualified ? 'qualified' : 'incomplete',
+      qualification: {
+        role: user.role,
+        isQualified,
+        status: isQualified ? 'qualified' : 'incomplete',
+        requirements,
+        missing: requirements
+          .filter((requirement) => !requirement.completed)
+          .map((requirement) => requirement.label),
+      },
+    };
   }
 
   private async checkAndSetOnboarding(userId: string) {

@@ -34,9 +34,21 @@ export class TasksService {
     if (creator.role !== UserRole.ADMIN) {
       await this.assertQualifiedAffiliate(userId);
     }
+
+    if (createTaskDto.assignedAgentId) {
+      const assignee = await this.usersService.findOne(createTaskDto.assignedAgentId);
+      if (assignee.role === UserRole.ADMIN) {
+        throw new ForbiddenException('Cannot assign tasks to another Admin');
+      }
+      await this.assertQualifiedAffiliate(assignee.id);
+    }
+
     const task = this.tasksRepo.create({
       ...createTaskDto,
       clientId: userId,
+      ...(createTaskDto.assignedAgentId
+        ? { status: TaskStatus.ASSIGNED }
+        : {}),
     });
     return this.tasksRepo.save(task);
   }

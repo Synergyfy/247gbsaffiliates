@@ -7,9 +7,13 @@ import { Task } from '../tasks/entities/task.entity';
 import { Wallet } from '../wallet/entities/wallet.entity';
 import { Transaction } from '../wallet/entities/transaction.entity';
 import { User } from '../users/entities/user.entity';
+import { QuizAttempt } from '../assessment/entities/quiz_attempt.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Task, Wallet, Transaction, User]), HttpModule],
+  imports: [
+    TypeOrmModule.forFeature([Task, Wallet, Transaction, User, QuizAttempt]),
+    HttpModule,
+  ],
   controllers: [AccountManagerController],
   providers: [AccountManagerService],
   exports: [AccountManagerService],

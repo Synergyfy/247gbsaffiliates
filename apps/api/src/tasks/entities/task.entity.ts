@@ -23,6 +23,7 @@ export enum TaskType {
   ONE_TIME = 'one_time',
   RECURRING = 'recurring',
   CAMPAIGN = 'campaign',
+  CONSULTANCY = 'consultancy',
 }
 
 export enum OriginSystem {
