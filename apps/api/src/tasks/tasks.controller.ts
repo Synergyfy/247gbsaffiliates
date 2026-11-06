@@ -8,7 +8,7 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { CreateTaskFromCentralDto } from './dto/create-task-from-central.dto';
 import { CreateWorkRequestDto } from './dto/create-work-request.dto';
 import { FindTasksQueryDto } from './dto/find-tasks.dto';
-import { CentralStatusUpdateDto, ReviewCallbackDto, SubmitTaskDto } from './dto/task-collaboration.dto';
+import { CentralStatusUpdateDto, DeclineTaskDto, ReviewCallbackDto, SubmitTaskDto } from './dto/task-collaboration.dto';
 import { TaskStatus } from './entities/task.entity';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse, ApiBody, ApiHeader } from '@nestjs/swagger';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -116,11 +116,12 @@ export class TasksController {
   @Post(':id/decline')
   @ApiOperation({ 
     summary: 'Decline an assigned task', 
-    description: 'Authenticated user declines a task assigned to them. Updates status to DECLINED.' 
+    description: 'Authenticated user declines a task assigned to them. A reason is required so the business and administrators can reassign it.' 
   })
+  @ApiBody({ type: DeclineTaskDto })
   @ApiResponse({ status: 200, description: 'Task declined' })
-  decline(@Param('id') id: string, @Request() req) {
-    return this.tasksService.respondToTask(id, req.user.userId, 'decline');
+  decline(@Param('id') id: string, @Body() dto: DeclineTaskDto, @Request() req) {
+    return this.tasksService.respondToTask(id, req.user.userId, 'decline', { reason: dto.reason });
   }
 
   @Post(':id/submit')

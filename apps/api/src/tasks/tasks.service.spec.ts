@@ -294,7 +294,19 @@ describe('TasksService (AffiliateBackend)', () => {
     mockTask.status = TaskStatus.ASSIGNED;
     mockTask.assignedAgentId = 'uuid-agent-1';
 
-    const result = await service.respondToTask('uuid-task-1', 'uuid-agent-1', 'decline');
+    const result = await service.respondToTask('uuid-task-1', 'uuid-agent-1', 'decline', {
+      reason: 'No capacity before the deadline.',
+    });
     expect(result.status).toBe(TaskStatus.DECLINED);
+    expect(result.declineReason).toBe('No capacity before the deadline.');
+  });
+
+  it('refuses a decline without a reason', async () => {
+    mockTask.status = TaskStatus.ASSIGNED;
+    mockTask.assignedAgentId = 'uuid-agent-1';
+
+    await expect(
+      service.respondToTask('uuid-task-1', 'uuid-agent-1', 'decline', { reason: '  ' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

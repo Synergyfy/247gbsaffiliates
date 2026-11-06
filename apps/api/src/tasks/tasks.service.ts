@@ -161,6 +161,7 @@ export class TasksService {
         patch.reviewNotes = null;
         patch.reviewHistory = [];
         patch.revisionCount = 0;
+        patch.declineReason = null;
         patch.submittedAt = null;
         patch.completedAt = null;
         return this.tasksRepo.save(this.tasksRepo.merge(existing, patch));
@@ -298,7 +299,12 @@ export class TasksService {
     return savedTask;
   }
 
-  async respondToTask(id: string, userId: string, response: 'accept' | 'decline') {
+  async respondToTask(
+    id: string,
+    userId: string,
+    response: 'accept' | 'decline',
+    options: { reason?: string } = {},
+  ) {
     const task = await this.findOne(id);
     const me = await this.assertQualifiedAffiliate(userId);
 
@@ -343,8 +349,16 @@ export class TasksService {
       }
       task.status = TaskStatus.ACCEPTED;
       task.acceptedAt = new Date();
+      task.declineReason = null;
     } else {
+      const reason = (options.reason ?? '').trim();
+      if (reason.length < 5) {
+        throw new BadRequestException(
+          'Provide a reason for declining this task so the business and an administrator can reassign it.',
+        );
+      }
       task.status = TaskStatus.DECLINED;
+      task.declineReason = reason;
     }
 
     const savedTask = await this.tasksRepo.save(task);
@@ -659,6 +673,7 @@ export class TasksService {
             affiliateTaskId: task.id,
             submissionData: task.submissionData ?? null,
             reviewAcknowledged: extra.reviewAcknowledged ?? false,
+            declineReason: task.declineReason ?? null,
           },
           {
             headers: {
