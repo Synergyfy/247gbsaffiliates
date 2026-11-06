@@ -21,6 +21,8 @@ const mockTask: {
   reviewedAt?: Date | null;
   completedAt?: Date | null;
   assigneeEmail?: string | null;
+  paymentStatus?: string | null;
+  chargeApprovalRequired?: boolean;
 } = {
   id: 'uuid-task-1',
   title: 'Affiliate Task',
@@ -91,6 +93,8 @@ describe('TasksService (AffiliateBackend)', () => {
     mockTask.submittedAt = null;
     mockTask.reviewedAt = null;
     mockTask.completedAt = null;
+    mockTask.paymentStatus = null;
+    mockTask.chargeApprovalRequired = false;
     mockRepo.findAndCount.mockClear();
     mockRepo.findOne.mockClear();
     mockRepo.save.mockClear();
@@ -188,6 +192,15 @@ describe('TasksService (AffiliateBackend)', () => {
     
     const result = await service.respondToTask('uuid-task-1', 'uuid-agent-1', 'accept');
     expect(result.status).toBe(TaskStatus.ACCEPTED);
+  });
+
+  it('blocks accepting while Central has not locked the business funds', async () => {
+    mockTask.status = TaskStatus.ASSIGNED;
+    mockTask.assignedAgentId = 'uuid-agent-1';
+    mockTask.paymentStatus = 'ON_HOLD';
+
+    await expect(service.respondToTask('uuid-task-1', 'uuid-agent-1', 'accept'))
+      .rejects.toThrow(BadRequestException);
   });
 
   it('should not allow an unverified affiliate to accept an assigned task', async () => {

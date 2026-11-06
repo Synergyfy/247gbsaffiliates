@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import TaskCountdown from '@/components/tasks/TaskCountdown';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { useAuthStore } from '@/store/useAuthStore';
 import { FormEvent, Suspense } from 'react';
@@ -47,13 +48,20 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
                             {(task.platforms ?? []).map((platform) => <span key={platform} className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-blue-800">{platform}</span>)}
                             {task.category && <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-indigo-800">{task.category}</span>}
                             {task.projectName && <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800"><span className="material-symbols-outlined text-sm">folder</span>{task.projectName}</span>}
-                            {task.chargeApprovalRequired && <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Awaiting charge approval</span>}
+                            {task.paymentStatus === 'ON_HOLD' ? (
+                                <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Awaiting funds</span>
+                            ) : task.chargeApprovalRequired ? (
+                                <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Awaiting charge approval</span>
+                            ) : null}
                         </div>
                     )}
                 </div>
-                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${statusStyles[task.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}>
-                    {task.status.replaceAll('_', ' ')}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${statusStyles[task.status] || 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                        {task.status.replaceAll('_', ' ')}
+                    </span>
+                    <TaskCountdown dueDate={task.dueDate} status={task.status} />
+                </div>
             </div>
 
             {isRevision && (

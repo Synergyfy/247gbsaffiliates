@@ -138,6 +138,7 @@ export class TasksService {
       businessChargeAmount: dto.businessChargeAmount ?? undefined,
       businessChargeCurrency: dto.businessChargeCurrency ?? 'GBP',
       chargeApprovalRequired: dto.chargeApprovalRequired ?? false,
+      paymentStatus: dto.paymentStatus ?? undefined,
       ...(dto.chargeApprovalRequired === false
         ? { chargeApprovedAt: new Date() }
         : {}),
@@ -319,6 +320,11 @@ export class TasksService {
     }
 
     if (response === 'accept') {
+      if (task.paymentStatus === 'ON_HOLD') {
+        throw new BadRequestException(
+          'The business has not locked the funds for this task yet. You can see the task, but work cannot start until payment is secured.',
+        );
+      }
       if (task.chargeApprovalRequired) {
         throw new BadRequestException(
           'The business must approve the charge for this task before work begins.',

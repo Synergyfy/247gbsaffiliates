@@ -9,6 +9,8 @@ import {
   useTask,
   useTasks,
 } from '@/hooks/useTasks';
+import TaskCountdown from '@/components/tasks/TaskCountdown';
+import { parseTaskMaterials } from '@/lib/taskMaterials';
 import { useAuthStore } from '@/store/useAuthStore';
 import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 import { getActionFailureMessage, reportRequestFailure } from '@/lib/requestErrors';
@@ -211,6 +213,7 @@ export default function AgentTaskDetailsPage() {
     const canRespond = task.status === 'assigned';
     const canSubmit = task.status === 'accepted' || task.status === 'revision_requested';
     const waitingForCharge = task.status === 'assigned' && Boolean(task.chargeApprovalRequired);
+    const waitingForFunds = task.status === 'assigned' && task.paymentStatus === 'ON_HOLD';
     const isRevision = task.status === 'revision_requested';
     const isCentralTask = task.originSystem === 'MCOM_CENTRAL' || Boolean(task.externalTaskId);
     const money = formatMoney(task);
@@ -218,6 +221,7 @@ export default function AgentTaskDetailsPage() {
     const reviewHistory = task.reviewHistory ?? [];
     const submission = task.submissionData;
     const hasSubmission = Boolean(submission && (submission.notes || submission.links?.length || submission.attachments?.length));
+    const materials = parseTaskMaterials(task.materials);
 
     return (
         <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
@@ -238,7 +242,10 @@ export default function AgentTaskDetailsPage() {
                             {task.taskType && <span className="rounded-md bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">{task.taskType.replaceAll('_', ' ')}</span>}
                         </div>
                     </div>
-                    <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold capitalize ${statusStyles[task.status] || statusStyles.assigned}`}>{statusLabel(task.status)}</span>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${statusStyles[task.status] || statusStyles.assigned}`}>{statusLabel(task.status)}</span>
+                        <TaskCountdown dueDate={task.dueDate} status={task.status} />
+                    </div>
                 </div>
 
                 {isRevision && (
@@ -257,7 +264,19 @@ export default function AgentTaskDetailsPage() {
                     </div>
                 )}
 
-                {task.chargeApprovalRequired && (
+                {waitingForFunds && (
+                    <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4" role="status">
+                        <p className="flex items-center gap-1.5 text-sm font-bold text-amber-900">
+                            <span className="material-symbols-outlined text-base">lock_clock</span>
+                            Waiting for the business to secure funds
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-amber-900">
+                            This task is assigned to you, but the business has not locked the payment yet. You can see the task and its instructions, but you cannot accept or start it until Central Hub confirms the funds are secured.
+                        </p>
+                    </div>
+                )}
+
+                {task.chargeApprovalRequired && !waitingForFunds && (
                     <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4" role="status">
                         <p className="flex items-center gap-1.5 text-sm font-bold text-amber-900">
                             <span className="material-symbols-outlined text-base">lock_clock</span>
@@ -293,10 +312,73 @@ export default function AgentTaskDetailsPage() {
                     </section>
                 ) : null}
 
-                {task.materials ? (
+                {(materials.notes || materials.files.length > 0 || materials.links.length > 0) ? (
                     <section className="mt-6 border-t border-slate-100 pt-5">
                         <h2 className="text-base font-semibold text-slate-950">Materials supplied</h2>
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{task.materials}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                            Files and links from the business. Open or download them before you start.
+                        </p>
+
+                        {materials.notes ? (
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                                {materials.notes}
+                            </p>
+                        ) : null}
+
+                        {materials.files.length > 0 ? (
+                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                {materials.files.map((file) => (
+                                    <a
+                                        key={file.url}
+                                        href={file.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        download={file.name}
+                                        className="group flex min-h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:border-blue-300 hover:bg-blue-50/40"
+                                    >
+                                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+                                            <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                                                description
+                                            </span>
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block truncate text-sm font-semibold text-slate-900">
+                                                {file.name}
+                                            </span>
+                                            <span className="block text-[11px] text-slate-500">
+                                                Download material
+                                            </span>
+                                        </span>
+                                        <span className="material-symbols-outlined text-lg text-slate-400 group-hover:text-blue-700" aria-hidden="true">
+                                            download
+                                        </span>
+                                    </a>
+                                ))}
+                            </div>
+                        ) : null}
+
+                        {materials.links.length > 0 ? (
+                            <ul className="mt-3 space-y-1.5">
+                                {materials.links.map((link) => (
+                                    <li key={link}>
+                                        <a
+                                            href={link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                                        >
+                                            <span className="material-symbols-outlined text-base" aria-hidden="true">
+                                                link
+                                            </span>
+                                            <span className="truncate">{link}</span>
+                                            <span className="material-symbols-outlined text-base" aria-hidden="true">
+                                                open_in_new
+                                            </span>
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : null}
                     </section>
                 ) : null}
 
@@ -388,7 +470,7 @@ export default function AgentTaskDetailsPage() {
 
                 {canRespond && (
                     <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
-                        <button type="button" onClick={() => void run(() => acceptTask(taskId), 'Task accepted. You can now work on it and submit it for review when ready.')} disabled={!isQualified || isAccepting || isDeclining || waitingForCharge} title={waitingForCharge ? 'The business must approve the charge first' : undefined} className="min-h-11 rounded-lg bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">{isAccepting ? 'Accepting…' : waitingForCharge ? 'Awaiting business approval' : 'Accept task'}</button>
+                        <button type="button" onClick={() => void run(() => acceptTask(taskId), 'Task accepted. You can now work on it and submit it for review when ready.')} disabled={!isQualified || isAccepting || isDeclining || waitingForCharge || waitingForFunds} title={waitingForFunds ? 'The business must lock the funds before you can start' : waitingForCharge ? 'The business must approve the charge first' : undefined} className="min-h-11 rounded-lg bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">{isAccepting ? 'Accepting…' : waitingForFunds ? 'Awaiting funds' : waitingForCharge ? 'Awaiting business approval' : 'Accept task'}</button>
                         <button type="button" onClick={() => void run(() => declineTask(taskId), 'Task declined.')} disabled={isAccepting || isDeclining} className="min-h-11 rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{isDeclining ? 'Declining…' : 'Decline'}</button>
                     </div>
                 )}
