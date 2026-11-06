@@ -106,7 +106,7 @@ export function HeroCarousel() {
                                 className="inline-flex items-center px-8 py-4 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-full font-display font-semibold transition-all backdrop-blur-sm"
                             >
                                 <span className="material-symbols-outlined mr-2">search</span>
-                                Find an Agent
+                                Find Affiliates
                             </Link>
                         </motion.div>
                     </div>

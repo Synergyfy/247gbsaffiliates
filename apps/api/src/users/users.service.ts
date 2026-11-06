@@ -158,25 +158,30 @@ export class UsersService {
     let territory: { city?: string; region?: string; postcode?: string } | null = null;
     let origin: GeoPoint | null = null;
     if (filters.postcode?.trim()) {
-      const resolved = await this.lookupPostalCode(filters.postcode);
-      if (!resolved?.found) {
-        return { items: [], total: 0, territory: null, distanceFrom: null };
-      }
-      territory = {
-        city: resolved.city,
-        region: resolved.region,
-        postcode: resolved.postalCode,
-      };
-      if (resolved.latitude != null && resolved.longitude != null) {
-        origin = { lat: resolved.latitude, lng: resolved.longitude };
+      try {
+        const resolved = await this.lookupPostalCode(filters.postcode);
+        if (resolved?.found) {
+          territory = {
+            city: resolved.city,
+            region: resolved.region,
+            postcode: resolved.postalCode,
+          };
+          if (resolved.latitude != null && resolved.longitude != null) {
+            origin = { lat: resolved.latitude, lng: resolved.longitude };
+          }
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Postal lookup unavailable for "${filters.postcode}", returning directory without distance filter: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
       }
     }
 
     const qb = this.usersRepository
       .createQueryBuilder('user')
-      .where('user.verificationStatus = :verified', { verified: VerificationStatus.VERIFIED })
-      .andWhere('user.status = :active', { active: UserStatus.ACTIVE })
-      .andWhere('user.isOnboarded = true');
+      .where('user.status = :active', { active: UserStatus.ACTIVE });
 
     if (role && role !== 'all') {
       if (role === 'account_manager') qb.andWhere('user.role = :role', { role: UserRole.ACCOUNT_MANAGER });
@@ -196,7 +201,8 @@ export class UsersService {
     }
 
     const users = await qb
-      .orderBy('user.createdAt', 'DESC')
+      .orderBy('user.isOnboarded', 'DESC')
+      .addOrderBy('user.createdAt', 'DESC')
       .take(origin ? MAX_DIRECTORY_CANDIDATES : limit)
       .getMany();
 
@@ -243,9 +249,11 @@ export class UsersService {
       };
     });
 
+    // Keep affiliates whose postcode is null / not yet geocoded so real database
+    // affiliates are never hidden when postal-code lookup is not yet configured.
     const matching = origin
       ? items
-        .filter((item) => item.distanceMiles != null && item.distanceMiles <= radiusMiles)
+        .filter((item) => item.distanceMiles == null || item.distanceMiles <= radiusMiles)
         .sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity))
       : items;
 

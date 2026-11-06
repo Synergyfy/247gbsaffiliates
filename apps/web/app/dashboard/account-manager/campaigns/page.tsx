@@ -1,152 +1,91 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useTasks, Task } from '@/hooks/useTasks';
+import { Task, useTasks } from '@/hooks/useTasks';
 import { CreateCampaignModal } from '@/components/dashboard/CreateCampaignModal';
 import { toast } from 'react-toastify';
 
-const progressForStatus = (status: string) => {
-    switch (status) {
-        case 'open': return 10;
-        case 'assigned': return 25;
-        case 'accepted': return 50;
-        case 'submitted': return 75;
-        case 'revision_requested': return 65;
-        case 'approved':
-        case 'completed': return 100;
-        case 'cancelled':
-        case 'declined': return 0;
-        default: return 25;
+const terminalStatuses = ['completed', 'approved', 'cancelled', 'declined'];
+const campaignCurrency = (task: Task) => (task.currency || 'GBP').toUpperCase();
+const formatBudget = (amount: number, currency: string) => {
+    try {
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount);
+    } catch {
+        return `${currency} ${amount.toLocaleString()}`;
     }
 };
 
 export default function CampaignsPage() {
-    const { tasks, isLoading, createTask, isCreating } = useTasks();
+    const { tasks, isLoading, isError, refetch, createTask, isCreating } = useTasks({ limit: 100 });
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const campaigns = useMemo(() => (tasks || []).filter((task) => {
+        const category = typeof task.category === 'string' ? task.category : '';
+        return task.type?.toLowerCase() === 'campaign' || category.toLowerCase() === 'campaign';
+    }), [tasks]);
+    const activeCampaigns = campaigns.filter((campaign) => !terminalStatuses.includes(campaign.status));
+    const completedCampaigns = campaigns.filter((campaign) => ['completed', 'approved'].includes(campaign.status));
+    const budgetTotals = campaigns.reduce<Record<string, number>>((totals, campaign) => {
+        const currency = campaignCurrency(campaign);
+        totals[currency] = (totals[currency] || 0) + Number(campaign.budget || 0);
+        return totals;
+    }, {});
 
-    const campaigns = (tasks || []).filter(t => {
-        const catName = typeof t.category === 'string' ? t.category : '';
-        return t.type?.toLowerCase() === 'campaign' || catName?.toLowerCase() === 'campaign';
-    });
-
-    const totalBudget = campaigns.reduce((sum, campaign) => sum + Number(campaign.budget || 0), 0);
-    const activeCampaigns = campaigns.filter((campaign) => !['completed', 'approved', 'cancelled', 'declined'].includes(campaign.status)).length;
-    const completedCampaigns = campaigns.filter((campaign) => ['completed', 'approved'].includes(campaign.status)).length;
-    const completionRate = campaigns.length ? Math.round((completedCampaigns / campaigns.length) * 100) : 0;
-
-    const handleCreateCampaign = async (values: any) => {
+    const handleCreateCampaign = async (values: Partial<Task>) => {
         try {
             await createTask(values);
-            toast.success('Strategic campaign deployed to the grid.');
-        } catch (error) {
-            toast.error('Campaign deployment failed.');
+            toast.success('Campaign created.');
+        } catch {
+            toast.error('Campaign could not be created. Check the details and try again.');
         }
     };
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary"></div>
-            </div>
-        );
-    }
-
     return (
-        <div className="p-8 lg:p-10 font-display">
-            <header className="mb-10 flex items-center justify-between">
+        <div className="mx-auto w-full max-w-[1500px] space-y-4 px-3 py-4 sm:px-5 sm:py-5 lg:px-7">
+            <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-black text-text-main uppercase tracking-tighter italic">Tactical Campaigns</h1>
-                    <p className="text-text-secondary text-sm font-medium italic">Command and track all active strategic marketing deployments.</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Account Manager workspace</p>
+                    <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Campaigns</h1>
+                    <p className="mt-1 max-w-2xl text-sm text-slate-600">Create campaigns and track their actual task status, budget and assignments.</p>
                 </div>
-                <button 
-                    onClick={() => setIsModalOpen(true)}
-                    disabled={isCreating}
-                    className="bg-primary text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary/20 hover:bg-primary-hover hover:scale-105 transition-all flex items-center gap-3 disabled:opacity-50"
-                >
-                    <span className="material-symbols-outlined text-lg">add_moderator</span>
-                    {isCreating ? 'Deploying...' : 'New Strategic Campaign'}
+                <button type="button" onClick={() => setIsModalOpen(true)} disabled={isCreating} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60">
+                    <span className="material-symbols-outlined text-lg">add</span>{isCreating ? 'Creating…' : 'Create campaign'}
                 </button>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-                <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all hover:shadow-lg group">
-                    <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-4 italic">Active Operations</p>
-                    <p className="text-5xl font-black text-text-main italic tracking-tighter group-hover:text-primary transition-colors">{activeCampaigns}</p>
-                </div>
-                <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all hover:shadow-lg group">
-                    <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-4 italic">Campaign Budget</p>
-                    <p className="text-5xl font-black text-text-main italic tracking-tighter group-hover:text-primary transition-colors">£{totalBudget.toLocaleString()}</p>
-                </div>
-                <div className="bg-surface-light p-10 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all hover:shadow-lg group">
-                    <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] mb-4 italic">Completion Rate</p>
-                    <div className="flex items-end gap-3">
-                        <p className="text-5xl font-black text-text-main italic tracking-tighter group-hover:text-primary transition-colors">{completionRate}%</p>
-                        <span className="text-xs font-black text-slate-500 mb-2 uppercase tracking-widest italic">{completedCampaigns}/{campaigns.length}</span>
-                    </div>
-                </div>
-            </div>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Campaign summary">
+                <article className="border border-slate-200 bg-white p-3"><p className="text-xs font-medium text-slate-500">Active campaigns</p><p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950">{isLoading ? '…' : isError ? '—' : activeCampaigns.length}</p><p className="mt-1 text-[11px] text-slate-500">Campaign tasks not yet completed or closed</p></article>
+                <article className="border border-slate-200 bg-white p-3"><p className="text-xs font-medium text-slate-500">Completed campaigns</p><p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950">{isLoading ? '…' : isError ? '—' : completedCampaigns.length}</p><p className="mt-1 text-[11px] text-slate-500">Campaign tasks marked completed or approved</p></article>
+                <article className="border border-slate-200 bg-white p-3"><p className="text-xs font-medium text-slate-500">Campaign budget total</p>{isLoading ? <p className="mt-1.5 text-base font-bold text-slate-950">Loading…</p> : isError ? <p className="mt-1.5 text-base font-bold text-slate-950">Unavailable</p> : Object.keys(budgetTotals).length ? <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">{Object.entries(budgetTotals).map(([currency, total]) => <span key={currency} className="text-base font-bold text-slate-950">{formatBudget(total, currency)}</span>)}</div> : <p className="mt-1.5 text-base font-bold text-slate-950">—</p>}<p className="mt-1 text-[11px] text-slate-500">Totals kept separate by currency</p></article>
+            </section>
 
-            <div className="bg-surface-light rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                                <th className="px-10 py-6 text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Campaign Identity</th>
-                                <th className="px-10 py-6 text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Status</th>
-                                <th className="px-10 py-6 text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Strategic Budget</th>
-                                <th className="px-10 py-6 text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Operational Yield</th>
-                                <th className="px-10 py-6 text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] text-right">Command</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 italic">
-                            {campaigns.length > 0 ? (
-                                campaigns.map((campaign: Task) => (
-                                    <tr key={campaign.id} className="hover:bg-slate-50/50 transition-all group">
-                                        <td className="px-10 py-6">
-                                            <p className="font-black text-text-main text-sm uppercase tracking-tighter">{campaign.title}</p>
-                                            <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest mt-0.5 opacity-60">ID: #CMP-{campaign.id.slice(0, 8)}</p>
-                                        </td>
-                                        <td className="px-10 py-6">
-                                            <span className="px-4 py-1.5 bg-green-50 text-green-700 text-[9px] font-black uppercase tracking-widest rounded-xl border border-green-100 flex items-center gap-2 w-fit">
-                                                <span className="size-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                                                {campaign.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-10 py-6 text-sm font-black text-text-main">£{campaign.budget.toLocaleString()}</td>
-                                        <td className="px-10 py-6">
-                                            <div className="flex flex-col gap-2">
-                                                <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner border border-slate-200/50">
-                                                    <div className="h-full bg-primary shadow-sm" style={{ width: `${progressForStatus(campaign.status)}%` }}></div>
-                                                </div>
-                                                <p className="text-[9px] text-text-secondary font-black uppercase tracking-widest italic opacity-60">{progressForStatus(campaign.status)}% status progress</p>
-                                            </div>
-                                        </td>
-                                        <td className="px-10 py-6 text-right">
-                                            <Link href={`/dashboard/account-manager/tasks/${campaign.id}`} className="text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5 px-6 py-2.5 rounded-2xl transition-all border border-primary/10 hover:scale-105 active:scale-95 inline-block">
-                                                Open task
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={5} className="py-24 text-center text-slate-300 font-bold uppercase tracking-[0.3em] text-[10px] italic opacity-50">
-                                        No active tactical campaigns in the sector.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-4 sm:px-5">
+                    <div><h2 className="text-sm font-semibold text-slate-950">Campaign work</h2><p className="mt-0.5 text-xs text-slate-500">Status and assignment from each campaign task record</p></div>
+                    {!isLoading && !isError && <span className="text-xs text-slate-500">{campaigns.length} record{campaigns.length === 1 ? '' : 's'}</span>}
                 </div>
-            </div>
+                {isLoading ? (
+                    <div className="space-y-3 p-4 sm:p-5" aria-label="Loading campaigns"><div className="h-16 animate-pulse rounded-lg bg-slate-100" /><div className="h-16 animate-pulse rounded-lg bg-slate-100" /><div className="h-16 animate-pulse rounded-lg bg-slate-100" /></div>
+                ) : isError ? (
+                    <div role="alert" className="m-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:m-5">Campaign records could not be loaded. <button type="button" onClick={() => void refetch()} className="ml-1 font-semibold underline">Try again</button></div>
+                ) : campaigns.length === 0 ? (
+                    <div className="px-4 py-5"><h3 className="text-sm font-semibold text-slate-800">No campaigns yet</h3><p className="mt-1 text-xs text-slate-500">Create a campaign to add its task record to this list.</p><button type="button" onClick={() => setIsModalOpen(true)} className="mt-3 inline-flex min-h-9 items-center rounded-lg bg-blue-700 px-3 text-xs font-semibold text-white hover:bg-blue-800">Create campaign</button></div>
+                ) : (
+                    <ul className="divide-y divide-slate-100">
+                        {campaigns.map((campaign) => (
+                            <li key={campaign.id}>
+                                <Link href={`/dashboard/account-manager/tasks/${campaign.id}`} className="grid gap-3 px-4 py-4 transition-colors hover:bg-slate-50 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:px-5">
+                                    <span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-950">{campaign.title}</span><span className="mt-1 block line-clamp-2 text-xs leading-relaxed text-slate-600">{campaign.description || 'No description provided.'}</span><span className="mt-1 block text-xs text-slate-500">{campaign.assignedAgent ? `Assigned to ${[campaign.assignedAgent.firstName, campaign.assignedAgent.lastName].filter(Boolean).join(' ') || campaign.assignedAgent.email}` : 'No agent listed'}</span></span>
+                                    <span className="flex items-center gap-2 text-xs text-slate-600"><span className="text-slate-400">Status</span><span className="capitalize">{campaign.status.replaceAll('_', ' ')}</span></span>
+                                    <span className="flex items-center justify-between gap-4 text-xs sm:justify-end"><span className="font-semibold text-slate-900">{formatBudget(Number(campaign.budget || 0), campaignCurrency(campaign))}</span><span className="material-symbols-outlined text-base text-blue-700">arrow_forward</span></span>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>
 
-            <CreateCampaignModal 
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSubmit={handleCreateCampaign}
-                isSubmitting={isCreating}
-            />
+            <CreateCampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleCreateCampaign} isSubmitting={isCreating} />
         </div>
     );
 }

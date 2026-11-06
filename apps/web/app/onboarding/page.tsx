@@ -87,13 +87,15 @@ function OnboardingFlow() {
     useEffect(() => {
         if (isRetakeQuiz) {
             if (retakeAvailableAt && Date.now() < retakeAvailableAt) {
-                router.replace('/dashboard/agent/assessment');
+                const currentRole = normalizeRole(user?.role || onboardingRole);
+                const dashboardRole = currentRole === 'account-manager' ? 'account-manager' : currentRole === 'consultant' ? 'consultant' : 'agent';
+                router.replace(`/dashboard/${dashboardRole}/assessment`);
                 return;
             }
             clearQuizAnswers();
             setStep('quiz');
         }
-    }, [clearQuizAnswers, isRetakeQuiz, retakeAvailableAt, router, setStep]);
+    }, [clearQuizAnswers, isRetakeQuiz, onboardingRole, retakeAvailableAt, router, setStep, user?.role]);
 
     useEffect(() => {
         if (!user?.role) return;
@@ -149,7 +151,7 @@ function OnboardingFlow() {
             case 'basic-info':
                 return <BasicInfoStep />;
             case 'profile-info':
-                return <ProfileInfoStep />;
+                return <ProfileInfoStep isEditingProfile={isEditingProfile} />;
             case 'questionnaire':
                 return <SkillSelectionStep />;
             case 'quiz':

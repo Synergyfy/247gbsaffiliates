@@ -205,13 +205,13 @@ export default function AgentDashboard() {
         eyebrow: 'Recommended next step',
         title: 'Complete your affiliate profile',
         description: 'Submit your profile information and identity document so an administrator can review your verification.',
-        href: '/onboarding?edit-profile=1',
+        href: '/onboarding',
         action: 'Continue profile setup',
         icon: 'person_edit',
     };
 
     if (hasProfileSubmission && verificationStatus === 'rejected') {
-        nextAction = { ...nextAction, title: 'Update your verification submission', description: profile?.verificationNotes || 'Review the feedback and resubmit your profile and identity document for administrator review.', action: 'Update submission' };
+        nextAction = { ...nextAction, title: 'Update your verification submission', description: profile?.verificationNotes || 'Review the feedback and resubmit your profile and identity document for administrator review.', href: '/onboarding?edit-profile=1', action: 'Update submission' };
     } else if (hasProfileSubmission && verificationStatus === 'pending') {
         nextAction = { ...nextAction, title: 'Your identity verification is under review', description: 'You can continue learning while an administrator reviews your submission. We’ll show the persisted verification status here.', href: '/dashboard/agent/verification', action: 'View verification status', icon: 'hourglass_top' };
     } else if (verificationStatus === 'verified' && !hasAssessmentPassed && latestAttempt?.band?.toLowerCase() === 'fail') {

@@ -19,7 +19,7 @@ export default function LandingPage() {
             <h2 className="text-text-main text-2xl font-bold font-display tracking-tight">247gbs affiliate</h2>
           </div>
           <div className="hidden md:flex flex-1 justify-center gap-10">
-            <Link href="/find-agent" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">Find an Agent</Link>
+            <Link href="/find-agent" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">Find Affiliates</Link>
             <Link href="/for-account-manager" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Account Managers</Link>
             <Link href="/for-agent" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Agents</Link>
             <Link href="/for-consultant" className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors">For Consultants</Link>

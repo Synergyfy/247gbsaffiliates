@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { usePathname } from 'next/navigation';
 import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 
@@ -90,6 +91,8 @@ function ProfileField({ label, value, hint, wide = false }: { label: string; val
 }
 
 export default function AgentProfilePage() {
+    const pathname = usePathname();
+    const dashboardRoot = pathname.split('/').slice(0, 3).join('/');
     const { user } = useAuthStore();
     const profileQuery = useQuery({
         queryKey: ['affiliate-dashboard-profile'],
@@ -146,9 +149,9 @@ export default function AgentProfilePage() {
     const imageUrl = avatar || undefined;
 
     return (
-        <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-5">
+        <div className="mx-auto w-full max-w-[1500px] space-y-4 sm:space-y-5">
             <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[11px] text-slate-500">
-                <Link href="/dashboard/agent" className="hover:text-blue-700">Core Operations</Link>
+                <Link href={dashboardRoot} className="hover:text-blue-700">Dashboard</Link>
                 <span aria-hidden="true" className="material-symbols-outlined text-[14px]">chevron_right</span>
                 <span aria-current="page" className="font-medium text-blue-700">My Profile</span>
             </nav>
@@ -252,8 +255,8 @@ export default function AgentProfilePage() {
                         <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-blue-200">Next step</p>
                         <h2 className="mt-1.5 text-sm font-semibold">{completedCount === completionItems.length ? 'Review your profile details' : 'Continue profile setup'}</h2>
                         <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">{completedCount === completionItems.length ? 'You can update any profile details through the existing onboarding flow.' : 'Add the remaining profile details through the existing guided setup.'}</p>
-                        <Link href="/onboarding?edit-profile=1" className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-500">
-                            Continue profile setup<span className="material-symbols-outlined text-base">arrow_forward</span>
+                        <Link href={completedCount === completionItems.length ? '/onboarding?edit-profile=1' : '/onboarding'} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-500">
+                            {completedCount === completionItems.length ? 'Edit profile' : 'Resume onboarding'}<span className="material-symbols-outlined text-base">arrow_forward</span>
                         </Link>
                     </section>
                 </aside>
