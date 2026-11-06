@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { McomService } from './mcom.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { setAuthCookie } from '../auth/auth-cookie.util';
 
 import { UsersService } from '../users/users.service';
 
@@ -91,6 +92,11 @@ export class HandshakeController {
         role: user.role,
         isOnboarded: user.isOnboarded,
       });
+
+      // The browser continues on the web origin (different port), so the
+      // handshake must establish the HttpOnly session itself. Without this
+      // cookie every subsequent dashboard request is unauthenticated.
+      setAuthCookie(res, localToken);
 
       const role = (user.role ?? 'agent').toLowerCase().replace('_', '-');
       res.redirect(

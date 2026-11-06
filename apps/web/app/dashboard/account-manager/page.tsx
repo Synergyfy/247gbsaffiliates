@@ -1,14 +1,13 @@
 'use client';
 
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
-import { useAssignedBusinesses } from '@/hooks/useAssignedBusinesses';
+import { AssignedBusiness, useAssignedBusinesses } from '@/hooks/useAssignedBusinesses';
 import { useLearningProgress, useLearningResources } from '@/hooks/useLearningResources';
 import { Task, useManagedProjects, useManagedTasks, useTasks } from '@/hooks/useTasks';
 import { useWallet } from '@/hooks/useWallet';
 import { useAuthStore } from '@/store/useAuthStore';
-import { OverviewStage, QueryMessage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
+import { OverviewStage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
 
 type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string; verificationSubmission?: unknown };
 type Attempt = { band?: string; percentage?: number } | null;
@@ -21,6 +20,15 @@ const unwrap = <T,>(payload: unknown): T => {
     return payload as T;
 };
 const closed = (task: Task) => ['completed', 'approved', 'cancelled', 'declined'].includes(task.status.toLowerCase());
+const formatDate = (value?: string | null) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+const businessLocation = (business: AssignedBusiness) =>
+    [business.city?.name, business.city?.region, business.postcode].filter(Boolean).join(', ') ||
+    business.address ||
+    'Location not provided';
 
 export default function AccountManagerDashboard() {
     const { user } = useAuthStore();
@@ -37,7 +45,9 @@ export default function AccountManagerDashboard() {
     const walletQuery = useWallet();
 
     const myTasks = profile?.id ? (tasksQuery.tasks || []).filter((task) => task.assignedAgentId === profile.id || (task.assigneeEmail && task.assigneeEmail.toLowerCase() === profile.email?.toLowerCase())) : [] as Task[];
-    const businesses = businessesQuery.data?.businesses || [];
+    const assignedBusinesses = businessesQuery.data;
+    const isLoadingBusinesses = businessesQuery.isLoading;
+    const businesses = assignedBusinesses?.businesses || [];
     const completedResources = (progressQuery.data || []).filter((row) => row.status === 'completed').length;
     const resources = resourcesQuery.data || [];
     const verified = profile?.verificationStatus?.toLowerCase() === 'verified';
@@ -76,18 +86,75 @@ export default function AccountManagerDashboard() {
                 </div>
             </section>
 
-            <div className="grid gap-4 xl:grid-cols-5">
-                <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-span-3">
-                    <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-950">Assigned businesses</h2><p className="mt-0.5 text-xs text-slate-500">Live assignments from Central Hub</p></div><Link href="/dashboard/account-manager/businesses" className="text-xs font-semibold text-blue-700 hover:underline">View all</Link></div>
-                    <QueryMessage loading={businessesQuery.isLoading} error={businessesUnavailable} empty={businesses.length === 0} onRetry={() => void businessesQuery.refetch()}>
-                        <ul className="divide-y divide-slate-100">{businesses.slice(0, 4).map((business) => <li key={business.id} className="flex flex-wrap justify-between gap-2 py-3"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{business.businessName || 'Business'}</span><span className="mt-0.5 block text-xs text-slate-500">{[business.city?.name, business.city?.region, business.postcode].filter(Boolean).join(', ') || business.address || 'Location not provided'}</span></span><span className="self-center text-xs text-slate-500">{business.membershipPlanName || business.membershipLevel || 'Membership not listed'}</span></li>)}</ul>
-                    </QueryMessage>
-                </section>
-                <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-span-2">
-                    <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-950">My tasks</h2><p className="mt-1 text-xs text-slate-500">Only assignments associated with your account</p></div><Link href="/dashboard/account-manager/tasks" className="text-xs font-semibold text-blue-700 hover:underline">View all</Link></div>
-                    <QueryMessage loading={tasksQuery.isLoading} error={tasksQuery.isError} empty={myTasks.length === 0} onRetry={() => void tasksQuery.refetch()}>
-                        <ul className="divide-y divide-slate-100">{myTasks.slice(0, 4).map((task) => <li key={task.id}><Link href={`/dashboard/account-manager/tasks/${task.id}`} className="flex justify-between gap-3 py-3"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{task.title}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{task.centralBusinessName || task.projectName || 'Assigned task'}</span></span><span className="shrink-0 self-center text-xs capitalize text-slate-600">{task.status.replaceAll('_', ' ')}</span></Link></li>)}</ul>
-                    </QueryMessage>
+            <div className="p-4 sm:p-8 space-y-6">
+                <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-6 py-5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 className="font-bold text-text-main">Assigned businesses</h2>
+                            <p className="text-xs text-text-secondary">Businesses matched to you by Central Hub.</p>
+                        </div>
+                        {assignedBusinesses?.manager && (
+                            <span className="text-[11px] font-semibold text-slate-500">
+                                {assignedBusinesses.manager.name} · {assignedBusinesses.manager.email}
+                            </span>
+                        )}
+                    </div>
+                    {isLoadingBusinesses ? (
+                        <div className="px-6 py-10 text-center text-sm text-slate-500">Loading assigned businesses…</div>
+                    ) : assignedBusinesses?.error ? (
+                        <div className="px-6 py-8 text-sm text-red-700 bg-red-50 border-t border-red-100">
+                            {assignedBusinesses.error}
+                        </div>
+                    ) : businesses.length === 0 ? (
+                        <div className="px-6 py-12 text-center">
+                            <span className="material-symbols-outlined text-4xl text-slate-300">storefront</span>
+                            <p className="mt-2 text-sm font-semibold text-slate-700">No businesses assigned yet</p>
+                            <p className="mt-1 text-xs text-slate-500">Central Hub assigns businesses to you based on territory and membership.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Business</th>
+                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Location</th>
+                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Membership</th>
+                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Acquired by</th>
+                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Assigned</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {businesses.map((business: AssignedBusiness) => (
+                                        <tr key={business.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <p className="font-bold text-text-main text-sm">{business.businessName}</p>
+                                                <p className="text-[11px] text-slate-500">{business.email || business.businessType || 'Business'}</p>
+                                            </td>
+                                            <td className="px-6 py-4 text-xs text-slate-600">{businessLocation(business)}</td>
+                                            <td className="px-6 py-4">
+                                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                                                    {business.membershipPlanName || business.membershipLevel || 'Standard'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-xs text-slate-600">
+                                                {business.acquiredByAffiliateName ? (
+                                                    <span className="font-semibold text-slate-800">
+                                                        {business.acquiredByAffiliateName}
+                                                        <span className="ml-1 font-normal capitalize text-slate-400">
+                                                            ({(business.acquiredByAffiliateRole || 'affiliate').replaceAll('_', ' ')})
+                                                        </span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400">Direct signup</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-xs text-slate-600">{formatDate(business.accountManagerAssignedAt)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </section>
             </div>
 
