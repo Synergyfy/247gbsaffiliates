@@ -249,13 +249,29 @@ export class UsersService {
       };
     });
 
-    // Keep affiliates whose postcode is null / not yet geocoded so real database
-    // affiliates are never hidden when postal-code lookup is not yet configured.
-    const matching = origin
-      ? items
-        .filter((item) => item.distanceMiles == null || item.distanceMiles <= radiusMiles)
-        .sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity))
-      : items;
+    // Radius is measured from each affiliate's own postcode. Members whose
+    // postcode cannot be geocoded have no verifiable distance and are
+    // excluded from a radius search, so the result count always matches the
+    // advertised radius. If the bulk geocoder fails outright (affiliates have
+    // postcodes but none resolved), keep the unfiltered list instead of
+    // pretending every member is out of range.
+    const geocodingFailed =
+      Boolean(origin) &&
+      users.some((user) => Boolean(user.postcode?.trim())) &&
+      geoByPostcode.size === 0;
+
+    const matching =
+      origin && !geocodingFailed
+        ? items
+            .filter(
+              (item) =>
+                item.distanceMiles != null && item.distanceMiles <= radiusMiles,
+            )
+            .sort(
+              (a, b) =>
+                (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity),
+            )
+        : items;
 
     return {
       items: matching.slice(0, limit),

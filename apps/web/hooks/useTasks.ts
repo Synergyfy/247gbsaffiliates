@@ -192,8 +192,8 @@ export const useTasks = (filters: TaskFilters = {}) => {
   });
 
   const declineTaskMutation = useMutation({
-    mutationFn: async (taskId: string) => {
-      const response = await apiClient.post(`/tasks/${taskId}/decline`);
+    mutationFn: async ({ taskId, reason }: { taskId: string; reason: string }) => {
+      const response = await apiClient.post(`/tasks/${taskId}/decline`, { reason });
       return unwrapTask(response.data);
     },
     onSuccess: invalidateTaskQueries,

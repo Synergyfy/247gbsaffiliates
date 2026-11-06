@@ -179,6 +179,10 @@ export class Task {
   @Column({ type: 'timestamptz', nullable: true })
   acceptedAt: Date;
 
+  /** Why the assignee declined the task (required when declining). */
+  @Column('text', { nullable: true })
+  declineReason: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   submittedAt: Date;
 

@@ -123,6 +123,9 @@ export default function AgentTaskDetailsPage() {
 
     const [actionMessage, setActionMessage] = useState('');
     const [actionError, setActionError] = useState('');
+    const [declineFormOpen, setDeclineFormOpen] = useState(false);
+    const [declineReason, setDeclineReason] = useState('');
+    const [declineError, setDeclineError] = useState('');
     const [notes, setNotes] = useState('');
     const [linksText, setLinksText] = useState('');
     const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
@@ -153,6 +156,26 @@ export default function AgentTaskDetailsPage() {
             await refetch();
         } catch (err) {
             setActionError(getErrorMessage(err, 'AssignedTask action'));
+        }
+    };
+
+    const handleDecline = async () => {
+        const reason = declineReason.trim();
+        if (reason.length < 5) {
+            setDeclineError('Give a short reason (at least 5 characters) so the business and an administrator can reassign the task.');
+            return;
+        }
+        setDeclineError('');
+        setActionError('');
+        setActionMessage('');
+        try {
+            await declineTask({ taskId, reason });
+            setDeclineFormOpen(false);
+            setDeclineReason('');
+            setActionMessage('Task declined. The business and an administrator can see your reason and reassign it.');
+            await refetch();
+        } catch (err) {
+            setDeclineError(getErrorMessage(err, 'Task decline'));
         }
     };
 
@@ -471,7 +494,43 @@ export default function AgentTaskDetailsPage() {
                 {canRespond && (
                     <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
                         <button type="button" onClick={() => void run(() => acceptTask(taskId), 'Task accepted. You can now work on it and submit it for review when ready.')} disabled={!isQualified || isAccepting || isDeclining || waitingForCharge || waitingForFunds} title={waitingForFunds ? 'The business must lock the funds before you can start' : waitingForCharge ? 'The business must approve the charge first' : undefined} className="min-h-11 rounded-lg bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">{isAccepting ? 'Accepting…' : waitingForFunds ? 'Awaiting funds' : waitingForCharge ? 'Awaiting business approval' : 'Accept task'}</button>
-                        <button type="button" onClick={() => void run(() => declineTask(taskId), 'Task declined.')} disabled={isAccepting || isDeclining} className="min-h-11 rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{isDeclining ? 'Declining…' : 'Decline'}</button>
+                        <button type="button" onClick={() => { setDeclineFormOpen(true); setDeclineError(''); setActionMessage(''); setActionError(''); }} disabled={isAccepting || isDeclining} className="min-h-11 rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Decline</button>
+                    </div>
+                )}
+
+                {canRespond && declineFormOpen && (
+                    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <label className="block text-sm font-semibold text-slate-900">
+                            Why are you declining this task?
+                            <textarea
+                                value={declineReason}
+                                onChange={(event) => setDeclineReason(event.target.value)}
+                                rows={3}
+                                maxLength={1000}
+                                placeholder="e.g. I do not have the capacity to deliver this before the deadline."
+                                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                            />
+                        </label>
+                        <p className="mt-1 text-xs text-slate-500">Required. The business and an administrator will see this so they can reassign the task.</p>
+                        {declineError && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs font-semibold text-red-800" role="alert">{declineError}</p>}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void handleDecline()}
+                                disabled={isDeclining || declineReason.trim().length < 5}
+                                className="min-h-10 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {isDeclining ? 'Declining…' : 'Confirm decline'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setDeclineFormOpen(false); setDeclineReason(''); setDeclineError(''); }}
+                                disabled={isDeclining}
+                                className="min-h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-white disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                        </div>
                     </div>
                 )}
 
