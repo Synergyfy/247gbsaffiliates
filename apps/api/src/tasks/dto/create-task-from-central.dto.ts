@@ -131,6 +131,15 @@ export class CreateTaskFromCentralDto {
   @IsOptional()
   chargeApprovalRequired?: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      'Central payment state. ON_HOLD means the business funds are visible but not locked; the affiliate cannot start.',
+    example: 'ON_HOLD',
+  })
+  @IsString()
+  @IsOptional()
+  paymentStatus?: string;
+
   @ApiPropertyOptional({ description: 'Opaque metadata from the origin system' })
   @IsObject()
   @IsOptional()
