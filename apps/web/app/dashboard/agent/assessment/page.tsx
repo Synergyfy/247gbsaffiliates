@@ -26,7 +26,7 @@ type AssignedAssessment = { id: string; title: string; instructions?: string | n
 const RETAKE_DELAY_MS = 24 * 60 * 60 * 1000;
 
 export default function AssessmentQualificationPage() {
-    const { retakeAvailableAt } = useOnboardingStore();
+    const { retakeAvailableAt, clearQuizAnswers } = useOnboardingStore();
     const { user } = useAuthStore();
     const [now, setNow] = useState(0);
 
@@ -79,7 +79,8 @@ export default function AssessmentQualificationPage() {
     const hasError = profileQuery.isError || attemptQuery.isError;
 
     const handleRetake = () => {
-        window.location.assign('/onboarding?retake=1');
+        clearQuizAnswers();
+        window.location.assign('/dashboard/agent/assessment/retake');
     };
 
     return (

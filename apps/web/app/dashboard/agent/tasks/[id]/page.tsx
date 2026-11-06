@@ -12,6 +12,8 @@ import {
 import TaskCountdown from '@/components/tasks/TaskCountdown';
 import { parseTaskMaterials } from '@/lib/taskMaterials';
 import { useAuthStore } from '@/store/useAuthStore';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { getActionFailureMessage, reportRequestFailure } from '@/lib/requestErrors';
 
 const formatDate = (value?: string | null) => {
     if (!value) return 'Not specified';
@@ -30,14 +32,9 @@ const formatMoney = (task: { budget?: number; currency?: string }) => {
     return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'USD' }).format(Number(task.budget));
 };
 
-const getErrorMessage = (error: unknown) => {
-    if (typeof error === 'object' && error && 'response' in error) {
-        const response = (error as { response?: { data?: { message?: string | string[] } } }).response;
-        const message = response?.data?.message;
-        if (Array.isArray(message)) return message.join(', ');
-        if (message) return message;
-    }
-    return error instanceof Error ? error.message : 'The task could not be updated. Please try again.';
+const getErrorMessage = (error: unknown, area: string) => {
+    reportRequestFailure(area, error);
+    return getActionFailureMessage(error, 'We could not complete that task action. Please try again.');
 };
 
 const statusStyles: Record<string, string> = {
@@ -155,7 +152,7 @@ export default function AgentTaskDetailsPage() {
             setActionMessage(successMessage);
             await refetch();
         } catch (err) {
-            setActionError(getErrorMessage(err));
+            setActionError(getErrorMessage(err, 'AssignedTask action'));
         }
     };
 
@@ -170,7 +167,7 @@ export default function AgentTaskDetailsPage() {
             }
             setAttachments((current) => [...current, ...uploaded]);
         } catch (err) {
-            setUploadError(getErrorMessage(err));
+            setUploadError(getErrorMessage(err, 'AssignedTask attachment upload'));
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -196,7 +193,7 @@ export default function AgentTaskDetailsPage() {
             setActionMessage('Submitted for review. You will be notified when the review is complete.');
             await refetch();
         } catch (err) {
-            setActionError(getErrorMessage(err));
+            setActionError(getErrorMessage(err, 'AssignedTask submission'));
         }
     };
 
@@ -208,12 +205,7 @@ export default function AgentTaskDetailsPage() {
         return (
             <div className="mx-auto max-w-3xl px-4 py-8">
                 <Link href={`${basePath}/tasks`} className="text-sm font-semibold text-blue-700 hover:underline">← Back to tasks</Link>
-                <section className="mt-5 rounded-xl border border-red-200 bg-red-50 p-5" role="alert">
-                    <h1 className="font-semibold text-red-900">Task details couldn’t be loaded</h1>
-                    <p className="mt-1 text-sm text-red-800">{getErrorMessage(error)}</p>
-                    <p className="mt-1 text-xs text-red-700">If this task isn’t assigned to your account, it won’t be available here.</p>
-                    <button type="button" onClick={() => refetch()} className="mt-3 rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white">Try again</button>
-                </section>
+                <div className="mt-5"><RequestErrorState area="Assigned task details" label="Task details" error={error} onRetry={() => void refetch()} supportHref={`${basePath}/messages`} compact={false} /></div>
             </div>
         );
     }

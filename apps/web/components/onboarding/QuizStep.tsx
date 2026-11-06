@@ -13,9 +13,10 @@ type TimedQuizAnswer = { questionId: string; selectedOptionIndex: number };
 
 export const QuizStep: React.FC<{
     isRetake?: boolean;
+    returnPath?: string;
     questionsOverride?: QuizQuestion[];
     onStandaloneSubmit?: (answers: TimedQuizAnswer[]) => Promise<void>;
-}> = ({ isRetake = false, questionsOverride, onStandaloneSubmit }) => {
+}> = ({ isRetake = false, returnPath = '/dashboard/agent/assessment', questionsOverride, onStandaloneSubmit }) => {
     const {
         quizAnswers,
         setQuizAnswer,
@@ -161,7 +162,7 @@ export const QuizStep: React.FC<{
                     } catch (err) {
                         console.warn('Could not refresh profile after assessment:', err);
                     }
-                    router.replace('/dashboard/agent/assessment');
+                    router.replace(returnPath);
                     return;
                 }
                 setStep('outcome');
@@ -183,7 +184,7 @@ export const QuizStep: React.FC<{
                         // the status page reloads the authoritative profile on return.
                         console.warn('Could not refresh profile after assessment:', err);
                     }
-                    router.replace('/dashboard/agent/assessment');
+                    router.replace(returnPath);
                     return;
                 }
                 try {
@@ -277,7 +278,7 @@ export const QuizStep: React.FC<{
                         : 'No preliminary assessment questions are required for your selected track at this time. You can complete your onboarding to access the dashboard.'}
                 </p>
                 {isRetake || questionsOverride ? (
-                    <button onClick={() => router.replace('/dashboard/agent/assessment')} className="px-6 md:px-8 h-10 md:h-12 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:opacity-90 transition-all font-display uppercase tracking-widest text-[10px]">
+                    <button onClick={() => router.replace(returnPath)} className="px-6 md:px-8 h-10 md:h-12 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:opacity-90 transition-all font-display uppercase tracking-widest text-[10px]">
                         Return to assessment status
                     </button>
                 ) : (

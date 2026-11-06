@@ -36,6 +36,7 @@ export default function LandingHeader() {
     }, [isMobileMenuOpen]);
 
     const navLinks = [
+        { name: "Find Affiliates", href: "/find-agent" },
         { name: "For Account Managers", href: "/for-account-manager" },
         { name: "For Agents", href: "/for-agent" },
         { name: "For Consultants", href: "/for-consultant" },

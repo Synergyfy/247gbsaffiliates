@@ -22,6 +22,13 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --radius-3xl: 4rem;
+  --radius-md: 0.5rem;
+}
+
+@layer base {
+  :where(.border, input, textarea, select, button) {
+    border-radius: var(--radius-md);
+  }
 }
 
 .glass-morphism {

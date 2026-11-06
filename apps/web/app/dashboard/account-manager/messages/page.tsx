@@ -4,7 +4,7 @@ import ChatWorkspace from '@/components/chat/ChatWorkspace';
 
 export default function AccountManagerMessagesPage() {
   return (
-    <div className="h-[calc(100dvh-64px)] min-h-[560px] p-3 sm:p-5">
+    <div className="h-[calc(100dvh-9rem)] min-h-[400px] p-2 sm:h-[calc(100dvh-68px)] sm:min-h-[460px] sm:p-4">
       <ChatWorkspace
         title="Messages"
         subtitle="Talk to the businesses and agents you manage"
