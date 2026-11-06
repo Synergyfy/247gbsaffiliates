@@ -37,6 +37,12 @@ interface AgentRecord {
   country?: string | null;
   languages?: string[];
   isDemoProfile?: boolean;
+  mcomUserId?: string | null;
+  assessmentScore?: number | null;
+  completedTasksCount?: number;
+  activeTasksCount?: number;
+  onTimeRate?: number | null;
+  averageResponseTimeHours?: number | null;
 }
 
 interface HeroCarouselCard {
@@ -376,10 +382,20 @@ export default function FindAgentPage() {
     for (let i = 0; i < seedStr.length; i += 1) {
       hash = (hash * 31 + seedStr.charCodeAt(i)) % 1000;
     }
-    const assessmentScore = 91 + (hash % 9); // 91% - 99%
-    const slaReliability = (98.2 + (hash % 18) / 10).toFixed(1); // 98.2% - 99.9%
-    const completedDeliverables = 14 + (hash % 48);
-    const responseTime = hash % 2 === 0 ? '< 1 hr' : '< 2 hrs';
+    const assessmentScore = agent.assessmentScore ?? 91 + (hash % 9); // live metric, otherwise 91% - 99%
+    const slaReliability =
+      agent.onTimeRate != null
+        ? Number(agent.onTimeRate).toFixed(1)
+        : (98.2 + (hash % 18) / 10).toFixed(1); // live on-time rate, otherwise 98.2% - 99.9%
+    const completedDeliverables = agent.completedTasksCount ?? 14 + (hash % 48);
+    const responseTime =
+      agent.averageResponseTimeHours != null
+        ? agent.averageResponseTimeHours < 1
+          ? '< 1 hr'
+          : `< ${Math.max(1, Math.ceil(agent.averageResponseTimeHours))} hrs`
+        : hash % 2 === 0
+          ? '< 1 hr'
+          : '< 2 hrs';
     const normalizedRole = (agent.role || 'agent').toLowerCase().replace('-', '_');
     const defaultSkills =
       normalizedRole === 'account_manager'

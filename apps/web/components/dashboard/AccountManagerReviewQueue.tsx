@@ -178,7 +178,7 @@ function TaskDelegationPanel({
   const selectedAffiliate = useMemo(
     () =>
       filteredAffiliates.find(
-        (affiliate) => (affiliate.centralUserId || affiliate.id) === selectedAssigneeId,
+        (affiliate) => (affiliate.mcomUserId || affiliate.centralUserId || affiliate.id) === selectedAssigneeId,
       ) ?? null,
     [filteredAffiliates, selectedAssigneeId],
   );
@@ -289,7 +289,7 @@ function TaskDelegationPanel({
               >
                 <option value="">Choose an agent or consultant…</option>
                 {filteredAffiliates.map((affiliate) => {
-                  const assigneeId = affiliate.centralUserId || affiliate.id;
+                  const assigneeId = affiliate.mcomUserId || affiliate.centralUserId || affiliate.id;
                   const roleLabel = (affiliate.role || 'agent').replace('_', ' ').toUpperCase();
                   const skillPreview = affiliate.skills?.slice(0, 3).join(', ');
                   const matchingSkillCount = (affiliate.skills ?? []).filter((s) =>
@@ -646,7 +646,12 @@ function ProjectRow({
   const [followUpNotes, setFollowUpNotes] = useState(project.followUpNotes || '');
   const [closeError, setCloseError] = useState('');
   const [closeFeedback, setCloseFeedback] = useState('');
-  const { closeProject, isClosingProject } = useManagedProjects({}, false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDescription, setNewTaskDescription] = useState('');
+  const [newTaskAssignee, setNewTaskAssignee] = useState('');
+  const [newTaskError, setNewTaskError] = useState('');
+  const [newTaskFeedback, setNewTaskFeedback] = useState('');
+  const { closeProject, isClosingProject, createProjectTask, isCreatingProjectTask } = useManagedProjects({}, false);
 
   const normalizedStatus = (project.status || 'ACTIVE').toUpperCase();
   const isClosed = ['COMPLETED', 'CLOSED', 'CANCELLED'].includes(normalizedStatus);
@@ -683,6 +688,28 @@ function ProjectRow({
       setCloseError(
         getErrorMessage(err, 'Could not close this project. Ensure all tasks are resolved first.'),
       );
+    }
+  };
+
+  const handleCreateProjectTask = async () => {
+    const title = newTaskTitle.trim();
+    const description = newTaskDescription.trim();
+    if (!title || !description || isCreatingProjectTask) return;
+    setNewTaskError('');
+    setNewTaskFeedback('');
+    try {
+      await createProjectTask({
+        projectId: project.id,
+        title,
+        description,
+        ...(newTaskAssignee ? { assigneeUserId: newTaskAssignee } : {}),
+      });
+      setNewTaskTitle('');
+      setNewTaskDescription('');
+      setNewTaskAssignee('');
+      setNewTaskFeedback('Task created in the project and synced to the affiliate task board.');
+    } catch (err: unknown) {
+      setNewTaskError(getErrorMessage(err, 'Could not create the project task.'));
     }
   };
 
@@ -803,6 +830,60 @@ function ProjectRow({
               </p>
             )}
           </div>
+
+          {!isClosed ? (
+            <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50/60 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-blue-800">
+                Add a task to this project
+              </p>
+              <input
+                value={newTaskTitle}
+                onChange={(event) => setNewTaskTitle(event.target.value)}
+                placeholder="Task title"
+                className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs"
+              />
+              <textarea
+                value={newTaskDescription}
+                onChange={(event) => setNewTaskDescription(event.target.value)}
+                rows={2}
+                placeholder="Scope, deliverables and instructions"
+                className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs"
+              />
+              <select
+                value={newTaskAssignee}
+                onChange={(event) => setNewTaskAssignee(event.target.value)}
+                className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs"
+              >
+                <option value="">Leave unassigned</option>
+                {affiliates.map((affiliate) => (
+                  <option
+                    key={affiliate.id}
+                    value={affiliate.mcomUserId || affiliate.centralUserId || affiliate.id}
+                  >
+                    {affiliate.name} ({affiliate.role?.replace('_', ' ')})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void handleCreateProjectTask()}
+                disabled={isCreatingProjectTask || !newTaskTitle.trim() || !newTaskDescription.trim()}
+                className="min-h-9 rounded-lg bg-blue-700 px-4 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50"
+              >
+                {isCreatingProjectTask ? 'Creating task…' : 'Add task'}
+              </button>
+              {newTaskError ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+                  {newTaskError}
+                </p>
+              ) : null}
+              {newTaskFeedback ? (
+                <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
+                  {newTaskFeedback}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           {isClosed ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-950">

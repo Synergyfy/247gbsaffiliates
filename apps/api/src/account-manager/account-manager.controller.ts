@@ -21,6 +21,16 @@ export class AccountManagerController {
     return this.accountManagerService.getRevenueDashboard(req.user.userId);
   }
 
+  @Get('agents')
+  @ApiOperation({
+    summary: 'Agents working on this account manager’s managed work',
+    description:
+      'Manager-scoped roster with verification, onboarding, assessment status and live task counts.',
+  })
+  async getManagedAgents(@Request() req) {
+    return this.accountManagerService.getManagedAgents(req.user.userId);
+  }
+
   @Get('businesses')
   @ApiOperation({ summary: 'List businesses assigned to the signed-in account manager' })
   @ApiResponse({ status: 200, description: 'Assigned businesses from Central Hub' })
@@ -114,5 +124,23 @@ export class AccountManagerController {
     @Body() body: Record<string, unknown>,
   ) {
     return this.accountManagerService.closeManagedProject(req.user.userId, id, body);
+  }
+
+  @Post('managed-projects/:id/tasks')
+  @ApiOperation({
+    summary: 'Create a task inside a managed project',
+    description:
+      'Creates the task in Central Hub under the project and syncs it back to the affiliate task board.',
+  })
+  async createManagedProjectTask(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.accountManagerService.createManagedProjectTask(
+      req.user.userId,
+      id,
+      body,
+    );
   }
 }

@@ -175,11 +175,14 @@ export class TasksController {
     await this.tasksService.findOneForUser(id, req.user.userId, req.user.role);
 
     // Multer's `dest` names files randomly without an extension — append it so
-    // the served file keeps a correct content type.
+    // the served file keeps a correct content type. Prefixing the owning task
+    // id lets the download route enforce task ownership instead of relying on
+    // an unguessable filename alone.
     const ext = extname(file.originalname || '').toLowerCase();
-    const finalPath = `${file.path}${ext}`;
+    const storedName = basename(file.path);
+    const filename = `${id}--${storedName}${ext}`;
+    const finalPath = join(TASK_UPLOAD_DIR, filename);
     fs.renameSync(file.path, finalPath);
-    const filename = basename(finalPath);
     const base = `${req.protocol}://${req.get('host')}`;
     const kind = /\.(png|jpe?g|gif|webp)$/i.test(filename) ? 'IMAGE' : 'DOCUMENT';
     return {
@@ -190,14 +193,32 @@ export class TasksController {
     };
   }
 
-  @Public()
   @Get('attachments/:filename')
-  @ApiOperation({ summary: 'Serve an uploaded task attachment' })
-  serveAttachment(@Param('filename') filename: string, @Res() res: Response) {
-    // Strict basename check — no path traversal.
-    if (!/^[a-f0-9-]{16,64}\.[a-z0-9]{1,8}$/i.test(filename)) {
+  @ApiOperation({
+    summary: 'Serve an uploaded task attachment',
+    description:
+      'Authenticated users can download task evidence. Files uploaded after this change carry the owning task id and are checked against the task assignee/admin role.',
+  })
+  async serveAttachment(
+    @Param('filename') filename: string,
+    @Request() req,
+    @Res() res: Response,
+  ) {
+    // Task-scoped names are `<task-uuid>--<random>.<ext>`.
+    const taskScoped = /^([a-f0-9-]{36})--[a-z0-9-]{8,64}\.[a-z0-9]{1,8}$/i.exec(filename);
+    if (taskScoped) {
+      // Throws 404/403 when the caller is not the assignee (admins bypass the
+      // assignee check inside TasksService).
+      await this.tasksService.findOneForUser(
+        taskScoped[1],
+        req.user.userId,
+        req.user.role,
+      );
+    } else if (!/^[a-f0-9-]{16,64}\.[a-z0-9]{1,8}$/i.test(filename)) {
+      // Legacy attachment naming (pre task-scoping) or path traversal attempt.
       throw new BadRequestException('Invalid attachment name');
     }
+
     const filePath = join(process.cwd(), 'uploads', 'tasks', filename);
     if (!fs.existsSync(filePath)) {
       throw new BadRequestException('Attachment not found');

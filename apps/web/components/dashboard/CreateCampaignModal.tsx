@@ -50,7 +50,18 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
     if (!isOpen) return null;
 
     const handleFormSubmit = async (data: any) => {
-        await onSubmit(data);
+        // The API accepts a narrow task contract. Map the UI-only
+        // "High Level Consultancy" toggle onto the consultancy task type and
+        // drop presentation-only fields so strict validation does not reject it.
+        const payload = {
+            title: data.title,
+            description: data.description,
+            budget: data.budget,
+            currency: data.currency,
+            type: data.isConsultancy ? 'consultancy' : data.type,
+            ...(data.assignedAgentId ? { assignedAgentId: data.assignedAgentId } : {}),
+        };
+        await onSubmit(payload);
         reset();
         onClose();
     };
@@ -121,6 +132,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
                                 { value: 'campaign', label: 'Strategic Campaign' },
                                 { value: 'one_time', label: 'One-Time Operation' },
                                 { value: 'recurring', label: 'Recurring Deployment' },
+                                { value: 'consultancy', label: 'Consultancy Session' },
                             ]}
                         />
                         <FormSelect 

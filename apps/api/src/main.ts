@@ -25,7 +25,24 @@ console.log('[BOOT] POSTGRES_HOST:', process.env.POSTGRES_HOST);
 console.log('[BOOT] PORT:', process.env.PORT ?? '7088 (default)');
 console.log('[BOOT] API_PREFIX:', process.env.API_PREFIX ?? 'api/v1 (default)');
 
+function assertRequiredSecrets() {
+  if (process.env.NODE_ENV === 'test') return;
+
+  if (!process.env.JWT_ACCESS_SECRET && !process.env.JWT_SECRET) {
+    throw new Error(
+      'JWT_ACCESS_SECRET (or JWT_SECRET) must be set. Refusing to start with an unsigned/unknown JWT secret.',
+    );
+  }
+
+  if (process.env.NODE_ENV === 'production' && !process.env.INTERNAL_API_KEY) {
+    throw new Error(
+      'INTERNAL_API_KEY must be set in production. Backend-to-backend endpoints fail closed without it.',
+    );
+  }
+}
+
 async function bootstrap() {
+  assertRequiredSecrets();
   const app = await NestFactory.create(AppModule);
 
   // All configurable via apps/api/.env — change ports/paths there, no code edit needed.

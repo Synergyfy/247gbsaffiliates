@@ -11,6 +11,17 @@ describe('UsersService onboarding verification gate', () => {
     create: jest.fn((value) => value),
     save: jest.fn(),
   };
+  const tasksRepository = {
+    createQueryBuilder: jest.fn(() => ({
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      setParameters: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    })),
+  };
+  const quizAttemptRepository = { find: jest.fn().mockResolvedValue([]) };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -26,7 +37,11 @@ describe('UsersService onboarding verification gate', () => {
     };
     repository.findOne.mockImplementation(async () => user);
     repository.save.mockImplementation(async (value) => Object.assign(user as object, value));
-    service = new UsersService(repository as never);
+    service = new UsersService(
+      repository as never,
+      tasksRepository as never,
+      quizAttemptRepository as never,
+    );
   });
 
   it('refuses onboarding completion while verification is pending, even when other requirements are complete', async () => {
@@ -67,7 +82,13 @@ describe('UsersService onboarding verification gate', () => {
 
 describe('UsersService postal-code lookup', () => {
   const repository = { findOne: jest.fn() };
-  const service = new UsersService(repository as never);
+  const tasksRepository = { createQueryBuilder: jest.fn() };
+  const quizAttemptRepository = { find: jest.fn() };
+  const service = new UsersService(
+    repository as never,
+    tasksRepository as never,
+    quizAttemptRepository as never,
+  );
 
   afterEach(() => jest.restoreAllMocks());
 
@@ -143,7 +164,28 @@ describe('UsersService public directory radius filter', () => {
   ]);
 
   const createService = (users: Array<Partial<User>>) => {
-    const service = new UsersService(createRepository(users) as never);
+    const tasksRepository = {
+      createQueryBuilder: jest.fn(() => {
+        const queryBuilder: Record<string, jest.Mock> = {};
+        for (const method of [
+          'select',
+          'addSelect',
+          'where',
+          'setParameters',
+          'groupBy',
+        ]) {
+          queryBuilder[method] = jest.fn(() => queryBuilder);
+        }
+        queryBuilder.getRawMany = jest.fn(() => Promise.resolve([]));
+        return queryBuilder;
+      }),
+    };
+    const quizAttemptRepository = { find: jest.fn(() => Promise.resolve([])) };
+    const service = new UsersService(
+      createRepository(users) as never,
+      tasksRepository as never,
+      quizAttemptRepository as never,
+    );
     jest.spyOn(service, 'lookupPostalCode').mockResolvedValue({
       found: true,
       postalCode: 'SW1A 1AA',
