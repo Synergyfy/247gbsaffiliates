@@ -3,7 +3,7 @@ import AccountManagerReviewQueue from '@/components/dashboard/AccountManagerRevi
 
 export default function AccountManagerTasksPage() {
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-[1500px] space-y-4 px-3 py-4 sm:px-5 lg:px-7">
       <AccountManagerReviewQueue />
       <AgentTasksPage />
     </div>

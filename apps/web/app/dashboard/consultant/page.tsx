@@ -1,229 +1,94 @@
 'use client';
 
-import React, { useMemo } from 'react';
 import Link from 'next/link';
-import { useTasks, Task } from '@/hooks/useTasks';
-import { useMcomWallet } from '@/hooks/useMcomWallet';
+import { useQuery } from '@tanstack/react-query';
+import apiClient from '@/lib/apiClient';
+import { useLearningProgress, useLearningResources } from '@/hooks/useLearningResources';
+import { Task, useTasks } from '@/hooks/useTasks';
+import { useWallet } from '@/hooks/useWallet';
 import { useAuthStore } from '@/store/useAuthStore';
+import { OverviewStage, QueryMessage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
 
-const formatDate = (value?: string | null) => {
-    if (!value) return 'No deadline';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime())
-        ? 'No deadline'
-        : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string };
+type Attempt = { band?: string; percentage?: number } | null;
+const unwrap = <T,>(payload: unknown): T => {
+    if (payload && typeof payload === 'object' && 'data' in payload) {
+        const value = (payload as { data?: unknown }).data;
+        if (value && typeof value === 'object' && 'data' in value) return (value as { data: T }).data;
+        return value as T;
+    }
+    return payload as T;
 };
-
-const statusStyles: Record<string, string> = {
-    open: 'bg-slate-100 text-slate-700',
-    assigned: 'bg-blue-50 text-blue-700',
-    accepted: 'bg-emerald-50 text-emerald-700',
-    declined: 'bg-slate-100 text-slate-600',
-    submitted: 'bg-amber-50 text-amber-800',
-    revision_requested: 'bg-orange-50 text-orange-800',
-    approved: 'bg-teal-50 text-teal-700',
-    completed: 'bg-emerald-50 text-emerald-700',
-    cancelled: 'bg-red-50 text-red-700',
-};
+const isComplete = (task: Task) => ['completed', 'approved'].includes(task.status.toLowerCase());
+const isClosed = (task: Task) => ['completed', 'approved', 'cancelled', 'declined'].includes(task.status.toLowerCase());
 
 export default function ConsultantDashboard() {
     const { user } = useAuthStore();
-    const { tasks, isLoading: isLoadingTasks, isError: tasksError } = useTasks({ limit: 50 });
-    const { wallet, isLoading: isLoadingWallet } = useMcomWallet();
+    const profileQuery = useQuery({ queryKey: ['affiliate-dashboard-profile'], queryFn: async () => unwrap<Profile>((await apiClient.get('/auth/profile')).data) });
+    const profile: Profile | null = profileQuery.data || user as Profile | null;
+    const role = (profile?.role || 'consultant').replace('-', '_');
+    const attemptQuery = useQuery({ queryKey: ['affiliate-dashboard-latest-attempt'], queryFn: async () => unwrap<Attempt>((await apiClient.get('/assessment/latest-attempt')).data) });
+    const resourcesQuery = useLearningResources(role);
+    const progressQuery = useLearningProgress(Boolean(profile?.id));
+    const tasksQuery = useTasks({ limit: 50 });
+    const walletQuery = useWallet();
 
-    const myTasks = useMemo(() => {
-        if (!user?.id) return [] as Task[];
-        return (tasks || []).filter(
-            (task) =>
-                task.assignedAgentId === user.id ||
-                (task.assigneeEmail && task.assigneeEmail.toLowerCase() === user.email?.toLowerCase()),
-        );
-    }, [tasks, user?.id, user?.email]);
+    const myTasks = profile?.id ? (tasksQuery.tasks || []).filter((task) => task.assignedAgentId === profile.id || (task.assigneeEmail && task.assigneeEmail.toLowerCase() === profile.email?.toLowerCase())) : [] as Task[];
+    const sessions = myTasks.filter((task) => task.type?.toLowerCase() === 'consultancy');
+    const activeTasks = myTasks.filter((task) => !isClosed(task));
+    const completedTasks = myTasks.filter(isComplete);
+    const awaitingReview = myTasks.filter((task) => task.status === 'submitted');
+    const changesRequested = myTasks.filter((task) => task.status === 'revision_requested');
+    const resources = resourcesQuery.data || [];
+    const completedResources = (progressQuery.data || []).filter((item) => item.status === 'completed').length;
+    const latestAttempt = attemptQuery.data;
+    const verified = profile?.verificationStatus?.toLowerCase() === 'verified';
+    const displayName = profile?.name || user?.name || 'Consultant';
 
-    const completedTasks = myTasks.filter((task) => ['completed', 'approved'].includes(task.status)).length;
-    const activeTasks = myTasks.filter((task) => !['completed', 'approved', 'cancelled', 'declined'].includes(task.status)).length;
-    const completionRate = myTasks.length ? Math.round((completedTasks / myTasks.length) * 100) : 0;
-    const verificationStatus = user?.verificationStatus || 'pending';
-    const initials = (user?.name || user?.email || 'C')
-        .split(/\s+/)
-        .map((part) => part[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase();
+    const stages: OverviewStage[] = [
+        { title: 'Profile', detail: profile?.isOnboarded === true ? 'Onboarding marked complete' : profile?.isOnboarded === false ? 'Onboarding is incomplete' : 'No profile completion status recorded', state: profile?.isOnboarded === true ? 'complete' : profile?.isOnboarded === false ? 'active' : 'unknown', href: '/dashboard/consultant/profile' },
+        { title: 'Verification', detail: profile?.verificationStatus?.toLowerCase() === 'pending' ? '' : profile?.verificationStatus?.replaceAll('_', ' ') || 'Not recorded', state: verified ? 'complete' : profile?.verificationStatus === 'rejected' ? 'blocked' : profile?.verificationStatus === 'pending' ? 'pending' : profile?.verificationStatus ? 'active' : 'unknown', href: '/dashboard/consultant/verification' },
+        { title: 'Learning', detail: resourcesQuery.isError || progressQuery.isError ? 'Learning status unavailable' : resources.length ? `${completedResources} of ${resources.length} resources completed` : 'No resources available for this role', state: resourcesQuery.isError || progressQuery.isError ? 'unknown' : resources.length && completedResources === resources.length ? 'complete' : completedResources ? 'active' : 'unknown', href: '/dashboard/consultant/learning' },
+        { title: 'Assessments', detail: attemptQuery.isError ? 'Assessment status unavailable' : latestAttempt ? `${latestAttempt.band}${latestAttempt.percentage != null ? ` · ${latestAttempt.percentage}%` : ''}` : profile?.isQuizPassed ? 'Quiz passed' : 'Assessment not started', state: attemptQuery.isError ? 'unknown' : latestAttempt?.band?.toLowerCase() === 'fail' ? 'blocked' : profile?.isQuizPassed || ['pass', 'partial'].includes(latestAttempt?.band?.toLowerCase() || '') ? 'complete' : latestAttempt ? 'active' : 'unknown', href: '/dashboard/consultant/assessment' },
+        { title: 'Tasks', detail: tasksQuery.isError ? 'Assignments unavailable' : activeTasks.length ? `${activeTasks.length} active assignment${activeTasks.length === 1 ? '' : 's'}` : myTasks.length && completedTasks.length === myTasks.length ? 'Assigned work is complete' : myTasks.length ? 'No open assignments' : 'No assignments recorded', state: tasksQuery.isError ? 'unknown' : activeTasks.length ? 'active' : myTasks.length && completedTasks.length === myTasks.length ? 'complete' : 'unknown', href: '/dashboard/consultant/tasks' },
+    ];
 
-    if (isLoadingWallet) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary/20 border-b-primary"></div>
-            </div>
-        );
-    }
+    let nextStep = { title: 'Review your assigned consultancy work', detail: activeTasks.length ? `You have ${activeTasks.length} active assignment${activeTasks.length === 1 ? '' : 's'} to review.` : 'Open your task and session lists to check for new assignments.', href: '/dashboard/consultant/tasks', action: 'Open tasks' };
+    if (changesRequested.length) nextStep = { title: 'Revise and resubmit your work', detail: `${changesRequested.length} assignment${changesRequested.length === 1 ? ' has' : 's have'} feedback requesting changes.`, href: '/dashboard/consultant/tasks', action: 'Review feedback' };
+    else if (awaitingReview.length) nextStep = { title: 'Your submitted work is awaiting review', detail: `${awaitingReview.length} submission${awaitingReview.length === 1 ? ' is' : 's are'} with the reviewer.`, href: '/dashboard/consultant/tasks', action: 'View submissions' };
+    else if (profile?.verificationStatus === 'rejected') nextStep = { title: 'Review your verification status', detail: 'Your account has a persisted rejected status. Open your profile for the recorded status and available next step.', href: '/dashboard/consultant/profile', action: 'Review profile' };
+    else if (activeTasks.length === 0 && sessions.length > 0) nextStep = { title: 'Check your consultancy sessions', detail: `You have ${sessions.length} consultancy assignment${sessions.length === 1 ? '' : 's'} in your work history.`, href: '/dashboard/consultant/sessions', action: 'View sessions' };
 
     return (
-        <div className="font-display">
-            {verificationStatus !== 'verified' && (
-                <div className="bg-amber-50 border-b border-amber-100 py-3 px-6 flex items-center justify-center gap-3">
-                    <span className="material-symbols-outlined text-amber-600 text-sm">verified_user</span>
-                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">
-                        {verificationStatus === 'rejected'
-                            ? 'Your verification needs attention. Review the feedback in your profile.'
-                            : 'Your consultant credentials are being verified by our compliance team.'}
-                    </p>
+        <RoleOverview name={displayName.split(/\s+/)[0]} description="Follow your professional progress and manage consultancy work assigned to you." stages={stages} nextStep={nextStep} profileHref="/dashboard/consultant/profile">
+            {profileQuery.isError && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">The latest profile status could not be loaded. Any profile details above are from the signed-in session. <button type="button" onClick={() => void profileQuery.refetch()} className="font-semibold underline">Retry</button></div>}
+            <section>
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-2"><div><h2 className="text-lg font-semibold text-slate-950">Consultant work</h2><p className="mt-0.5 text-xs text-slate-600">Assigned work, sessions and delivery status from your account.</p></div></div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <SummaryCard title="Active assignments" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(activeTasks.length)} detail={tasksQuery.isError ? 'Your assignments could not be loaded.' : activeTasks.length ? 'Tasks currently assigned to your account.' : 'No active assignments are recorded.'} href="/dashboard/consultant/tasks" action="Open tasks" state={tasksQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="Awaiting review" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(awaitingReview.length)} detail={tasksQuery.isError ? 'Submission status could not be loaded.' : 'Work you submitted and is awaiting reviewer action.'} href="/dashboard/consultant/tasks" action="View submissions" state={tasksQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="Changes requested" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(changesRequested.length)} detail={tasksQuery.isError ? 'Revision status could not be loaded.' : 'Assignments returned with feedback for revision.'} href="/dashboard/consultant/tasks" action="Review feedback" state={tasksQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="Completed assignments" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(completedTasks.length)} detail={tasksQuery.isError ? 'Completion records could not be loaded.' : 'Tasks with completed or approved status.'} href="/dashboard/consultant/tasks" action="View tasks" state={tasksQuery.isError ? 'Unavailable' : undefined} />
                 </div>
-            )}
-            <header className="h-20 bg-surface-light border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-20">
-                <h1 className="text-xl font-black text-text-main italic uppercase tracking-tighter">
-                    Consultant <span className="text-primary tracking-normal not-italic">Portal</span>
-                </h1>
-                <div className="flex items-center gap-3 sm:gap-6">
-                    <Link href="/dashboard/consultant/tasks" className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-primary-hover">
-                        My tasks
-                    </Link>
-                    <div className="flex items-center gap-3 pl-3 sm:pl-6 border-l border-slate-200">
-                        <div className="text-right">
-                            <p className="text-sm font-black text-text-main">{user?.name || 'Consultant'}</p>
-                            <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">
-                                {user?.role?.replaceAll('_', ' ') || 'Consultant'}
-                            </p>
-                        </div>
-                        {user?.avatar ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img alt={user.name} className="size-10 rounded-full object-cover border-2 border-primary/20 shadow-sm" src={user.avatar} />
-                        ) : (
-                            <div className="size-10 rounded-full bg-slate-800 text-white text-xs font-bold flex items-center justify-center border-2 border-primary/20 shadow-sm">
-                                {initials}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </header>
+            </section>
 
-            <main className="flex-1 p-4 sm:p-8 overflow-y-auto">
-                <div className="max-w-6xl mx-auto">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                            <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                                <span className="material-symbols-outlined text-2xl">payments</span>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">Account balance</p>
-                                <p className="text-2xl font-black text-text-main">{Number(wallet?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} MCOM</p>
-                            </div>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                            <div className="size-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-700">
-                                <span className="material-symbols-outlined text-2xl">assignment</span>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">Active tasks</p>
-                                <p className="text-2xl font-black text-text-main">{isLoadingTasks ? '…' : activeTasks}</p>
-                            </div>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                            <div className="size-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-700">
-                                <span className="material-symbols-outlined text-2xl">task_alt</span>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">Completed tasks</p>
-                                <p className="text-2xl font-black text-text-main">{isLoadingTasks ? '…' : completedTasks}</p>
-                            </div>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                            <div className="size-12 rounded-2xl bg-violet-50 flex items-center justify-center text-violet-700">
-                                <span className="material-symbols-outlined text-2xl">insights</span>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-1">Completion rate</p>
-                                <p className="text-2xl font-black text-text-main">{isLoadingTasks ? '…' : `${completionRate}%`}</p>
-                            </div>
-                        </div>
-                    </div>
+            <div className="grid gap-4 xl:grid-cols-5">
+                <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-span-3">
+                    <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-950">Assigned work</h2><p className="mt-1 text-xs text-slate-500">Personal assignments only</p></div><Link href="/dashboard/consultant/tasks" className="text-xs font-semibold text-blue-700 hover:underline">View all</Link></div>
+                    <QueryMessage loading={tasksQuery.isLoading} error={tasksQuery.isError} empty={myTasks.length === 0} onRetry={() => void tasksQuery.refetch()}>
+                        <ul className="divide-y divide-slate-100">{myTasks.slice(0, 5).map((task) => <li key={task.id}><Link href={`/dashboard/consultant/tasks/${task.id}`} className="flex flex-wrap justify-between gap-2 py-3"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{task.title}</span><span className="mt-0.5 block text-xs text-slate-500">{task.centralBusinessName || 'Assigned by Central Hub'}{task.dueDate ? ` · Due ${new Date(task.dueDate).toLocaleDateString()}` : ''}</span></span><span className="self-center text-xs capitalize text-slate-600">{task.status.replaceAll('_', ' ')}</span></Link></li>)}</ul>
+                    </QueryMessage>
+                </section>
+                <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-span-2">
+                    <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-950">Consultancy sessions</h2><p className="mt-1 text-xs text-slate-500">Consultancy-type assignments in your task records</p></div><Link href="/dashboard/consultant/sessions" className="text-xs font-semibold text-blue-700 hover:underline">Sessions</Link></div>
+                    {tasksQuery.isLoading ? <p className="py-3 text-xs text-slate-500">Loading sessions…</p> : tasksQuery.isError ? <div role="alert" className="py-2 text-xs text-rose-800">Sessions could not be loaded. <button type="button" onClick={() => void tasksQuery.refetch()} className="font-semibold underline">Try again</button></div> : sessions.length ? <ul className="divide-y divide-slate-100">{sessions.slice(0, 4).map((session) => <li key={session.id}><Link href={`/dashboard/consultant/tasks/${session.id}`} className="flex justify-between gap-2 py-3"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{session.title}</span><span className="mt-0.5 block text-xs text-slate-500">{session.dueDate ? `Due ${new Date(session.dueDate).toLocaleDateString()}` : 'No date recorded'}</span></span><span className="self-center text-xs capitalize text-slate-600">{session.status.replaceAll('_', ' ')}</span></Link></li>)}</ul> : <p className="py-3 text-xs text-slate-500">No sessions are returned. The current task API does not expose a separate session schedule; assignments remain available under My Tasks.</p>}
+                </section>
+            </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                        <section className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-                                <h2 className="font-black text-text-main uppercase tracking-widest flex items-center gap-2 text-sm">
-                                    <span className="material-symbols-outlined text-primary">assignment_turned_in</span>
-                                    Assigned work
-                                </h2>
-                                <Link href="/dashboard/consultant/tasks" className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-full uppercase hover:bg-primary/20">
-                                    View all
-                                </Link>
-                            </div>
-                            {isLoadingTasks ? (
-                                <div className="p-8 text-center text-sm text-slate-500">Loading assigned work…</div>
-                            ) : tasksError ? (
-                                <div className="p-6 text-sm text-red-700 bg-red-50">Tasks could not be loaded. Complete onboarding and try again.</div>
-                            ) : myTasks.length === 0 ? (
-                                <div className="p-12 text-center">
-                                    <span className="material-symbols-outlined text-4xl text-slate-300">assignment</span>
-                                    <p className="mt-2 text-sm font-semibold text-slate-700">No tasks assigned yet</p>
-                                    <p className="mt-1 text-xs text-slate-500">Work delegated to you by Central Hub businesses will appear here.</p>
-                                </div>
-                            ) : (
-                                <div className="divide-y divide-slate-100">
-                                    {myTasks.slice(0, 8).map((task: Task) => (
-                                        <Link key={task.id} href={`/dashboard/consultant/tasks/${task.id}`} className="flex flex-wrap items-center justify-between gap-3 p-5 hover:bg-slate-50">
-                                            <div className="min-w-0">
-                                                <h3 className="font-bold text-text-main text-sm">{task.title}</h3>
-                                                <p className="text-[11px] text-slate-500 mt-0.5">
-                                                    {task.centralBusinessName || 'Central Hub'} · due {formatDate(task.dueDate)}
-                                                </p>
-                                            </div>
-                                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${statusStyles[task.status] || 'bg-slate-100 text-slate-600'}`}>
-                                                {task.status.replaceAll('_', ' ')}
-                                            </span>
-                                        </Link>
-                                    ))}
-                                </div>
-                            )}
-                        </section>
-
-                        <aside className="space-y-6">
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                                <h3 className="font-black text-text-main uppercase tracking-widest text-sm mb-4">Delivery performance</h3>
-                                <div className="flex justify-between items-end mb-3">
-                                    <div>
-                                        <span className="text-4xl font-black text-primary">{completionRate}%</span>
-                                        <p className="text-[10px] text-text-secondary font-black uppercase mt-1">Tasks completed</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-[10px] font-bold text-text-secondary uppercase block">Assigned</span>
-                                        <span className="text-sm font-black text-text-main">{myTasks.length}</span>
-                                    </div>
-                                </div>
-                                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-primary transition-all" style={{ width: `${completionRate}%` }}></div>
-                                </div>
-                                <dl className="mt-5 grid grid-cols-2 gap-3 text-xs">
-                                    <div className="rounded-xl bg-slate-50 p-3">
-                                        <dt className="text-slate-500">Awaiting review</dt>
-                                        <dd className="mt-1 text-lg font-black text-text-main">{myTasks.filter((task) => task.status === 'submitted').length}</dd>
-                                    </div>
-                                    <div className="rounded-xl bg-slate-50 p-3">
-                                        <dt className="text-slate-500">Changes requested</dt>
-                                        <dd className="mt-1 text-lg font-black text-text-main">{myTasks.filter((task) => task.status === 'revision_requested').length}</dd>
-                                    </div>
-                                </dl>
-                            </div>
-
-                            <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl">
-                                <h3 className="font-black text-sm uppercase tracking-widest mb-4">Consultant actions</h3>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Link href="/dashboard/consultant/profile" className="flex flex-col items-center gap-2 p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-white/10">
-                                        <span className="material-symbols-outlined text-primary text-2xl">person</span>
-                                        <span className="text-[9px] font-black uppercase tracking-tighter">Edit profile</span>
-                                    </Link>
-                                    <Link href="/dashboard/consultant/messages" className="flex flex-col items-center gap-2 p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all border border-white/10">
-                                        <span className="material-symbols-outlined text-primary text-2xl">forum</span>
-                                        <span className="text-[9px] font-black uppercase tracking-tighter">Messages</span>
-                                    </Link>
-                                </div>
-                            </div>
-                        </aside>
-                    </div>
-                </div>
-            </main>
-        </div>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                <SummaryCard title="Earnings" value={walletQuery.isLoading ? '…' : walletQuery.isError ? 'Unavailable' : `${walletQuery.wallet?.currency || 'GBP'} ${Number(walletQuery.wallet?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} detail={walletQuery.isError ? 'Wallet data failed to load.' : 'Current wallet balance; transaction details are available on Earnings.'} href="/dashboard/consultant/earnings" action="Open earnings" state={walletQuery.isError ? 'Unavailable' : undefined} />
+                <SummaryCard title="Learning" value={resourcesQuery.isLoading || progressQuery.isLoading ? '…' : resourcesQuery.isError || progressQuery.isError ? '—' : `${completedResources}/${resources.length}`} detail={resourcesQuery.isError || progressQuery.isError ? 'Learning data failed to load.' : resources.length ? 'Published resources completed for your account role.' : 'No learning resources are currently available for this role.'} href="/dashboard/learning" action="Open Learning Hub" state={resourcesQuery.isError || progressQuery.isError ? 'Unavailable' : undefined} />
+            </section>
+        </RoleOverview>
     );
 }

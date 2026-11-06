@@ -102,24 +102,57 @@ export interface SubmitTaskInput {
  * "Request failed with status code 403". Keeps status/code for callers that
  * want to tailor the UI (e.g. verification pending vs onboarding incomplete).
  */
-export const normalizeTaskError = (error: any): Error => {
-  const payload = error?.response?.data;
-  const raw = payload?.message;
-  const message = Array.isArray(raw) ? raw.join(', ') : raw || error?.message || 'The request failed.';
+export const normalizeTaskError = (error: unknown): Error => {
+  const source = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const response = source.response && typeof source.response === 'object'
+    ? source.response as Record<string, unknown>
+    : {};
+  const payload = response.data && typeof response.data === 'object'
+    ? response.data as Record<string, unknown>
+    : {};
+  const raw = payload.message;
+  const sourceMessage = typeof source.message === 'string' ? source.message : undefined;
+  const message = Array.isArray(raw)
+    ? raw.filter((item): item is string => typeof item === 'string').join(', ')
+    : typeof raw === 'string' ? raw : sourceMessage || 'The request failed.';
   const normalized = new Error(message) as Error & {
     status?: number;
     code?: string;
-    payload?: any;
+    payload?: unknown;
   };
-  normalized.status = error?.response?.status;
-  normalized.code = payload?.code;
+  normalized.status = typeof response.status === 'number' ? response.status : undefined;
+  normalized.code = typeof payload.code === 'string' ? payload.code : undefined;
   normalized.payload = payload;
   return normalized;
 };
 
-const unwrapTask = (payload: any): Task => (payload?.data ?? payload) as Task;
-const unwrapAttachment = (payload: any): TaskAttachment =>
-  (payload?.data ?? payload) as TaskAttachment;
+const unwrapTask = (payload: unknown): Task => {
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return ((payload as { data?: unknown }).data ?? payload) as Task;
+  }
+  return payload as Task;
+};
+
+const unwrapTaskList = (payload: unknown): Task[] => {
+  let current: unknown = payload;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (Array.isArray(current)) return current as Task[];
+    if (!current || typeof current !== 'object') break;
+    const value = current as Record<string, unknown>;
+    if (value.success === false) throw new Error('The task service reported the request as unavailable.');
+    if (Array.isArray(value.items)) return value.items as Task[];
+    if (Array.isArray(value.data)) return value.data as Task[];
+    if (value.data && typeof value.data === 'object') { current = value.data; continue; }
+    break;
+  }
+  throw new Error('The task service returned an unsupported response.');
+};
+const unwrapAttachment = (payload: unknown): TaskAttachment => {
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return ((payload as { data?: unknown }).data ?? payload) as TaskAttachment;
+  }
+  return payload as TaskAttachment;
+};
 
 export const useTasks = (filters: TaskFilters = {}) => {
   const queryClient = useQueryClient();
@@ -140,13 +173,10 @@ export const useTasks = (filters: TaskFilters = {}) => {
     },
     queryFn: async () => {
       try {
-        const { enabled: _enabled, ...params } = filters;
+        const params = { ...filters };
+        delete params.enabled;
         const response = await apiClient.get('/tasks', { params });
-        const data = response.data?.data ?? response.data;
-        if (Array.isArray(data)) return data as Task[];
-        if (data && Array.isArray(data.items)) return data.items as Task[];
-        if (data && Array.isArray(data.data)) return data.data as Task[];
-        return [] as Task[];
+        return unwrapTaskList(response.data);
       } catch (error) {
         throw normalizeTaskError(error);
       }
@@ -271,6 +301,10 @@ export const useTask = (taskId: string, enabled = true) => useQuery({
 // ─── Account Manager: tasks across managed businesses ────────────────────────
 
 export interface ManagedTask extends Task {
+  assigneeUserId?: string | null;
+  assignedAgentEmail?: string | null;
+  assignedAgentName?: string | null;
+  assignee?: { id?: string; email?: string; name?: string; firstName?: string | null; lastName?: string | null } | null;
   dueAt?: string | null;
   business?: {
     id: string;
@@ -296,26 +330,100 @@ export interface ManagedTask extends Task {
   }> | null;
 }
 
-const unwrapManagedTasks = (payload: any): ManagedTask[] => {
-  const data = payload?.data ?? payload;
-  const rows: any[] = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.data)
-      ? data.data
-      : Array.isArray(data?.items)
-        ? data.items
+export interface ManagedProject {
+  id: string;
+  title: string;
+  description?: string | null;
+  objective?: string | null;
+  status: string;
+  createdAt?: string | null;
+  dueAt?: string | null;
+  closedAt?: string | null;
+  outcomeSummary?: string | null;
+  followUpNotes?: string | null;
+  business?: { id: string; businessName?: string | null; email?: string | null } | null;
+  request?: { id: string; title?: string | null } | null;
+  tasks?: ManagedTask[] | null;
+}
+
+export interface DirectoryAffiliate {
+  id: string;
+  centralUserId?: string;
+  name: string;
+  email: string;
+  role: string;
+  skills?: string[];
+  postcode?: string | null;
+  city?: string | null;
+  region?: string | null;
+  hourlyRate?: number | null;
+  currency?: string | null;
+}
+
+const unwrapManagedList = <T,>(payload: unknown, label: string): T[] => {
+  let current: unknown = payload;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (Array.isArray(current)) return current as T[];
+    if (!current || typeof current !== 'object') break;
+    const record = current as Record<string, unknown>;
+    if (record.success === false) throw new Error(`The ${label} service reported the request as unavailable.`);
+    if (Array.isArray(record.items)) return record.items as T[];
+    if (Array.isArray(record.projects)) return record.projects as T[];
+    if (Array.isArray(record.data)) return record.data as T[];
+    if (record.data && typeof record.data === 'object') {
+      current = record.data;
+      continue;
+    }
+    break;
+  }
+  throw new Error(`The ${label} service returned an unsupported response.`);
+};
+
+const unwrapManagedRecord = <T,>(payload: unknown): T => {
+  let current = payload;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) break;
+    const record = current as Record<string, unknown>;
+    if (record.success === false) throw new Error('The Account Manager service reported the request as unavailable.');
+    if (record.data && typeof record.data === 'object') {
+      current = record.data;
+      continue;
+    }
+    if (record.project && typeof record.project === 'object') return record.project as T;
+    if (record.task && typeof record.task === 'object') return record.task as T;
+    return current as T;
+  }
+  throw new Error('The Account Manager service returned an unsupported response.');
+};
+
+/** Public directory of real, eligible 247GBS affiliates. */
+export const useAffiliateDirectory = (filters: { limit?: number; search?: string; role?: string } = {}, enabled = true) =>
+  useQuery({
+    queryKey: ['affiliate-directory', filters],
+    enabled,
+    queryFn: async () => {
+      const response = await apiClient.get('/users/directory', { params: filters });
+      return unwrapManagedList<DirectoryAffiliate>(response.data, 'affiliate directory');
+    },
+  });
+
+const unwrapManagedTasks = (payload: unknown): ManagedTask[] => {
+  const rows = unwrapManagedList<Record<string, unknown>>(payload, 'managed task');
+  return rows.map((row) => {
+    const rawDeliverables = row.deliverables;
+    const deliverables = Array.isArray(rawDeliverables)
+      ? rawDeliverables.filter((item): item is string => typeof item === 'string')
+      : typeof rawDeliverables === 'string' && rawDeliverables.trim()
+        ? rawDeliverables.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean)
         : [];
-  return rows.map((row) => ({
-    ...row,
-    // Central stores agreed deliverables as free text; the affiliate UI works
-    // with a list. Normalise both shapes here.
-    deliverables: Array.isArray(row.deliverables)
-      ? row.deliverables
-      : typeof row.deliverables === 'string' && row.deliverables.trim()
-        ? row.deliverables.split(/\r?\n|,/).map((item: string) => item.trim()).filter(Boolean)
-        : [],
-    status: typeof row.status === 'string' ? row.status.toUpperCase() : row.status,
-  })) as ManagedTask[];
+    return {
+      ...row,
+      // Central stores agreed deliverables as free text; the affiliate UI works
+      // with a list. Normalise both shapes here.
+      deliverables,
+      status: typeof row.status === 'string' ? row.status.toUpperCase() : row.status,
+    } as ManagedTask;
+  });
 };
 
 export interface ManagedServiceRequest {
@@ -416,6 +524,25 @@ export const useManagedTasks = (filters: { status?: string; search?: string; lim
     },
   });
 
+  const assignTask = useMutation({
+    mutationFn: async ({
+      taskId,
+      assigneeUserId,
+      note,
+    }: {
+      taskId: string;
+      assigneeUserId: string;
+      note?: string;
+    }) => {
+      const response = await apiClient.post(`/account-manager/managed-tasks/${encodeURIComponent(taskId)}/assign`, {
+        assigneeUserId,
+        ...(note ? { note } : {}),
+      });
+      return unwrapManagedRecord<ManagedTask>(response.data);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['managed-tasks'] }),
+  });
+
   const reviewTask = useMutation({
     mutationFn: async ({
       taskId,
@@ -440,7 +567,59 @@ export const useManagedTasks = (filters: { status?: string; search?: string; lim
 
   return {
     ...query,
+    assignTask: assignTask.mutateAsync,
+    isAssigningTask: assignTask.isPending,
     reviewTask: reviewTask.mutateAsync,
     isReviewing: reviewTask.isPending,
+  };
+};
+
+export const useManagedTask = (taskId: string, enabled = true) =>
+  useQuery({
+    queryKey: ['managed-task', taskId],
+    enabled: Boolean(taskId) && enabled,
+    queryFn: async () => {
+      const response = await apiClient.get(`/account-manager/managed-tasks/${encodeURIComponent(taskId)}`);
+      return unwrapManagedRecord<ManagedTask>(response.data);
+    },
+  });
+
+export const useManagedProjects = (
+  filters: { status?: string; search?: string; limit?: number } = {},
+  enabled = true,
+) => {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ['managed-projects', filters],
+    enabled,
+    queryFn: async () => {
+      const response = await apiClient.get('/account-manager/managed-projects', { params: filters });
+      return unwrapManagedList<ManagedProject>(response.data, 'managed projects');
+    },
+  });
+
+  const closeProject = useMutation({
+    mutationFn: async ({
+      projectId,
+      outcomeSummary,
+      followUpNotes,
+    }: {
+      projectId: string;
+      outcomeSummary: string;
+      followUpNotes?: string;
+    }) => {
+      const response = await apiClient.post(
+        `/account-manager/managed-projects/${encodeURIComponent(projectId)}/close`,
+        { outcomeSummary, ...(followUpNotes ? { followUpNotes } : {}) },
+      );
+      return unwrapManagedRecord<ManagedProject>(response.data);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['managed-projects'] }),
+  });
+
+  return {
+    ...query,
+    closeProject: closeProject.mutateAsync,
+    isClosingProject: closeProject.isPending,
   };
 };

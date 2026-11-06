@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
+import { RoleWorkspaceHeader } from "@/components/dashboard/RoleWorkspaceHeader";
 import { BrandLogo } from "../../../components/ui/BrandLogo";
 import { UserMenu } from "@/components/dashboard/UserMenu";
+import { RoleMobileNavigation } from "@/components/dashboard/RoleMobileNavigation";
 import { useAuthStore } from "@/store/useAuthStore";
 
 export default function ConsultantLayout({
@@ -31,28 +32,33 @@ export default function ConsultantLayout({
         { name: "Messages", href: "/dashboard/consultant/messages", icon: "forum" },
         { name: "Earnings", href: "/dashboard/consultant/earnings", icon: "payments" },
         { name: "Profile", href: "/dashboard/consultant/profile", icon: "person" },
+        { name: "Verification", href: "/dashboard/consultant/verification", icon: "verified_user" },
+        { name: "Learning", href: "/dashboard/consultant/learning", icon: "school" },
+        { name: "Assessment & Qualification", href: "/dashboard/consultant/assessment", icon: "quiz" },
+        { name: "Notifications", href: "/dashboard/consultant/notifications", icon: "notifications" },
+        { name: "Settings", href: "/dashboard/consultant/settings", icon: "settings" },
+    ];
+    const primaryMobileLinks = [
+        sidebarLinks[0], sidebarLinks[1], sidebarLinks[2], sidebarLinks[4],
     ];
 
     return (
         <div className="bg-background-light min-h-screen font-sans text-text-main flex">
             {/* Sidebar */}
-            <aside className="w-64 bg-surface-light border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen z-10">
-                <div className="p-6 border-b border-slate-100">
+            <aside className="w-60 bg-surface-light border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen z-10">
+                <div className="p-4 border-b border-slate-100">
                     <div className="flex items-center gap-2">
-                       <BrandLogo/>
+                       <BrandLogo size="md" label="247GBS Affiliate" labelClassName="text-sm" />
                     </div>
                 </div>
-                <nav className="flex-1 py-6">
-                    <div className="px-4 mb-4 text-[10px] font-bold text-text-secondary uppercase tracking-widest">
-                        Main Menu
-                    </div>
+                <nav aria-label="Consultant navigation" className="min-h-0 flex-1 overflow-y-auto py-3">
                     {sidebarLinks.map((link) => {
-                        const isActive = pathname === link.href;
+                        const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                         return (
                             <Link
                                 key={link.name}
                                 href={link.href}
-                                className={`flex items-center gap-3 px-6 py-3 text-sm font-semibold transition-all ${isActive
+                                className={`flex items-center gap-2.5 px-5 py-2.5 text-xs font-semibold transition-all ${isActive
                                     ? "text-primary bg-primary/5 border-r-4 border-primary"
                                     : "text-text-secondary hover:text-text-main hover:bg-slate-50"
                                     }`}
@@ -70,11 +76,12 @@ export default function ConsultantLayout({
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0">
-                <DashboardPageHeader />
-                <main className="flex-1">
+                <RoleWorkspaceHeader roleName="Consultant" profileHref="/dashboard/consultant/profile" settingsHref="/dashboard/consultant/profile" />
+                <main className="flex-1 pb-20 lg:pb-0">
                     {children}
                 </main>
             </div>
+            <RoleMobileNavigation roleName="Consultant" items={sidebarLinks} primaryItems={primaryMobileLinks} />
         </div>
     );
 }

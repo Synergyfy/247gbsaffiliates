@@ -5,6 +5,7 @@ import { useTasks, Task } from '@/hooks/useTasks';
 import { useAuthStore } from '@/store/useAuthStore';
 import { FormEvent, Suspense } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 
 const formatDate = (value?: string | null) => {
     if (!value) return null;
@@ -130,21 +131,15 @@ function AgentTasksContent() {
             </form>
 
             {isError ? (
-                <section className="rounded-xl border border-red-200 bg-red-50 p-5" role="alert">
-                    <h2 className="font-semibold text-red-900">Tasks couldn’t be loaded</h2>
-                    <p className="mt-1 text-sm text-red-800">{error instanceof Error ? error.message : 'Check your connection and try again.'}</p>
-                    <button type="button" onClick={() => refetch()} className="mt-3 rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white hover:bg-red-900">Try again</button>
-                </section>
+                <RequestErrorState area="Assigned tasks" label="Assigned tasks" error={error} onRetry={() => void refetch()} supportHref={`${basePath}/messages`} compact={false} />
             ) : tasks?.length ? (
                 <div className="space-y-3">
                     {tasks.map((task) => <TaskCard key={task.id} task={task} basePath={basePath} />)}
                 </div>
             ) : (
-                <section className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
-                    <span className="material-symbols-outlined text-4xl text-slate-300">assignment</span>
-                    <h2 className="mt-3 font-semibold text-slate-900">{search.trim() ? 'No matching tasks' : 'No tasks assigned yet'}</h2>
-                    <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">{search.trim() ? 'Try a different search term.' : 'Tasks delegated by Central Hub businesses or an administrator will appear here when they’re ready for you.'}</p>
-                    <Link href={basePath} className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to dashboard</Link>
+                <section className="bg-white py-4 text-sm text-slate-600">
+                    <h2 className="font-semibold text-slate-900">{search.trim() ? 'No matching tasks' : 'No tasks assigned yet'}</h2>
+                    <p className="mt-1 text-xs">{search.trim() ? 'Try a different search term.' : 'Tasks delegated to your account will appear here when they’re ready.'}</p>
                 </section>
             )}
         </div>

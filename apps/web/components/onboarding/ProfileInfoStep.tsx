@@ -10,11 +10,14 @@ import { toast } from 'react-toastify';
 import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 
-const ProfileInfoStep: React.FC = () => {
+const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingProfile = false }) => {
     const { role, basicInfo, profileInfo, updateProfileInfo, setStep } = useOnboardingStore();
-    const { user, updateUser } = useAuthStore();
+    const { updateUser, user } = useAuthStore();
     const [identityDocument, setIdentityDocument] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const hasExistingSubmission = Boolean(
+        user?.verificationSubmission && Object.keys(user.verificationSubmission).length > 0,
+    );
 
     const {
         register,
@@ -167,6 +170,20 @@ const ProfileInfoStep: React.FC = () => {
                 </p>
             </div>
 
+            {hasExistingSubmission && user?.verificationStatus !== 'rejected' && !isEditingProfile ? (
+                <section className="space-y-3 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="existing-verification-title">
+                    <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined mt-0.5 text-xl text-emerald-700" aria-hidden="true">task_alt</span>
+                        <div>
+                            <h2 id="existing-verification-title" className="text-sm font-semibold text-slate-900">Profile and verification already submitted</h2>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-600">Your profile and identity document are on file. Continue onboarding without uploading them again.</p>
+                        </div>
+                    </div>
+                    <button type="button" onClick={() => setStep('questionnaire')} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-white transition-colors hover:bg-primary-hover sm:w-auto">
+                        Continue to Expertise<span className="material-symbols-outlined text-base">arrow_forward</span>
+                    </button>
+                </section>
+            ) : (
             <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-3.5 md:space-y-6 bg-white p-4 sm:p-6 md:p-10 rounded-2xl md:rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
 
                 <input type="hidden" {...register('phone')} />
@@ -254,6 +271,7 @@ const ProfileInfoStep: React.FC = () => {
                     </button>
                 </div>
             </form>
+            )}
         </div>
     );
 };
