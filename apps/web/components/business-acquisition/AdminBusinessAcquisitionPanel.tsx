@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import apiClient from '@/lib/apiClient';
+import { AcquisitionActivityFeed } from './AcquisitionActivityFeed';
 
 type Prospect = {
   id: string;
@@ -16,6 +17,9 @@ type Prospect = {
   centralBusinessId?: string | null;
   centralClaimId?: string | null;
   invitationSentAt?: string | null;
+  convertedAt?: string | null;
+  conversionType?: string | null;
+  conversionAmount?: string | number | null;
   createdAt: string;
 };
 
@@ -207,6 +211,10 @@ export function AdminBusinessAcquisitionPanel() {
         </div>
       </section>
 
+      <div className="mb-6">
+        <AcquisitionActivityFeed admin limit={15} />
+      </div>
+
       <section className="rounded-xl border border-slate-200 bg-white">
         <div className="flex flex-col gap-2 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -237,6 +245,7 @@ export function AdminBusinessAcquisitionPanel() {
                   <th className="px-4 py-3 font-semibold">Acquired by</th>
                   <th className="px-4 py-3 font-semibold">Outreach</th>
                   <th className="px-4 py-3 font-semibold">Acquisition</th>
+                  <th className="px-4 py-3 font-semibold">Payment</th>
                   <th className="px-4 py-3 font-semibold">CHS record</th>
                   <th className="px-4 py-3 text-right font-semibold">Review</th>
                 </tr>
@@ -262,6 +271,26 @@ export function AdminBusinessAcquisitionPanel() {
                       <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
                         {label(prospect.acquisitionStatus)}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {prospect.convertedAt ? (
+                        <div className="space-y-1">
+                          <span className="inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            Paid
+                          </span>
+                          <p className="text-[11px] text-slate-600">
+                            {prospect.conversionType
+                              ? label(prospect.conversionType)
+                              : 'Conversion'}
+                            {prospect.conversionAmount != null &&
+                            Number(prospect.conversionAmount) > 0
+                              ? ` · £${Number(prospect.conversionAmount).toFixed(2)}`
+                              : ''}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">No payment yet</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-[11px] text-slate-600">
                       {prospect.centralBusinessId ? (

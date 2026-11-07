@@ -115,6 +115,22 @@ export class BusinessProspect {
   @Column({ type: 'timestamptz', nullable: true })
   invitationSentAt: Date | null;
 
+  // ── Conversion (paid membership / access pass / trial) ────────────────
+  @Column({ type: 'timestamptz', nullable: true })
+  convertedAt: Date | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  conversionType: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  conversionProvider: string | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  conversionAmount: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  conversionReference: string | null;
+
   // ── Permanent CHS attribution ─────────────────────────────────────────
   @Index()
   @Column({ type: 'varchar', nullable: true })

@@ -23,6 +23,7 @@ import {
 } from './entities/business-prospect.entity';
 import { BusinessRelationshipHistory } from './entities/business-relationship-history.entity';
 import { BusinessAcquisitionSettings } from './entities/business-acquisition-settings.entity';
+import { BusinessAcquisitionEventsService } from './business-acquisition-events.service';
 import {
   ConfirmBusinessAssociationDto,
   CreateBusinessProspectDto,
@@ -77,6 +78,7 @@ export class BusinessAcquisitionService {
     private readonly usersService: UsersService,
     private readonly http: HttpService,
     private readonly config: ConfigService,
+    private readonly events: BusinessAcquisitionEventsService,
   ) {}
 
   // ── Central Hub bridge ────────────────────────────────────────────────
@@ -454,6 +456,14 @@ export class BusinessAcquisitionService {
                 : status === 'rejected'
                   ? ProspectStatus.REJECTED
                   : prospect.status;
+        // A paid conversion is a later stage than registration/onboarding.
+        // Central's acquisitionStatus does not track payment, so never regress.
+        const resolvedStatus =
+          prospect.convertedAt &&
+          (nextStatus === ProspectStatus.REGISTERED ||
+            nextStatus === ProspectStatus.ONBOARDING_COMPLETED)
+            ? ProspectStatus.ACTIVE
+            : nextStatus;
         const nextVerification =
           status === 'verified'
             ? AcquisitionVerificationStatus.VERIFIED
@@ -463,11 +473,11 @@ export class BusinessAcquisitionService {
 
         if (
           prospect.centralBusinessId !== business.id ||
-          prospect.status !== nextStatus ||
+          prospect.status !== resolvedStatus ||
           prospect.acquisitionStatus !== nextVerification
         ) {
           prospect.centralBusinessId = business.id;
-          prospect.status = nextStatus;
+          prospect.status = resolvedStatus;
           prospect.acquisitionStatus = nextVerification;
           if (nextVerification === AcquisitionVerificationStatus.VERIFIED && !prospect.verifiedAt) {
             prospect.verifiedAt = new Date();
@@ -497,6 +507,7 @@ export class BusinessAcquisitionService {
       invitationsSent: all.filter((p) => Boolean(p.invitationSentAt)).length,
       registered: countStatuses(COUNTED_AS_REGISTERED),
       onboardingCompleted: countStatuses(COUNTED_AS_ONBOARDED),
+      converted: all.filter((p) => Boolean(p.convertedAt)).length,
       verified: all.filter(
         (p) => p.acquisitionStatus === AcquisitionVerificationStatus.VERIFIED,
       ).length,
@@ -650,6 +661,12 @@ export class BusinessAcquisitionService {
     status?: string | null;
     occurredAt?: string | null;
     claimId?: string | null;
+    conversionType?: string | null;
+    planName?: string | null;
+    amount?: number | null;
+    currency?: string | null;
+    provider?: string | null;
+    paymentReference?: string | null;
   }) {
     const prospect = await this.findProspectForEvent(event);
     if (!prospect) {
@@ -697,6 +714,19 @@ export class BusinessAcquisitionService {
           prospect.status = ProspectStatus.ONBOARDING_COMPLETED;
         }
         break;
+      case 'conversion':
+        // Paid membership, access pass or trial. The acquisition is now a
+        // converted customer; verification remains a separate admin decision.
+        prospect.status = ProspectStatus.ACTIVE;
+        prospect.convertedAt = event.occurredAt ? new Date(event.occurredAt) : new Date();
+        prospect.conversionType = (event.conversionType ?? 'membership').toLowerCase();
+        prospect.conversionProvider = event.provider ?? null;
+        prospect.conversionAmount =
+          event.amount != null && Number.isFinite(Number(event.amount))
+            ? Number(event.amount).toFixed(2)
+            : null;
+        prospect.conversionReference = event.paymentReference ?? null;
+        break;
       case 'verified':
         prospect.status = ProspectStatus.VERIFIED;
         prospect.acquisitionStatus = AcquisitionVerificationStatus.VERIFIED;
@@ -731,7 +761,56 @@ export class BusinessAcquisitionService {
       metadata: { event },
     });
 
+    // Persist + publish to the SSE stream. Never let an activity-log failure
+    // roll back the acquisition status that was just saved.
+    await this.recordEventSafely(prospect, event);
+
     return { matched: true, prospectId: prospect.id, status: prospect.status };
+  }
+
+  private async recordEventSafely(
+    prospect: BusinessProspect,
+    event: {
+      type: string;
+      businessName?: string | null;
+      conversionType?: string | null;
+      planName?: string | null;
+      amount?: number | null;
+      currency?: string | null;
+      provider?: string | null;
+      paymentReference?: string | null;
+      occurredAt?: string | null;
+    },
+  ) {
+    try {
+      await this.events.record({
+        affiliateId: prospect.affiliateId,
+        prospectId: prospect.id,
+        centralBusinessId: prospect.centralBusinessId,
+        type: event.type,
+        businessName: event.businessName ?? prospect.businessName,
+        status: prospect.status,
+        conversionType: event.conversionType ?? prospect.conversionType,
+        planName: event.planName ?? null,
+        amount:
+          event.amount != null
+            ? Number(event.amount)
+            : prospect.conversionAmount != null
+              ? Number(prospect.conversionAmount)
+              : null,
+        currency: event.currency ?? 'GBP',
+        provider: event.provider ?? prospect.conversionProvider,
+        paymentReference: event.paymentReference ?? prospect.conversionReference,
+        occurredAt: event.occurredAt ? new Date(event.occurredAt) : new Date(),
+        metadata: { ...event },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Could not persist acquisition event ${event.type}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   private async findProspectForEvent(event: {
@@ -829,6 +908,20 @@ export class BusinessAcquisitionService {
     );
 
     return { assignments: Array.from(grouped.values()), total: grouped.size };
+  }
+
+  // ── Live acquisition activity ─────────────────────────────────────────
+
+  streamEvents(user: { userId: string; role?: string }) {
+    return this.events.streamFor(user);
+  }
+
+  listEvents(affiliateId: string, limit?: number) {
+    return this.events.listForAffiliate(affiliateId, limit);
+  }
+
+  adminListEvents(limit?: number) {
+    return this.events.listForAdmin(limit);
   }
 
   // ── Settings & admin ─────────────────────────────────────────────────
