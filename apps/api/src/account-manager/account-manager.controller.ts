@@ -23,11 +23,14 @@ export class AccountManagerController {
 
   @Get('agents')
   @ApiOperation({
-    summary: 'Agents working on this account manager’s managed work',
+    summary: 'Agents for this account manager',
     description:
-      'Manager-scoped roster with verification, onboarding, assessment status and live task counts.',
+      'Default scope returns the roster already working on this manager’s work. Use ?scope=delegatable to list qualified agents and consultants with a live Central Hub link, skills and current workload.',
   })
-  async getManagedAgents(@Request() req) {
+  async getManagedAgents(@Request() req, @Query('scope') scope?: string) {
+    if (scope === 'delegatable') {
+      return this.accountManagerService.getDelegatableAgents(req.user.userId);
+    }
     return this.accountManagerService.getManagedAgents(req.user.userId);
   }
 

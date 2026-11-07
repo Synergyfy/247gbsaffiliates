@@ -29,7 +29,11 @@ export class TasksController {
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.ACCOUNT_MANAGER)
-  @ApiOperation({ summary: 'Create a new task (Admin or Account Manager)', description: 'Creates a manual task not linked to Central.' })
+  @ApiOperation({
+    summary: 'Create a new task (Admin or Account Manager)',
+    description:
+      'Creates a task. Account Managers can pass centralProjectId to create it in Central Hub under a managed project and link it to the business; otherwise it stays local-only.',
+  })
   @ApiBody({ type: CreateTaskDto })
   @ApiResponse({ status: 201, description: 'Task created successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden. Role not authorized.' })

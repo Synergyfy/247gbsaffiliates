@@ -68,6 +68,7 @@ const mockUsersService = {
 
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { AccountManagerService } from '../account-manager/account-manager.service';
 import { of } from 'rxjs';
 
 const mockHttpService = {
@@ -77,6 +78,22 @@ const mockHttpService = {
 
 const mockConfigService = {
   get: jest.fn().mockReturnValue('http://localhost:3010/api/v1'),
+};
+
+const mockAccountManagerService = {
+  createManagedProjectTask: jest.fn().mockResolvedValue({
+    success: true,
+    data: {
+      id: 'central-task-1',
+      businessId: 'central-business-1',
+      projectId: 'central-project-1',
+      status: 'PENDING_ASSIGNMENT',
+      title: 'Design Flyer',
+      description: 'Create the campaign flyer.',
+      business: { id: 'central-business-1', businessName: 'Acme Ltd' },
+      project: { id: 'central-project-1', title: 'Abuja Campaign' },
+    },
+  }),
 };
 
 describe('TasksService (AffiliateBackend)', () => {
@@ -100,6 +117,7 @@ describe('TasksService (AffiliateBackend)', () => {
     mockRepo.save.mockClear();
     mockRepo.create.mockClear();
     mockUsersService.findOne.mockClear();
+    mockAccountManagerService.createManagedProjectTask.mockClear();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TasksService,
@@ -107,6 +125,7 @@ describe('TasksService (AffiliateBackend)', () => {
         { provide: UsersService, useValue: mockUsersService },
         { provide: HttpService, useValue: mockHttpService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: AccountManagerService, useValue: mockAccountManagerService },
       ],
     }).compile();
 
@@ -115,6 +134,36 @@ describe('TasksService (AffiliateBackend)', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('prevents local assignment of a Central-linked task', async () => {
+    mockTask.externalTaskId = 'central-task-1';
+
+    await expect(service.assign('uuid-task-1', 'uuid-agent-1')).rejects.toMatchObject({
+      response: { code: 'CENTRAL_TASK_ASSIGNMENT_REQUIRED' },
+    });
+  });
+
+  it('creates client project tasks in Central Hub and stores the linked mirror', async () => {
+    const result = (await service.create('uuid-admin-1', {
+      title: 'Design Flyer',
+      description: 'Create the campaign flyer.',
+      budget: 100,
+      centralProjectId: 'central-project-1',
+    } as any)) as Task;
+
+    expect(mockAccountManagerService.createManagedProjectTask).toHaveBeenCalledWith(
+      'uuid-admin-1',
+      'central-project-1',
+      expect.objectContaining({
+        title: 'Design Flyer',
+        description: 'Create the campaign flyer.',
+      }),
+    );
+    expect(result.externalTaskId).toBe('central-task-1');
+    expect(result.centralBusinessId).toBe('central-business-1');
+    expect(result.projectId).toBe('central-project-1');
+    expect(result.originSystem).toBe('MCOM_CENTRAL');
   });
 
   it('should create task from central', async () => {
