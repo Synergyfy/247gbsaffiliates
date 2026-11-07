@@ -8,8 +8,9 @@ import { Task, useTasks } from '@/hooks/useTasks';
 import { useWallet } from '@/hooks/useWallet';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OverviewStage, QueryMessage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
+import ReferralPanel from '@/components/dashboard/ReferralPanel';
 
-type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string };
+type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string; referralCode?: string | null; referralLink?: string | null };
 type Attempt = { band?: string; percentage?: number } | null;
 const unwrap = <T,>(payload: unknown): T => {
     if (payload && typeof payload === 'object' && 'data' in payload) {
@@ -89,6 +90,11 @@ export default function ConsultantDashboard() {
                 <SummaryCard title="Earnings" value={walletQuery.isLoading ? '…' : walletQuery.isError ? 'Unavailable' : `${walletQuery.wallet?.currency || 'GBP'} ${Number(walletQuery.wallet?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} detail={walletQuery.isError ? 'Wallet data failed to load.' : 'Current wallet balance; transaction details are available on Earnings.'} href="/dashboard/consultant/earnings" action="Open earnings" state={walletQuery.isError ? 'Unavailable' : undefined} />
                 <SummaryCard title="Learning" value={resourcesQuery.isLoading || progressQuery.isLoading ? '…' : resourcesQuery.isError || progressQuery.isError ? '—' : `${completedResources}/${resources.length}`} detail={resourcesQuery.isError || progressQuery.isError ? 'Learning data failed to load.' : resources.length ? 'Published resources completed for your account role.' : 'No learning resources are currently available for this role.'} href="/dashboard/learning" action="Open Learning Hub" state={resourcesQuery.isError || progressQuery.isError ? 'Unavailable' : undefined} />
             </section>
+
+            <ReferralPanel
+                referralCode={profile?.referralCode ?? user?.referralCode}
+                referralLink={profile?.referralLink ?? user?.referralLink}
+            />
         </RoleOverview>
     );
 }

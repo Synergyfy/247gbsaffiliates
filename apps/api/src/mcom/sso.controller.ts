@@ -181,6 +181,8 @@ export class SsoController {
             null,
         },
         permissions: centralUser.permissions,
+        referralCode: centralUser.referralCode ?? null,
+        referralLink: centralUser.referralLink ?? null,
       });
 
       await this.mcomService.storeTokens(
@@ -270,6 +272,8 @@ export class SsoController {
           status: centralUser.membershipStatus ?? null,
         },
         permissions: centralUser.permissions,
+        referralCode: centralUser.referralCode ?? null,
+        referralLink: centralUser.referralLink ?? null,
       });
     } catch (err) {
       this.logger.warn(`Post-refresh userinfo sync failed: ${err}`);
@@ -321,6 +325,8 @@ export class SsoController {
               status: centralUser.membershipStatus ?? null,
             },
             permissions: centralUser.permissions,
+            referralCode: centralUser.referralCode ?? null,
+            referralLink: centralUser.referralLink ?? null,
           });
         } catch {
           if (tokens.refreshToken) {

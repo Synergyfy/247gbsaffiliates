@@ -133,6 +133,14 @@ export class User {
   @Column({ name: 'mcom_user_id', type: 'varchar', nullable: true })
   mcomUserId: string | null;
 
+  // Referral programme — synced from Central Hub so affiliates can share
+  // their own referral code/link without leaving this portal.
+  @Column({ name: 'referral_code', type: 'varchar', nullable: true })
+  referralCode: string | null;
+
+  @Column({ name: 'referral_link', type: 'text', nullable: true })
+  referralLink: string | null;
+
   @Column({ name: 'mcom_membership_level', type: 'varchar', nullable: true })
   mcomMembershipLevel: string | null;
 

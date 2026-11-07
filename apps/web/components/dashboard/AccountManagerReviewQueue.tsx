@@ -6,7 +6,7 @@ import {
   ManagedProject,
   ManagedServiceRequest,
   ManagedTask,
-  useAffiliateDirectory,
+  useDelegatableAgents,
   useManagedProjects,
   useManagedRequests,
   useManagedTask,
@@ -257,7 +257,7 @@ function TaskDelegationPanel({
             </label>
 
             <label className="block text-[11px] font-semibold text-slate-700 sm:col-span-2">
-              Search directory (name, skill, location, email)
+              Search eligible people (name, skill, location, email)
               <input
                 type="search"
                 value={searchQuery}
@@ -269,15 +269,15 @@ function TaskDelegationPanel({
           </div>
 
           {isLoadingAffiliates ? (
-            <p className="text-xs text-slate-500">Loading verified affiliates from directory…</p>
+            <p className="text-xs text-slate-500">Loading eligible agents and consultants…</p>
           ) : isErrorAffiliates ? (
             <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">
-              Could not load the affiliate directory.{' '}
+              Could not load eligible agents and consultants.{' '}
               <ResponsiveRetryAction onRetry={onRefetchAffiliates} label="Retry" className="ml-2 align-middle" />
             </div>
           ) : filteredAffiliates.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">
-              No eligible verified affiliates match the current filter.
+              No eligible agents or consultants match the current filter.
             </p>
           ) : (
             <label className="block text-[11px] font-semibold text-slate-700">
@@ -298,11 +298,16 @@ function TaskDelegationPanel({
                   const matchBadge =
                     matchingSkillCount > 0 ? ` ★ ${matchingSkillCount} skill match` : '';
                   const locationPart = affiliate.city ? ` · ${affiliate.city}` : '';
+                  const workloadPart =
+                    affiliate.activeTasksCount != null
+                      ? ` · ${affiliate.activeTasksCount} active`
+                      : '';
                   return (
                     <option key={affiliate.id} value={assigneeId}>
                       {affiliate.name} ({roleLabel}
                       {locationPart}) — {affiliate.email}
                       {skillPreview ? ` [${skillPreview}]` : ''}
+                      {workloadPart}
                       {matchBadge}
                     </option>
                   );
@@ -1163,7 +1168,7 @@ export default function AccountManagerReviewQueue() {
     isLoading: isLoadingAffiliates,
     isError: isErrorAffiliates,
     refetch: refetchAffiliates,
-  } = useAffiliateDirectory({ limit: 100 });
+  } = useDelegatableAgents();
 
   const tasksByProjectId = useMemo(() => {
     const grouped = new Map<string, ManagedTask[]>();

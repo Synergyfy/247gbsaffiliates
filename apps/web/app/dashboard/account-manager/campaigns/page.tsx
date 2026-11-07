@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Task, useTasks } from '@/hooks/useTasks';
+import { Task, useManagedProjects, useTasks } from '@/hooks/useTasks';
 import { CreateCampaignModal } from '@/components/dashboard/CreateCampaignModal';
 import { toast } from 'react-toastify';
 
@@ -18,6 +18,10 @@ const formatBudget = (amount: number, currency: string) => {
 
 export default function CampaignsPage() {
     const { tasks, isLoading, isError, refetch, createTask, isCreating } = useTasks({ limit: 100 });
+    const {
+        data: managedProjects = [],
+        isLoading: isLoadingProjects,
+    } = useManagedProjects({ status: 'ACTIVE', limit: 100 });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const campaigns = useMemo(() => (tasks || []).filter((task) => {
         const category = typeof task.category === 'string' ? task.category : '';
@@ -31,12 +35,16 @@ export default function CampaignsPage() {
         return totals;
     }, {});
 
-    const handleCreateCampaign = async (values: Partial<Task>) => {
+    const handleCreateCampaign = async (values: Partial<Task> & { centralProjectId?: string }) => {
         try {
             await createTask(values);
-            toast.success('Campaign created.');
-        } catch {
-            toast.error('Campaign could not be created. Check the details and try again.');
+            toast.success(values.centralProjectId ? 'Client task created in Central Hub and linked to the affiliate board.' : 'Campaign created.');
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : 'Campaign could not be created. Check the details and try again.',
+            );
         }
     };
 
@@ -85,7 +93,14 @@ export default function CampaignsPage() {
                 )}
             </section>
 
-            <CreateCampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleCreateCampaign} isSubmitting={isCreating} />
+            <CreateCampaignModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSubmit={handleCreateCampaign}
+                isSubmitting={isCreating}
+                projects={managedProjects}
+                isLoadingProjects={isLoadingProjects}
+            />
         </div>
     );
 }

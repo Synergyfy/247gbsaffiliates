@@ -6,14 +6,19 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, Brackets } from 'typeorm';
+import { Repository, In, Brackets, IsNull, Not } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { Task, TaskStatus } from '../tasks/entities/task.entity';
 import { Wallet } from '../wallet/entities/wallet.entity';
 import { Transaction, TransactionType } from '../wallet/entities/transaction.entity';
-import { User, UserRole } from '../users/entities/user.entity';
+import {
+  User,
+  UserRole,
+  UserStatus,
+  VerificationStatus,
+} from '../users/entities/user.entity';
 import { QuizAttempt } from '../assessment/entities/quiz_attempt.entity';
 
 @Injectable()
@@ -575,6 +580,210 @@ export class AccountManagerService {
       total: items.length,
       scope: 'manager',
       businessCount: businessIds.length,
+    };
+  }
+
+  /**
+   * Agents and consultants the Account Manager can actually delegate to.
+   *
+   * The managed roster above only knows people who already have work with this
+   * manager, so it cannot populate a delegation picker. This list is based on
+   * the affiliate's own qualification state and requires a live Central Hub
+   * (`mcomUserId`) link; otherwise Central would reject the assignment with
+   * "Affiliate not found".
+   */
+  async getDelegatableAgents(accountManagerId: string) {
+    const manager = await this.usersRepo.findOne({
+      where: { id: accountManagerId },
+      select: ['id', 'mcomUserId'],
+    });
+    if (!manager?.mcomUserId) {
+      throw new ConflictException({
+        code: 'CENTRAL_ACCOUNT_NOT_LINKED',
+        message:
+          'Your Central Hub account is not linked yet. Sign in through Central Hub SSO before delegating work.',
+      });
+    }
+
+    const candidates = await this.usersRepo.find({
+      where: {
+        role: In([UserRole.AGENT, UserRole.CONSULTANT]),
+        status: UserStatus.ACTIVE,
+        mcomUserId: Not(IsNull()),
+      },
+      select: [
+        'id',
+        'email',
+        'firstName',
+        'lastName',
+        'profileImage',
+        'role',
+        'status',
+        'verificationStatus',
+        'isOnboarded',
+        'isQuizPassed',
+        'skills',
+        'languages',
+        'hourlyRate',
+        'currency',
+        'timezone',
+        'city',
+        'region',
+        'postcode',
+        'mcomUserId',
+        'createdAt',
+      ],
+    });
+
+    const eligible = candidates.filter((agent) => {
+      if (!agent.mcomUserId?.trim()) return false;
+      if (agent.role === UserRole.AGENT) {
+        // Mirrors TasksService.assertQualifiedAffiliate(): an agent must be
+        // verified, onboarded, assessed and have at least one skill.
+        return (
+          agent.verificationStatus === VerificationStatus.VERIFIED &&
+          agent.isOnboarded &&
+          agent.isQuizPassed &&
+          Boolean(agent.skills?.length)
+        );
+      }
+      // Consultants are trusted relationship roles: onboarding is enough.
+      return agent.role === UserRole.CONSULTANT && agent.isOnboarded;
+    });
+
+    if (!eligible.length) {
+      return {
+        items: [],
+        total: 0,
+        scope: 'delegatable',
+        message:
+          'No agents or consultants are currently eligible for delegation. They need an active Central Hub link and a complete profile.',
+      };
+    }
+
+    const agentIds = eligible.map((agent) => agent.id);
+    const activeStatuses = [
+      TaskStatus.ASSIGNED,
+      TaskStatus.ACCEPTED,
+      TaskStatus.SUBMITTED,
+      TaskStatus.PENDING_BUSINESS_APPROVAL,
+      TaskStatus.REVISION_REQUESTED,
+      TaskStatus.APPROVED,
+    ];
+
+    const [workloadRows, attempts] = await Promise.all([
+      this.tasksRepo
+        .createQueryBuilder('task')
+        .select('task.assignedAgentId', 'agentId')
+        .addSelect('COUNT(*)', 'total')
+        .addSelect(
+          'SUM(CASE WHEN task.status IN (:...activeStatuses) THEN 1 ELSE 0 END)',
+          'active',
+        )
+        .addSelect(
+          'SUM(CASE WHEN task.status = :completedStatus THEN 1 ELSE 0 END)',
+          'completed',
+        )
+        .where('task.assignedAgentId IN (:...agentIds)', { agentIds })
+        .setParameters({
+          activeStatuses,
+          completedStatus: TaskStatus.COMPLETED,
+        })
+        .groupBy('task.assignedAgentId')
+        .getRawMany<{
+          agentId: string;
+          active: string;
+          completed: string;
+          total: string;
+        }>(),
+      this.quizAttemptRepo.find({
+        where: { userId: In(agentIds) },
+        order: { createdAt: 'DESC' },
+        select: ['id', 'userId', 'percentage', 'band', 'createdAt'],
+      }),
+    ]);
+
+    const workload = new Map<
+      string,
+      { active: number; completed: number; total: number }
+    >();
+    for (const row of workloadRows) {
+      if (!row.agentId) continue;
+      workload.set(row.agentId, {
+        active: Number(row.active || 0),
+        completed: Number(row.completed || 0),
+        total: Number(row.total || 0),
+      });
+    }
+
+    const latestAttempt = new Map<string, QuizAttempt>();
+    const latestPassedAttempt = new Map<string, QuizAttempt>();
+    for (const attempt of attempts) {
+      if (!latestAttempt.has(attempt.userId)) latestAttempt.set(attempt.userId, attempt);
+      if (
+        !latestPassedAttempt.has(attempt.userId) &&
+        String(attempt.band || '').toLowerCase() !== 'fail'
+      ) {
+        latestPassedAttempt.set(attempt.userId, attempt);
+      }
+    }
+
+    const items = eligible
+      .map((agent) => {
+        const stats = workload.get(agent.id) ?? { active: 0, completed: 0, total: 0 };
+        const latest = latestAttempt.get(agent.id);
+        const passed = latestPassedAttempt.get(agent.id);
+        const name =
+          [agent.firstName, agent.lastName].filter(Boolean).join(' ') ||
+          agent.email;
+
+        return {
+          id: agent.id,
+          mcomUserId: agent.mcomUserId,
+          email: agent.email,
+          firstName: agent.firstName,
+          lastName: agent.lastName,
+          name,
+          profileImage: agent.profileImage,
+          role: agent.role,
+          status: agent.status,
+          verificationStatus: agent.verificationStatus,
+          isOnboarded: agent.isOnboarded,
+          isQuizPassed: agent.isQuizPassed,
+          skills: agent.skills ?? [],
+          languages: agent.languages ?? [],
+          hourlyRate: agent.hourlyRate,
+          currency: agent.currency,
+          timezone: agent.timezone,
+          city: agent.city,
+          region: agent.region,
+          postcode: agent.postcode,
+          createdAt: agent.createdAt,
+          assessmentScore: passed?.percentage ?? latest?.percentage ?? null,
+          latestAssessmentBand: latest?.band ?? null,
+          activeTasksCount: stats.active,
+          completedTasksCount: stats.completed,
+          totalTasksCount: stats.total,
+          workload: {
+            activeTasks: stats.active,
+            completedTasks: stats.completed,
+            totalTasks: stats.total,
+          },
+        };
+      })
+      // Least-loaded people first so the delegation modal naturally surfaces
+      // capacity, then the strongest track record, then name.
+      .sort(
+        (a, b) =>
+          a.activeTasksCount - b.activeTasksCount ||
+          b.completedTasksCount - a.completedTasksCount ||
+          a.name.localeCompare(b.name),
+      );
+
+    return {
+      items,
+      total: items.length,
+      scope: 'delegatable',
     };
   }
 }

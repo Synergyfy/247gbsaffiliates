@@ -232,16 +232,24 @@ export const useTasks = (filters: TaskFilters = {}) => {
 
   const assignTaskMutation = useMutation({
     mutationFn: async ({ taskId, agentId }: { taskId: string; agentId: string }) => {
-      const response = await apiClient.post(`/tasks/${taskId}/assign`, { agentId });
-      return unwrapTask(response.data);
+      try {
+        const response = await apiClient.post(`/tasks/${taskId}/assign`, { agentId });
+        return unwrapTask(response.data);
+      } catch (error) {
+        throw normalizeTaskError(error);
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
   const createTaskMutation = useMutation({
     mutationFn: async (data: Partial<Task>) => {
-      const response = await apiClient.post('/tasks', data);
-      return unwrapTask(response.data);
+      try {
+        const response = await apiClient.post('/tasks', data);
+        return unwrapTask(response.data);
+      } catch (error) {
+        throw normalizeTaskError(error);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -401,6 +409,23 @@ const unwrapManagedRecord = <T,>(payload: unknown): T => {
   }
   throw new Error('The Account Manager service returned an unsupported response.');
 };
+
+/**
+ * Qualified agents and consultants the signed-in Account Manager can actually
+ * delegate to. Unlike the public directory, every item has a live Central Hub
+ * (`mcomUserId`) link and a current workload count.
+ */
+export const useDelegatableAgents = (enabled = true) =>
+  useQuery({
+    queryKey: ['delegatable-agents'],
+    enabled,
+    queryFn: async () => {
+      const response = await apiClient.get('/account-manager/agents', {
+        params: { scope: 'delegatable' },
+      });
+      return unwrapManagedList<DirectoryAffiliate>(response.data, 'delegatable agents');
+    },
+  });
 
 /** Public directory of real, eligible 247GBS affiliates. */
 export const useAffiliateDirectory = (filters: { limit?: number; search?: string; role?: string } = {}, enabled = true) =>

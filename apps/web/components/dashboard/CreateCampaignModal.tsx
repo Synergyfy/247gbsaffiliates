@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { FormInput, FormSelect } from '@/components/ui/FormComponents';
 import { useAgents } from '@/hooks/useAgents';
+import type { ManagedProject } from '@/hooks/useTasks';
 
 const campaignSchema = z.object({
     title: z.string().min(3, 'Title must be at least 3 characters'),
@@ -17,6 +18,7 @@ const campaignSchema = z.object({
     estimatedTime: z.string().optional(),
     isConsultancy: z.boolean().default(false),
     assignedAgentId: z.string().optional(),
+    centralProjectId: z.string().optional(),
 });
 
 type CampaignFormValues = z.infer<typeof campaignSchema>;
@@ -26,13 +28,17 @@ interface CreateCampaignModalProps {
     onClose: () => void;
     onSubmit: (values: any) => Promise<void>;
     isSubmitting: boolean;
+    projects?: ManagedProject[];
+    isLoadingProjects?: boolean;
 }
 
 export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ 
     isOpen, 
     onClose, 
     onSubmit, 
-    isSubmitting 
+    isSubmitting,
+    projects = [],
+    isLoadingProjects = false,
 }) => {
     const { data: agents } = useAgents();
     
@@ -44,6 +50,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
             type: 'campaign',
             status: 'active',
             isConsultancy: false,
+            centralProjectId: '',
         }
     });
 
@@ -60,6 +67,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
             currency: data.currency,
             type: data.isConsultancy ? 'consultancy' : data.type,
             ...(data.assignedAgentId ? { assignedAgentId: data.assignedAgentId } : {}),
+            ...(data.centralProjectId ? { centralProjectId: data.centralProjectId } : {}),
         };
         await onSubmit(payload);
         reset();
@@ -144,6 +152,30 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
                                 { value: 'open', label: 'Open - Available for Claim' },
                             ]}
                         />
+                    </div>
+
+                    <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                        <FormSelect
+                            label="Client Project (Central Hub)"
+                            register={register('centralProjectId')}
+                            options={projects.map((project) => ({
+                                value: project.id,
+                                label: project.business?.businessName
+                                    ? `${project.title} — ${project.business.businessName}`
+                                    : project.title,
+                            }))}
+                            helperText={
+                                isLoadingProjects
+                                    ? 'Loading your managed projects…'
+                                    : projects.length
+                                        ? 'Select a project to create this task in Central Hub under the business and project. Leave blank for an internal-only campaign.'
+                                        : 'No managed projects yet. Convert a business service request into a project first to create client work.'
+                            }
+                        />
+                        <p className="px-1 text-[11px] leading-5 text-blue-800">
+                            Client tasks are created in Central Hub first, then mirrored to the affiliate board with
+                            their project, business and Account Manager review trail attached.
+                        </p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -52,4 +52,14 @@ export class CreateTaskDto {
   @IsDateString()
   @IsOptional()
   dueDate?: string;
+
+  @ApiProperty({
+    example: 'clx123project',
+    required: false,
+    description:
+      'Central Hub project to create this task under. When set by an Account Manager, the task is created in Central Hub and linked to that project instead of staying local-only.',
+  })
+  @IsString()
+  @IsOptional()
+  centralProjectId?: string;
 }

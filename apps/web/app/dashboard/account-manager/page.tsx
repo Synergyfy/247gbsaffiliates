@@ -8,8 +8,9 @@ import { Task, useManagedProjects, useManagedTasks, useTasks } from '@/hooks/use
 import { useWallet } from '@/hooks/useWallet';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OverviewStage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
+import ReferralPanel from '@/components/dashboard/ReferralPanel';
 
-type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string; verificationSubmission?: unknown };
+type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string; verificationSubmission?: unknown; referralCode?: string | null; referralLink?: string | null };
 type Attempt = { band?: string; percentage?: number } | null;
 const unwrap = <T,>(payload: unknown): T => {
     if (payload && typeof payload === 'object' && 'data' in payload) {
@@ -162,6 +163,11 @@ export default function AccountManagerDashboard() {
                 <SummaryCard title="Learning" value={resourcesQuery.isLoading || progressQuery.isLoading ? '…' : resourcesQuery.isError || progressQuery.isError ? '—' : `${completedResources}/${resources.length}`} detail={resourcesQuery.isError || progressQuery.isError ? 'Learning data failed to load.' : resources.length ? 'Published resources completed for your account role.' : 'No learning resources are currently available for this role.'} href="/learning" action="Open Learning Hub" state={resourcesQuery.isError || progressQuery.isError ? 'Unavailable' : undefined} />
                 <SummaryCard title="Wallet" value={walletQuery.isLoading ? '…' : walletQuery.isError ? 'Unavailable' : `${walletQuery.wallet?.currency || 'GBP'} ${Number(walletQuery.wallet?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} detail={walletQuery.isError ? 'Wallet data failed to load.' : 'Current balance from your wallet.'} href="/dashboard/account-manager/revenue" action="Open wallet" state={walletQuery.isError ? 'Unavailable' : undefined} />
             </section>
+
+            <ReferralPanel
+                referralCode={profile?.referralCode ?? user?.referralCode}
+                referralLink={profile?.referralLink ?? user?.referralLink}
+            />
         </RoleOverview>
     );
 }

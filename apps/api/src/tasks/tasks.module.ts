@@ -6,11 +6,13 @@ import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 import { Task } from './entities/task.entity';
 import { UsersModule } from '../users/users.module';
+import { AccountManagerModule } from '../account-manager/account-manager.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Task]),
     UsersModule,
+    AccountManagerModule,
     HttpModule,
     ConfigModule,
   ],

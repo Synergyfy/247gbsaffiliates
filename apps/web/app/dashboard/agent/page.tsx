@@ -7,6 +7,7 @@ import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useLearningProgress, useLearningResources } from '@/hooks/useLearningResources';
 import { useTasks } from '@/hooks/useTasks';
+import ReferralPanel from '@/components/dashboard/ReferralPanel';
 
 type WorkflowStatus = 'not_started' | 'in_progress' | 'pending_review' | 'completed' | 'blocked' | 'failed';
 type DashboardProfile = {
@@ -29,6 +30,8 @@ type DashboardProfile = {
     verificationReviewedAt?: string | null;
     isOnboarded?: boolean;
     isQuizPassed?: boolean;
+    referralCode?: string | null;
+    referralLink?: string | null;
 };
 type AssessmentAttempt = { id: string; score: number; maxScore: number; percentage: number; band: string; createdAt: string };
 
@@ -352,6 +355,11 @@ export default function AgentDashboard() {
                     </CapabilityCard>
                 </div>
             </section>
+
+            <ReferralPanel
+                referralCode={profile?.referralCode ?? user?.referralCode}
+                referralLink={profile?.referralLink ?? user?.referralLink}
+            />
         </div>
     );
 }

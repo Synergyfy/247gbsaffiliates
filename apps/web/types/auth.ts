@@ -26,6 +26,9 @@ export interface User {
   mcomMembershipTier?: string | null;
   mcomMembershipStatus?: string | null;
   mcomCanAccessVcard?: boolean;
+  /** Referral programme details synced from Central Hub. */
+  referralCode?: string | null;
+  referralLink?: string | null;
   phone?: string | null;
   postcode?: string | null;
   postalCode?: string | null;
