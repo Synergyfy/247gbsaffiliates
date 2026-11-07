@@ -88,7 +88,7 @@ export default function McomWalletPanel({
 }: McomWalletPanelProps = {}) {
   const [page, setPage] = useState(1);
   const { user } = useAuthStore();
-  const { wallet, holds, transactions, totalPages, isLoading, isError, error, refetch, isFetching } =
+  const { wallet, holds, transactions, totalPages, referralEarnings, isLoading, isError, error, refetch, isFetching } =
     useMcomWallet(page);
 
   const normalizedRole = (user?.role || '').replace(/_/g, '-');
@@ -171,6 +171,119 @@ export default function McomWalletPanel({
                   : 'No activity yet'}
               </p>
             </article>
+          </section>
+
+          <section className="border border-emerald-100 bg-white" aria-label="Referral earnings">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-emerald-50 p-4 sm:p-5">
+              <div>
+                <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  <span className="material-symbols-outlined text-[16px] text-emerald-600">
+                    redeem
+                  </span>
+                  Referral earnings
+                </p>
+                <p className="mt-2 text-2xl font-semibold tracking-tight text-emerald-700 tabular-nums">
+                  {formatCredits(referralEarnings?.summary.totalEarnedCredits ?? 0)} MCOM
+                </p>
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  Already included in your wallet balance ·{' '}
+                  {referralEarnings?.summary.creditedCommissionCount ?? 0} commission
+                  {(referralEarnings?.summary.creditedCommissionCount ?? 0) === 1 ? '' : 's'} from{' '}
+                  {referralEarnings?.summary.creditedReferrals ?? 0} referred account
+                  {(referralEarnings?.summary.creditedReferrals ?? 0) === 1 ? '' : 's'}
+                </p>
+              </div>
+              <div className="rounded-md bg-emerald-50 px-3 py-2 text-center">
+                <p className="text-lg font-semibold text-emerald-800">
+                  {referralEarnings?.summary.totalReferrals ?? 0}
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700/70">
+                  total referrals
+                </p>
+              </div>
+            </div>
+
+            {referralEarnings?.config && (
+              <p className="border-b border-slate-100 px-4 py-2.5 text-[11px] text-slate-500 sm:px-5">
+                Current rule: version {referralEarnings.config.version} ·{' '}
+                {referralEarnings.config.rewardType === 'PERCENTAGE'
+                  ? `${referralEarnings.config.percentage ?? 0}% of qualifying purchases`
+                  : `£${Number(referralEarnings.config.fixedAmountGbp ?? 0).toFixed(2)} per qualifying purchase`}{' '}
+                ·{' '}
+                {referralEarnings.config.commissionFrequency === 'RECURRING'
+                  ? 'recurring'
+                  : 'one-time'}
+              </p>
+            )}
+
+            {(referralEarnings?.referredUsers?.length ?? 0) > 0 && (
+              <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
+                <h3 className="text-xs font-semibold text-slate-900">Earned per referred account</h3>
+                <div className="mt-2 space-y-1.5">
+                  {referralEarnings?.referredUsers
+                    .filter((referred) => referred.earnedCredits > 0)
+                    .slice(0, 8)
+                    .map((referred) => (
+                      <div
+                        key={referred.id}
+                        className="flex flex-wrap items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="min-w-0 truncate text-slate-700">
+                          {referred.displayName}
+                        </span>
+                        <span className="shrink-0 font-semibold text-emerald-700 tabular-nums">
+                          {formatCredits(referred.earnedCredits)} MCOM
+                        </span>
+                      </div>
+                    ))}
+                  {referralEarnings?.referredUsers.every(
+                    (referred) => referred.earnedCredits <= 0,
+                  ) && (
+                    <p className="text-xs text-slate-500">
+                      Referrals are recorded, but none has generated a commission yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="px-4 py-3 sm:px-5">
+              <h3 className="text-xs font-semibold text-slate-900">Referral earning history</h3>
+              {(referralEarnings?.history?.length ?? 0) === 0 ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  No referral commissions yet. Earnings appear when someone you referred buys a
+                  qualifying membership or access pass.
+                </p>
+              ) : (
+                <div className="mt-2 divide-y divide-slate-100">
+                  {referralEarnings?.history.slice(0, 10).map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="flex flex-wrap items-center justify-between gap-2 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-slate-800">
+                          {entry.referredName || entry.referredEmail || 'Referred account'}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {entry.sourceName || entry.sourceType.replaceAll('_', ' ').toLowerCase()}{' '}
+                          · {formatDate(entry.createdAt)} ·{' '}
+                          {entry.status.replaceAll('_', ' ').toLowerCase()}
+                        </p>
+                      </div>
+                      <p
+                        className={`shrink-0 text-xs font-semibold tabular-nums ${
+                          entry.status === 'CREDITED' ? 'text-emerald-700' : 'text-slate-400'
+                        }`}
+                      >
+                        {entry.status === 'CREDITED' ? '+' : ''}
+                        {formatCredits(entry.commissionCredits)} MCOM
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
 
           {holds.length > 0 && (
