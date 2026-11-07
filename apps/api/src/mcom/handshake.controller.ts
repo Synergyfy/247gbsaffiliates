@@ -84,6 +84,8 @@ export class HandshakeController {
         role: normalizedRole,
         membership: payload.membership,
         permissions: payload.permissions,
+        referralCode: payload.referralCode ?? null,
+        referralLink: payload.referralLink ?? null,
       });
 
       const localToken = this.jwtService.sign({

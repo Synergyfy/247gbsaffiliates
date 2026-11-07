@@ -74,6 +74,8 @@ export function AuthCallbackClient() {
           city: profile.data?.city ?? null,
           region: profile.data?.region ?? null,
           country: profile.data?.country ?? null,
+          referralCode: profile.data?.referralCode ?? null,
+          referralLink: profile.data?.referralLink ?? null,
         });
 
         const hasSubmittedVerification = Boolean(verificationSubmission);
