@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useAdminStats } from '@/hooks/useAdminStats';
+import { AcquisitionActivityFeed } from '@/components/business-acquisition/AcquisitionActivityFeed';
 
 const metrics = [
     { key: 'totalAffiliates', label: 'Registered affiliates', icon: 'group', href: '/dashboard/admin/users', color: 'text-blue-700 bg-blue-50' },
@@ -63,6 +64,10 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             </section>
+
+            <div className="mt-6">
+                <AcquisitionActivityFeed admin limit={8} compact />
+            </div>
         </div>
     );
 }

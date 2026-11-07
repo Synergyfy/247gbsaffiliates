@@ -48,6 +48,53 @@ export interface McomWalletSnapshot {
     limit: number;
     totalPages: number;
   };
+  referralEarnings?: McomReferralEarnings;
+}
+
+export interface McomReferralEarnings {
+  summary: {
+    totalReferrals: number;
+    creditedReferrals: number;
+    totalEarnedCredits: number;
+    totalEarnedGbp: number;
+    creditedCommissionCount: number;
+    configActive: boolean;
+    configVersion: number | null;
+  };
+  referredUsers: Array<{
+    id: string;
+    email: string;
+    displayName: string;
+    role: string;
+    joinedAt: string;
+    earnedCredits: number;
+    earnedGbp: number;
+    creditedCount: number;
+    evaluationCount: number;
+    lastActivityAt: string | null;
+  }>;
+  history: Array<{
+    id: string;
+    sourceType: 'MEMBERSHIP' | 'ACCESS_PASS';
+    sourceName: string | null;
+    purchaseAmountGbp: number;
+    commissionAmountGbp: number;
+    commissionCredits: number;
+    status: string;
+    referredUserId: string;
+    referredName: string | null;
+    referredEmail: string | null;
+    configVersion: number | null;
+    createdAt: string;
+  }>;
+  config: {
+    version: number;
+    rewardType: 'PERCENTAGE' | 'FIXED';
+    percentage: number | null;
+    fixedAmountGbp: number | null;
+    commissionFrequency: 'ONE_TIME' | 'RECURRING';
+    eligibleRoles: string[];
+  } | null;
 }
 
 /**
@@ -79,6 +126,7 @@ export const useMcomWallet = (page = 1, limit = 20) => {
     transactions: query.data?.transactions?.data ?? [],
     totalTransactions: query.data?.transactions?.total ?? 0,
     totalPages: query.data?.transactions?.totalPages ?? 1,
+    referralEarnings: query.data?.referralEarnings,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

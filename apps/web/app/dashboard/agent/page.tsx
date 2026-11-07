@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useLearningProgress, useLearningResources } from '@/hooks/useLearningResources';
 import { useTasks } from '@/hooks/useTasks';
 import ReferralPanel from '@/components/dashboard/ReferralPanel';
+import { AcquisitionActivityFeed } from '@/components/business-acquisition/AcquisitionActivityFeed';
 
 type WorkflowStatus = 'not_started' | 'in_progress' | 'pending_review' | 'completed' | 'blocked' | 'failed';
 type DashboardProfile = {
@@ -129,7 +130,7 @@ export default function AgentDashboard() {
     const acquisitionQuery = useQuery({
         queryKey: ['business-acquisition-overview'],
         queryFn: async () => unwrap<{
-            summary: { approached: number; registered: number; onboardingCompleted: number; verified: number };
+            summary: { approached: number; registered: number; onboardingCompleted: number; converted: number; verified: number };
             settings: { targetCount: number; dueDate?: string | null };
         }>((await apiClient.get('/business-acquisition/summary')).data),
         enabled: Boolean(userId),
@@ -350,11 +351,13 @@ export default function AgentDashboard() {
                         {acquisitionQuery.isError
                             ? 'Business acquisition progress could not be loaded.'
                             : acquisition
-                                ? `${acquisition.approached} approached · ${acquisition.registered} registered · ${acquisition.verified} of ${acquisitionTarget} verified onboardings.`
+                                ? `${acquisition.approached} approached · ${acquisition.registered} registered · ${acquisition.converted} paid · ${acquisition.verified} of ${acquisitionTarget} verified onboardings.`
                                 : `Record local business prospects and work towards ${acquisitionTarget} verified CHS onboardings.`}
                     </CapabilityCard>
                 </div>
             </section>
+
+            <AcquisitionActivityFeed limit={5} compact />
 
             <ReferralPanel
                 referralCode={profile?.referralCode ?? user?.referralCode}
