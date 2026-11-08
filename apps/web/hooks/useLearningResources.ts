@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 export interface LearningHubResource {
   id: string;
@@ -33,23 +34,29 @@ const unwrap = <T,>(payload: unknown): T => {
   return payload as T;
 };
 
-export const useLearningResources = (role: string | null) => useQuery({
-  queryKey: ['learning-resources', role],
-  queryFn: async (): Promise<LearningHubResource[]> => {
-    const response = await apiClient.get('/learning', { params: { role } });
-    return unwrap<LearningHubResource[]>(response.data);
-  },
-  enabled: Boolean(role),
-});
+export const useLearningResources = (role: string | null) =>
+  stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['learning-resources', role],
+      queryFn: async (): Promise<LearningHubResource[]> => {
+        const response = await apiClient.get('/learning', { params: { role } });
+        return unwrap<LearningHubResource[]>(response.data);
+      },
+      enabled: Boolean(role),
+    }),
+  );
 
-export const useLearningProgress = (enabled = true) => useQuery({
-  queryKey: ['learning-progress'],
-  queryFn: async (): Promise<LearningProgressItem[]> => {
-    const response = await apiClient.get('/learning/progress/me');
-    return unwrap<LearningProgressItem[]>(response.data);
-  },
-  enabled,
-});
+export const useLearningProgress = (enabled = true) =>
+  stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['learning-progress'],
+      queryFn: async (): Promise<LearningProgressItem[]> => {
+        const response = await apiClient.get('/learning/progress/me');
+        return unwrap<LearningProgressItem[]>(response.data);
+      },
+      enabled,
+    }),
+  );
 
 export const useUpdateLearningProgress = () => {
   const queryClient = useQueryClient();

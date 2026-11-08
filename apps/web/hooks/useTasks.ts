@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 export interface TaskAttachment {
   url: string;
@@ -162,7 +163,7 @@ export const useTasks = (filters: TaskFilters = {}) => {
     queryClient.invalidateQueries({ queryKey: ['task'] });
   };
 
-  const { data: tasks, isLoading, isError, error, refetch } = useQuery({
+  const tasksQuery = useQuery({
     queryKey: ['tasks', filters],
     enabled: filters.enabled ?? true,
     // 4xx responses (e.g. verification/onboarding required) are actionable —
@@ -182,6 +183,12 @@ export const useTasks = (filters: TaskFilters = {}) => {
       }
     },
   });
+  const tasks = tasksQuery.data;
+  const hasFailedPreviously = tasksQuery.errorUpdateCount > 0 && tasks === undefined;
+  const isLoading = tasksQuery.isLoading && !hasFailedPreviously;
+  const isError = tasksQuery.isError || (tasksQuery.isFetching && hasFailedPreviously);
+  const error = tasksQuery.error ?? tasksQuery.failureReason;
+  const refetch = tasksQuery.refetch;
 
   const acceptTaskMutation = useMutation({
     mutationFn: async (taskId: string) => {
@@ -293,18 +300,21 @@ export const useTasks = (filters: TaskFilters = {}) => {
   };
 };
 
-export const useTask = (taskId: string, enabled = true) => useQuery({
-  queryKey: ['task', taskId],
-  enabled: Boolean(taskId) && enabled,
-  queryFn: async () => {
-    try {
-      const response = await apiClient.get(`/tasks/${taskId}`);
-      return unwrapTask(response.data);
-    } catch (error) {
-      throw normalizeTaskError(error);
-    }
-  },
-});
+export const useTask = (taskId: string, enabled = true) =>
+  stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['task', taskId],
+      enabled: Boolean(taskId) && enabled,
+      queryFn: async () => {
+        try {
+          const response = await apiClient.get(`/tasks/${taskId}`);
+          return unwrapTask(response.data);
+        } catch (error) {
+          throw normalizeTaskError(error);
+        }
+      },
+    }),
+  );
 
 // ─── Account Manager: tasks across managed businesses ────────────────────────
 
@@ -367,6 +377,9 @@ export interface DirectoryAffiliate {
   region?: string | null;
   hourlyRate?: number | null;
   currency?: string | null;
+  isOnboarded?: boolean;
+  isQuizPassed?: boolean;
+  verificationStatus?: string | null;
   assessmentScore?: number | null;
   completedTasksCount?: number;
   activeTasksCount?: number;
@@ -403,6 +416,7 @@ const unwrapManagedRecord = <T,>(payload: unknown): T => {
       current = record.data;
       continue;
     }
+    if (typeof record.id === 'string') return current as T;
     if (record.project && typeof record.project === 'object') return record.project as T;
     if (record.task && typeof record.task === 'object') return record.task as T;
     return current as T;
@@ -429,33 +443,71 @@ export const useDelegatableAgents = (enabled = true) =>
 
 /** Public directory of real, eligible 247GBS affiliates. */
 export const useAffiliateDirectory = (filters: { limit?: number; search?: string; role?: string } = {}, enabled = true) =>
-  useQuery({
-    queryKey: ['affiliate-directory', filters],
-    enabled,
-    queryFn: async () => {
-      const response = await apiClient.get('/users/directory', { params: filters });
-      return unwrapManagedList<DirectoryAffiliate>(response.data, 'affiliate directory');
-    },
-  });
+  stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['affiliate-directory', filters],
+      enabled,
+      queryFn: async () => {
+        const response = await apiClient.get('/users/directory', { params: filters });
+        const list = unwrapManagedList<DirectoryAffiliate>(response.data, 'affiliate directory');
+        return list.filter((affiliate) => {
+          if (
+            affiliate.verificationStatus &&
+            affiliate.verificationStatus.toLowerCase() !== 'verified'
+          ) {
+            return false;
+          }
+          if (affiliate.isOnboarded === false) {
+            return false;
+          }
+          if (affiliate.role?.toLowerCase() === 'agent') {
+            if (affiliate.isQuizPassed === false) return false;
+            if (Array.isArray(affiliate.skills) && affiliate.skills.length === 0) return false;
+          }
+          return true;
+        });
+      },
+    }),
+  );
+
+const normalizeManagedTaskRecord = (row: Record<string, unknown>): ManagedTask => {
+  const rawDeliverables = row.deliverables;
+  const deliverables = Array.isArray(rawDeliverables)
+    ? rawDeliverables.filter((item): item is string => typeof item === 'string')
+    : typeof rawDeliverables === 'string' && rawDeliverables.trim()
+      ? rawDeliverables.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean)
+      : [];
+  return {
+    ...row,
+    // Central stores agreed deliverables as free text; the affiliate UI works
+    // with a list. Normalise both shapes here.
+    deliverables,
+    status: typeof row.status === 'string' ? row.status.toUpperCase() : row.status,
+  } as ManagedTask;
+};
 
 const unwrapManagedTasks = (payload: unknown): ManagedTask[] => {
   const rows = unwrapManagedList<Record<string, unknown>>(payload, 'managed task');
-  return rows.map((row) => {
-    const rawDeliverables = row.deliverables;
-    const deliverables = Array.isArray(rawDeliverables)
-      ? rawDeliverables.filter((item): item is string => typeof item === 'string')
-      : typeof rawDeliverables === 'string' && rawDeliverables.trim()
-        ? rawDeliverables.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean)
-        : [];
-    return {
-      ...row,
-      // Central stores agreed deliverables as free text; the affiliate UI works
-      // with a list. Normalise both shapes here.
-      deliverables,
-      status: typeof row.status === 'string' ? row.status.toUpperCase() : row.status,
-    } as ManagedTask;
-  });
+  return rows.map(normalizeManagedTaskRecord);
 };
+
+export interface CreateManagedProjectTaskInput {
+  projectId: string;
+  title: string;
+  description: string;
+  category?: 'INTERNAL' | 'EXTERNAL';
+  requiredSkills?: string[];
+  deliverables?: string;
+  materials?: string;
+  dueAt?: string;
+  assigneeUserId?: string;
+  requiresBusinessApproval?: boolean;
+  compensationModel?: string;
+  compensationAmount?: number;
+  businessChargeAmount?: number;
+  billableToBusiness?: boolean;
+  prerequisiteTaskId?: string;
+}
 
 export interface ManagedServiceRequest {
   id: string;
@@ -519,7 +571,13 @@ export const useManagedRequests = (filters: { status?: string; search?: string; 
       project,
     }: {
       requestId: string;
-      project: { title: string; description: string; objective?: string; dueAt?: string };
+      project: {
+        title: string;
+        description: string;
+        objective?: string;
+        dueAt?: string;
+        requiresBusinessApproval?: boolean;
+      };
     }) => {
       const response = await apiClient.post(
         `/account-manager/managed-requests/${requestId}/convert`,
@@ -529,12 +587,13 @@ export const useManagedRequests = (filters: { status?: string; search?: string; 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-projects'] });
       queryClient.invalidateQueries({ queryKey: ['managed-tasks'] });
     },
   });
 
   return {
-    ...query,
+    ...stabilizeErrorRetry(query),
     clarify: clarify.mutateAsync,
     isClarifying: clarify.isPending,
     quote: quote.mutateAsync,
@@ -569,9 +628,13 @@ export const useManagedTasks = (filters: { status?: string; search?: string; lim
         assigneeUserId,
         ...(note ? { note } : {}),
       });
-      return unwrapManagedRecord<ManagedTask>(response.data);
+      return normalizeManagedTaskRecord(unwrapManagedRecord<Record<string, unknown>>(response.data));
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['managed-tasks'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managed-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
   });
 
   const reviewTask = useMutation({
@@ -592,12 +655,13 @@ export const useManagedTasks = (filters: { status?: string; search?: string; lim
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-projects'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
   });
 
   return {
-    ...query,
+    ...stabilizeErrorRetry(query),
     assignTask: assignTask.mutateAsync,
     isAssigningTask: assignTask.isPending,
     reviewTask: reviewTask.mutateAsync,
@@ -606,14 +670,16 @@ export const useManagedTasks = (filters: { status?: string; search?: string; lim
 };
 
 export const useManagedTask = (taskId: string, enabled = true) =>
-  useQuery({
-    queryKey: ['managed-task', taskId],
-    enabled: Boolean(taskId) && enabled,
-    queryFn: async () => {
-      const response = await apiClient.get(`/account-manager/managed-tasks/${encodeURIComponent(taskId)}`);
-      return unwrapManagedRecord<ManagedTask>(response.data);
-    },
-  });
+  stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['managed-task', taskId],
+      enabled: Boolean(taskId) && enabled,
+      queryFn: async () => {
+        const response = await apiClient.get(`/account-manager/managed-tasks/${encodeURIComponent(taskId)}`);
+        return normalizeManagedTaskRecord(unwrapManagedRecord<Record<string, unknown>>(response.data));
+      },
+    }),
+  );
 
 export const useManagedProjects = (
   filters: { status?: string; search?: string; limit?: number } = {},
@@ -625,7 +691,30 @@ export const useManagedProjects = (
     enabled,
     queryFn: async () => {
       const response = await apiClient.get('/account-manager/managed-projects', { params: filters });
-      return unwrapManagedList<ManagedProject>(response.data, 'managed projects');
+      const projects = unwrapManagedList<ManagedProject>(response.data, 'managed projects');
+      return projects.map((project) => ({
+        ...project,
+        tasks: Array.isArray(project.tasks)
+          ? project.tasks.map((task) =>
+              normalizeManagedTaskRecord(task as unknown as Record<string, unknown>),
+            )
+          : project.tasks,
+      }));
+    },
+  });
+
+  const createProjectTask = useMutation({
+    mutationFn: async ({ projectId, ...body }: CreateManagedProjectTaskInput) => {
+      const response = await apiClient.post(
+        `/account-manager/managed-projects/${encodeURIComponent(projectId)}/tasks`,
+        body,
+      );
+      return normalizeManagedTaskRecord(unwrapManagedRecord<Record<string, unknown>>(response.data));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managed-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['managed-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
   });
 
@@ -648,37 +737,13 @@ export const useManagedProjects = (
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['managed-projects'] }),
   });
 
-  const createProjectTask = useMutation({
-    mutationFn: async ({
-      projectId,
-      ...task
-    }: {
-      projectId: string;
-      title: string;
-      description: string;
-      assigneeUserId?: string;
-      dueAt?: string;
-      requiredSkills?: string[];
-      deliverables?: string;
-      materials?: string;
-    }) => {
-      const response = await apiClient.post(
-        `/account-manager/managed-projects/${encodeURIComponent(projectId)}/tasks`,
-        task,
-      );
-      return unwrapManagedRecord<ManagedTask>(response.data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['managed-projects'] });
-      queryClient.invalidateQueries({ queryKey: ['managed-tasks'] });
-    },
-  });
+
 
   return {
-    ...query,
-    closeProject: closeProject.mutateAsync,
-    isClosingProject: closeProject.isPending,
+    ...stabilizeErrorRetry(query),
     createProjectTask: createProjectTask.mutateAsync,
     isCreatingProjectTask: createProjectTask.isPending,
+    closeProject: closeProject.mutateAsync,
+    isClosingProject: closeProject.isPending,
   };
 };

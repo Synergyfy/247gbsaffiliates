@@ -80,7 +80,7 @@ export default function AccountManagerLayout({
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0">
                 <RoleWorkspaceHeader roleName="Account Manager" profileHref="/dashboard/account-manager/profile" settingsHref="/dashboard/account-manager/settings" />
-                <main className="flex-1 pb-20 lg:pb-0">
+                <main className="min-w-0 flex-1 overflow-x-clip pb-20 lg:pb-0">
                     {children}
                 </main>
             </div>

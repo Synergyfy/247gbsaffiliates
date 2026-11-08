@@ -119,6 +119,16 @@ export class AccountManagerController {
     return this.accountManagerService.getManagedProjects(req.user.userId, query);
   }
 
+  @Post('managed-projects/:id/tasks')
+  @ApiOperation({ summary: 'Create a task inside a managed project and optionally assign it to an eligible affiliate' })
+  async createManagedProjectTask(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.accountManagerService.createManagedProjectTask(req.user.userId, id, body);
+  }
+
   @Post('managed-projects/:id/close')
   @ApiOperation({ summary: 'Close a project with an outcome summary and follow-up notes' })
   async closeManagedProject(
@@ -129,21 +139,5 @@ export class AccountManagerController {
     return this.accountManagerService.closeManagedProject(req.user.userId, id, body);
   }
 
-  @Post('managed-projects/:id/tasks')
-  @ApiOperation({
-    summary: 'Create a task inside a managed project',
-    description:
-      'Creates the task in Central Hub under the project and syncs it back to the affiliate task board.',
-  })
-  async createManagedProjectTask(
-    @Request() req,
-    @Param('id') id: string,
-    @Body() body: Record<string, unknown>,
-  ) {
-    return this.accountManagerService.createManagedProjectTask(
-      req.user.userId,
-      id,
-      body,
-    );
-  }
+
 }

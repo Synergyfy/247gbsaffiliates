@@ -13,7 +13,7 @@ interface BrandLogoProps {
     label?: string;
 }
 
-export const BrandLogo: React.FC<BrandLogoProps> = ({ className, iconClassName, labelClassName, variant = 'default', size = 'md', label = '247gbs' }) => {
+export const BrandLogo: React.FC<BrandLogoProps> = ({ className, iconClassName, labelClassName, variant = 'default', size = 'md', label = '247GBS Affiliate' }) => {
     const isWhite = variant === 'white';
 
     const sizeClasses = {

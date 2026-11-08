@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getVisibleSubmissionEntries } from '@/lib/profile-submission';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 type VerificationProfile = {
     verificationStatus?: string; verificationNotes?: string | null;
@@ -22,16 +24,30 @@ const copy: Record<string, { title: string; message: string; color: string }> = 
 
 export default function AgentVerificationPage() {
     const { user } = useAuthStore();
-    const { data, isLoading, isError, refetch } = useQuery({
-        queryKey: ['affiliate-dashboard-profile'],
-        queryFn: async () => {
-            const response = await apiClient.get('/auth/profile');
-            return (response.data?.data ?? response.data) as VerificationProfile;
-        },
-    });
+    const { data, isLoading, isError, error, refetch } = stabilizeErrorRetry(
+        useQuery({
+            queryKey: ['affiliate-dashboard-profile'],
+            queryFn: async () => {
+                const response = await apiClient.get('/auth/profile');
+                return (response.data?.data ?? response.data) as VerificationProfile;
+            },
+        }),
+    );
     const profile = (data || user) as VerificationProfile | null;
-    if (isLoading) return <p className="mx-auto max-w-3xl py-10 text-sm text-slate-500">Loading verification status…</p>;
-    if (isError || !profile) return <div role="alert" className="mx-auto max-w-3xl border-l-4 border-red-600 bg-red-50 p-4 text-sm text-red-900">Verification status could not be loaded. <button type="button" onClick={() => void refetch()} className="font-semibold underline">Try again</button></div>;
+    if (isLoading && !isError) return <p className="mx-auto max-w-3xl py-10 text-sm text-slate-500">Loading verification status…</p>;
+    if (isError || !profile) {
+        return (
+            <div className="mx-auto max-w-3xl py-4">
+                <RequestErrorState
+                    area="Verification status"
+                    label="Verification status"
+                    error={error}
+                    onRetry={() => void refetch()}
+                    supportHref="/dashboard/agent/messages"
+                />
+            </div>
+        );
+    }
 
     const status = profile.verificationStatus || 'unverified';
     const hasSubmission = Boolean(profile.verificationSubmission);

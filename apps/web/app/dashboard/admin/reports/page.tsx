@@ -2,18 +2,19 @@
 
 import Link from 'next/link';
 import { useAdminStats } from '@/hooks/useAdminStats';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 
 export default function AdminReportsPage() {
-    const { stats, isLoading, isError, refetch } = useAdminStats();
-    if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><span className="size-9 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div>;
-    if (isError || !stats) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">Operational reports could not be loaded. <button onClick={() => void refetch()} className="font-bold underline">Retry</button></div>;
+    const { stats, isLoading, isError, error, refetch } = useAdminStats();
+    if (isLoading && !isError) return <div className="flex min-h-[50vh] items-center justify-center"><span className="size-9 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div>;
+    if (isError || !stats) return <div className="mx-auto max-w-6xl"><RequestErrorState area="Admin reports" label="Operational reports" error={error} onRetry={() => void refetch()} supportHref="/dashboard/admin" compact={false} /></div>;
     const taskStatuses = Object.entries(stats.tasksByStatus || {}).sort(([a], [b]) => a.localeCompare(b));
     const resultBands = Object.entries(stats.attemptsByBand || {}).sort(([a], [b]) => a.localeCompare(b));
 
     return (
         <div className="mx-auto max-w-6xl font-display">
             <header className="mb-6"><p className="text-xs font-bold uppercase tracking-widest text-primary">Reporting</p><h1 className="mt-1 text-2xl font-black text-text-main">Affiliate Operations</h1><p className="mt-1 text-sm text-text-secondary">Live counts from persisted affiliate, assessment and task records.</p></header>
-            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {[
                     ['Registered affiliates', stats.totalAffiliates],
                     ['Pending verification', stats.pendingAffiliateVerification],

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "247GBS - Affliate platform",
+  title: "247GBS Affiliate - Affiliate Platform",
   description: "The unified platform for Merchants, Agents, and Consultants",
 };
 

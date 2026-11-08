@@ -56,7 +56,7 @@ export default function ForAccountManagerPage() {
                 <div className="max-w-[1240px] w-full">
                     <div className="flex flex-col gap-20 text-center items-center">
                         <div className="space-y-4">
-                            <span className="text-primary font-bold tracking-widest uppercase text-xs">The 247gbs Edge</span>
+                            <span className="text-primary font-bold tracking-widest uppercase text-xs">The 247GBS Affiliate Edge</span>
                             <h2 className="text-text-main tracking-tight text-4xl lg:text-5xl font-bold font-display leading-tight max-w-[900px]">
                                 Engineered for High Performance
                             </h2>
@@ -94,7 +94,7 @@ export default function ForAccountManagerPage() {
                 <div className="max-w-[1100px] w-full rounded-3xl bg-primary px-8 py-24 text-center flex flex-col items-center gap-12 shadow-2xl shadow-primary/40 relative overflow-hidden group">
                     <div className="relative z-10 space-y-8">
                         <h2 className="text-white text-5xl lg:text-7xl font-bold font-display leading-tight tracking-tight">Ready to take command?</h2>
-                        <p className="text-white/90 text-2xl font-medium max-w-[700px] mx-auto">Join 500+ top-tier marketing managers who have scaled their operations with 247gbs affiliate.</p>
+                        <p className="text-white/90 text-2xl font-medium max-w-[700px] mx-auto">Join 500+ top-tier marketing managers who have scaled their operations with 247GBS Affiliate.</p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-8 relative z-10 pt-4">
                         <Link href={getAffiliateRegisterUrl()} className="bg-text-main text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-center font-display">Start Your Free Trial</Link>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useManagedAgents } from '@/hooks/useAgents';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 
 export default function AccountManagerAgentsPage() {
     const [search, setSearch] = useState('');
@@ -37,15 +38,16 @@ export default function AccountManagerAgentsPage() {
                 />
             </label>
 
-            {query.isLoading ? (
+            {query.isLoading && !query.isError ? (
                 <p role="status" className="py-3 text-xs text-slate-500">Loading agents…</p>
             ) : query.isError ? (
-                <div role="alert" className="bg-rose-50 px-3 py-2 text-xs text-rose-800">
-                    The agent directory could not be loaded.{' '}
-                    <button type="button" onClick={() => void query.refetch()} className="font-semibold underline">
-                        Try again
-                    </button>
-                </div>
+                <RequestErrorState
+                    area="Agent directory"
+                    label="Agent directory"
+                    error={query.error}
+                    onRetry={() => void query.refetch()}
+                    supportHref="/dashboard/account-manager/messages"
+                />
             ) : agents.length ? (
                 <section className="grid gap-x-5 divide-y divide-slate-100 border-y border-slate-200 bg-white md:grid-cols-2 md:divide-y-0">
                     {agents.map((agent) => (

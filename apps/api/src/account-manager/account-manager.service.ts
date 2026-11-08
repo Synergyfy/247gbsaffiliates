@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   Injectable,
   Logger,
@@ -185,26 +187,63 @@ export class AccountManagerService {
    * identifier is already a Central id (or an unknown id) it is passed through
    * and Central remains the final validator.
    */
-  private async resolveCentralAssigneeId(identifier: string) {
-    const byLocalId = await this.usersRepo.findOne({ where: { id: identifier } });
-    if (byLocalId) {
-      if (!byLocalId.mcomUserId) {
+  /**
+   * Resolve a 247GBS directory affiliate id, Central Hub user id, or email into
+   * the canonical identifier Central Hub expects, while enforcing local active
+   * affiliate eligibility checks and requiring a linked Central Hub account.
+   */
+  private async resolveCentralAssigneeId(assigneeUserId: string): Promise<string> {
+    const trimmed = (assigneeUserId || '').trim();
+    if (!trimmed) {
+      throw new BadRequestException('Assignee user id is required.');
+    }
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+    const localUser = await this.usersRepo.findOne({
+      where: [
+        ...(isUuid ? [{ id: trimmed }] : []),
+        { mcomUserId: trimmed },
+        ...(trimmed.includes('@') ? [{ email: trimmed.toLowerCase() }] : []),
+      ],
+    });
+
+    if (localUser) {
+      if (
+        ![UserRole.AGENT, UserRole.CONSULTANT, UserRole.ACCOUNT_MANAGER].includes(localUser.role)
+      ) {
+        throw new ForbiddenException('Selected user is not an eligible affiliate.');
+      }
+      if (localUser.status !== UserStatus.ACTIVE) {
+        throw new ForbiddenException('Selected affiliate is not active.');
+      }
+      if (
+        localUser.verificationStatus &&
+        localUser.verificationStatus !== VerificationStatus.VERIFIED
+      ) {
+        throw new ForbiddenException('Selected affiliate is not verified yet.');
+      }
+      if (localUser.isOnboarded === false) {
+        throw new ForbiddenException('Selected affiliate has not completed onboarding.');
+      }
+      if (
+        localUser.role === UserRole.AGENT &&
+        (localUser.isQuizPassed === false ||
+          (Array.isArray(localUser.skills) && localUser.skills.length === 0))
+      ) {
+        throw new ForbiddenException('Selected agent has not completed assessment and skill qualification.');
+      }
+      if (!localUser.mcomUserId) {
         throw new ConflictException({
           code: 'AFFILIATE_CENTRAL_ACCOUNT_NOT_LINKED',
           message:
             'That affiliate has not connected their Central Hub account yet, so work cannot be delegated to them.',
         });
       }
-      return byLocalId.mcomUserId;
+      return localUser.mcomUserId;
     }
 
-    const byCentralId = await this.usersRepo.findOne({
-      where: { mcomUserId: identifier },
-    });
-    return byCentralId?.mcomUserId ?? identifier;
+    return trimmed;
   }
-
-  /** All tasks across the businesses this manager coordinates. */
   getManagedTasks(accountManagerId: string, query: Record<string, unknown>) {
     return this.centralGet(accountManagerId, '/tasks', query);
   }

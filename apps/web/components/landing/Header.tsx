@@ -71,7 +71,7 @@ export default function LandingHeader() {
                             </svg>
                         </div>
                         <h2 className="text-text-main text-2xl font-bold font-display tracking-tight group-hover:text-primary transition-colors">
-                            247gbs affiliate
+                            247GBS Affiliate
                         </h2>
                     </Link>
 
@@ -179,7 +179,7 @@ export default function LandingHeader() {
 
                 <div className="p-6 border-t border-slate-100">
                     <p className="text-xs text-text-secondary text-center">
-                        © 2026 247gbs affiliate. All rights reserved.
+                        © 2026 247GBS Affiliate. All rights reserved.
                     </p>
                 </div>
             </div>

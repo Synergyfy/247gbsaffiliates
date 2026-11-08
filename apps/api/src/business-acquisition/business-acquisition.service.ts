@@ -1030,10 +1030,19 @@ export class BusinessAcquisitionService {
     if (!user.mcomUserId) {
       return { total: 0, businesses: [], message: 'Central Hub account is not linked.' };
     }
-    const response = await this.centralGet<{ success: boolean; data: any }>(
-      `/affiliate/businesses/acquired/${encodeURIComponent(user.mcomUserId)}`,
-      { affiliateExternalId: user.id },
-    );
-    return response?.data ?? { total: 0, businesses: [] };
+    try {
+      const response = await this.centralGet<{ success: boolean; data: any }>(
+        `/affiliate/businesses/acquired/${encodeURIComponent(user.mcomUserId)}`,
+        { affiliateExternalId: user.id },
+      );
+      return response?.data ?? { total: 0, businesses: [] };
+    } catch (error) {
+      this.logger.warn(
+        `Central businesses retrieval skipped for affiliate ${userId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return { total: 0, businesses: [] };
+    }
   }
 }

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMcomWallet, type McomWalletTransaction } from '@/hooks/useMcomWallet';
 import { useAuthStore } from '@/store/useAuthStore';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 
 function formatCredits(amount: number) {
   return new Intl.NumberFormat(undefined, {
@@ -30,40 +31,42 @@ function TransactionRow({
   const label = transaction.description || transaction.category.replaceAll('_', ' ').toLowerCase();
 
   return (
-    <li className="flex items-center gap-3 border-b border-slate-100 px-4 py-4 last:border-0 sm:px-5">
-      <span
-        className={`flex size-9 shrink-0 items-center justify-center rounded-md ${
-          incoming ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
-        }`}
-        aria-hidden="true"
-      >
-        <span className="material-symbols-outlined text-[19px]">
-          {incoming ? 'arrow_downward' : 'arrow_upward'}
+    <li className="flex flex-col gap-3 border-b border-slate-100 px-3 py-3.5 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <span
+          className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${
+            incoming ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+          }`}
+          aria-hidden="true"
+        >
+          <span className="material-symbols-outlined text-[19px]">
+            {incoming ? 'arrow_downward' : 'arrow_upward'}
+          </span>
         </span>
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium capitalize text-slate-900">{label}</p>
-        <p className="mt-0.5 text-xs text-slate-500">{formatDate(transaction.createdAt)}</p>
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          {transaction.platformName || 'MCOM Central'}
-          {transaction.reference ? ` · ${transaction.reference}` : ''}
-        </p>
-        {transaction.taskId && (
-          <Link
-            href={`${taskHrefBase}/${transaction.taskId}`}
-            className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-800 transition-colors hover:border-blue-300 hover:bg-blue-100"
-          >
-            <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-            View task{transaction.taskTitle ? `: ${transaction.taskTitle}` : ''}
-          </Link>
-        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold capitalize text-slate-900">{label}</p>
+          <p className="mt-0.5 text-xs text-slate-500">{formatDate(transaction.createdAt)}</p>
+          <p className="mt-0.5 truncate text-[11px] text-slate-500">
+            {transaction.platformName || 'MCOM Central'}
+            {transaction.reference ? ` · ${transaction.reference}` : ''}
+          </p>
+          {transaction.taskId && (
+            <Link
+              href={`${taskHrefBase}/${transaction.taskId}`}
+              className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-800 transition-colors hover:border-blue-300 hover:bg-blue-100"
+            >
+              <span className="material-symbols-outlined shrink-0 text-[14px]">open_in_new</span>
+              <span className="truncate">View task{transaction.taskTitle ? `: ${transaction.taskTitle}` : ''}</span>
+            </Link>
+          )}
+        </div>
       </div>
-      <div className="shrink-0 text-right">
-        <p className={`text-sm font-semibold tabular-nums ${incoming ? 'text-emerald-700' : 'text-slate-900'}`}>
+      <div className="flex items-baseline justify-between border-t border-slate-100 pt-2 sm:block sm:shrink-0 sm:border-0 sm:pt-0 sm:text-right">
+        <p className={`text-sm font-bold tabular-nums sm:text-base ${incoming ? 'text-emerald-700' : 'text-slate-900'}`}>
           {incoming ? '+' : '−'}
           {formatCredits(transaction.amount)} MCOM
         </p>
-        <p className="mt-0.5 text-[11px] text-slate-400 tabular-nums">
+        <p className="text-[11px] text-slate-400 tabular-nums sm:mt-0.5">
           bal. {formatCredits(transaction.balanceAfter)}
         </p>
       </div>
@@ -84,22 +87,119 @@ interface McomWalletPanelProps {
 export default function McomWalletPanel({
   eyebrow = 'Affiliate workspace',
   title = 'Earnings',
-  subtitle = 'Your Central Hub MCOM wallet. Task payments are credited here after the business approves the work; platform fees are deducted from the business charge, never from your payout.',
+  subtitle = 'Central Hub MCOM wallet for task payouts, affiliate earnings and holds.',
 }: McomWalletPanelProps = {}) {
   const [page, setPage] = useState(1);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const sliderRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuthStore();
   const { wallet, holds, transactions, totalPages, referralEarnings, isLoading, isError, error, refetch, isFetching } =
     useMcomWallet(page);
 
   const normalizedRole = (user?.role || '').replace(/_/g, '-');
-  const taskHrefBase =
+  const dashboardBase =
     normalizedRole === 'account-manager'
-      ? '/dashboard/account-manager/tasks'
+      ? '/dashboard/account-manager'
       : normalizedRole === 'consultant'
-        ? '/dashboard/consultant/tasks'
-        : '/dashboard/agent/tasks';
+        ? '/dashboard/consultant'
+        : '/dashboard/agent';
+  const taskHrefBase = `${dashboardBase}/tasks`;
 
-  if (isLoading) {
+  const currency = (wallet?.currency || 'MCOM').toUpperCase();
+  const activeHoldsAmount = holds.reduce((sum, hold) => sum + Number(hold.amount || 0), 0);
+
+  const cards = [
+    {
+      id: 'available-balance',
+      label: 'Available Balance',
+      value: formatCredits(wallet?.availableBalance ?? 0),
+      currency,
+      badge: null as string | null,
+      description: 'Funds available to use',
+      icon: 'account_balance_wallet',
+      cardClass: 'border-slate-800 bg-[#202b42] text-white',
+      labelClass: 'text-slate-300',
+      currencyClass: 'text-blue-300',
+      descClass: 'text-slate-300',
+      iconClass: 'text-blue-300',
+      badgeClass: 'text-slate-300',
+    },
+    {
+      id: 'active-holds',
+      label: 'Active Holds',
+      value: formatCredits(activeHoldsAmount),
+      currency,
+      badge: `${holds.length} active hold${holds.length === 1 ? '' : 's'}`,
+      description: 'Funds reserved for ongoing tasks',
+      icon: 'lock',
+      cardClass: 'border-amber-200/80 bg-amber-50 text-amber-950',
+      labelClass: 'text-amber-800/80',
+      currencyClass: 'text-amber-700',
+      descClass: 'text-amber-800/80',
+      iconClass: 'text-amber-700',
+      badgeClass: 'text-amber-700',
+    },
+    {
+      id: 'total-balance',
+      label: 'Total Wallet Balance',
+      value: formatCredits(wallet?.balance ?? 0),
+      currency,
+      badge: null as string | null,
+      description: 'Your overall MCOM wallet balance',
+      icon: 'account_balance',
+      cardClass: 'border-emerald-200/80 bg-emerald-50 text-emerald-950',
+      labelClass: 'text-emerald-800/80',
+      currencyClass: 'text-emerald-700',
+      descClass: 'text-emerald-800/80',
+      iconClass: 'text-emerald-700',
+      badgeClass: 'text-emerald-700',
+    },
+  ];
+
+  const scrollToSlide = (index: number) => {
+    const clamped = Math.max(0, Math.min(cards.length - 1, index));
+    setActiveSlide(clamped);
+    const el = sliderRef.current;
+    if (!el) return;
+    const child = el.children[clamped] as HTMLElement | undefined;
+    if (child) {
+      const paddingLeft = parseFloat(window.getComputedStyle(el).paddingLeft || '0');
+      el.scrollTo({
+        left: Math.max(0, child.offsetLeft - paddingLeft),
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  const handleSliderScroll = () => {
+    const el = sliderRef.current;
+    if (!el || !el.clientWidth) return;
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    if (maxScrollLeft <= 4) {
+      if (activeSlide !== 0) setActiveSlide(0);
+      return;
+    }
+    if (el.scrollLeft >= maxScrollLeft - 12) {
+      if (activeSlide !== cards.length - 1) setActiveSlide(cards.length - 1);
+      return;
+    }
+    const paddingLeft = parseFloat(window.getComputedStyle(el).paddingLeft || '0');
+    let closestIndex = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < el.children.length; i += 1) {
+      const child = el.children[i] as HTMLElement;
+      const distance = Math.abs(child.offsetLeft - paddingLeft - el.scrollLeft);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = i;
+      }
+    }
+    if (closestIndex !== activeSlide) {
+      setActiveSlide(closestIndex);
+    }
+  };
+
+  if (isLoading && !isError) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center gap-3 text-sm text-slate-500" role="status">
         <span className="size-5 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />
@@ -109,68 +209,144 @@ export default function McomWalletPanel({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] space-y-4 py-5 sm:space-y-5 lg:py-8">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">{eyebrow}</p>
-          <h1 className="mt-1 text-2xl font-bold text-slate-950">{title}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">{subtitle}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          disabled={isFetching}
-          className="inline-flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-60"
-        >
-          <span className="material-symbols-outlined text-[16px]">refresh</span>
-          {isFetching ? 'Refreshing…' : 'Refresh'}
-        </button>
+    <div className="mx-auto w-full max-w-[1500px] space-y-3.5 px-3 pt-2 pb-5 sm:space-y-5 sm:px-6 sm:py-5 lg:px-8 lg:py-7">
+      <header className="space-y-0.5">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">{eyebrow}</p>
+        <h1 className="text-lg font-bold tracking-tight text-slate-950 sm:text-2xl">{title}</h1>
+        <p className="max-w-2xl text-xs leading-snug text-slate-500 sm:text-sm">{subtitle}</p>
       </header>
 
       {isError ? (
-        <section className="border-l-4 border-red-600 bg-red-50 p-4" role="alert">
-          <h2 className="font-semibold text-red-900">MCOM wallet couldn’t be loaded</h2>
-          <p className="mt-1 text-sm text-red-800">
-            {error instanceof Error ? error.message : 'Check your connection and try again.'}
-          </p>
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            className="mt-3 min-h-9 rounded-md bg-red-800 px-4 text-sm font-semibold text-white hover:bg-red-900"
-          >
-            Try again
-          </button>
-        </section>
+        <RequestErrorState
+          area="MCOM wallet"
+          label="MCOM wallet"
+          error={error}
+          onRetry={() => void refetch()}
+          supportHref={`${dashboardBase}/messages`}
+          compact={false}
+        />
       ) : (
         <>
-          <section className="grid gap-3 sm:grid-cols-3" aria-label="MCOM wallet summary">
-            <article className="border border-slate-200 bg-white p-4 sm:p-5">
-              <p className="text-xs font-medium text-slate-500">MCOM balance</p>
-              <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">
-                {formatCredits(wallet?.balance ?? 0)}
-              </p>
-              <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-400">MCOM</p>
-            </article>
-            <article className="border border-slate-200 bg-white p-4 sm:p-5">
-              <p className="text-xs font-medium text-slate-500">Available to use</p>
-              <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">
-                {formatCredits(wallet?.availableBalance ?? 0)}
-              </p>
-              <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-400">
-                {holds.length ? `${holds.length} active hold${holds.length === 1 ? '' : 's'}` : 'No holds'}
-              </p>
-            </article>
-            <article className="border border-slate-200 bg-white p-4 sm:p-5">
-              <p className="text-xs font-medium text-slate-500">Wallet status</p>
-              <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 capitalize">
-                {(wallet?.status || 'active').toLowerCase()}
-              </p>
-              <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-400">
-                {wallet?.lastTransactionAt
-                  ? `Last activity ${formatDate(wallet.lastTransactionAt)}`
-                  : 'No activity yet'}
-              </p>
-            </article>
+          {/* Mobile: Compact horizontal swipe carousel with next-card preview & subtle pagination dots */}
+          <section className="space-y-2 sm:hidden" aria-label="MCOM wallet summary">
+            <div
+              ref={sliderRef}
+              onScroll={handleSliderScroll}
+              className="-mx-3 flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-px-3 px-3 pb-0.5 touch-pan-x no-scrollbar"
+            >
+              {cards.map((card) => (
+                <article
+                  key={card.id}
+                  className={`w-[85%] max-w-[320px] shrink-0 snap-start rounded-xl border p-3.5 ${card.cardClass}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-[10px] font-semibold uppercase tracking-[0.08em] leading-none ${card.labelClass}`}>
+                      {card.label}
+                    </span>
+                    <span
+                      className={`material-symbols-outlined text-[16px] leading-none ${card.iconClass}`}
+                      aria-hidden="true"
+                    >
+                      {card.icon}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-2xl font-bold leading-none tracking-tight tabular-nums">
+                        {card.value}
+                      </span>
+                      <span className={`text-[11px] font-semibold uppercase tracking-wider leading-none ${card.currencyClass}`}>
+                        {card.currency}
+                      </span>
+                    </div>
+                    {card.badge && (
+                      <span className={`text-[10px] font-semibold tabular-nums ${card.badgeClass}`}>
+                        {card.badge}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className={`mt-1 text-[11px] leading-snug ${card.descClass}`}>{card.description}</p>
+                </article>
+              ))}
+            </div>
+
+            <div
+              className="flex items-center justify-center gap-1.5 pt-0.5"
+              role="tablist"
+              aria-label="Wallet summary cards"
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowRight') {
+                  event.preventDefault();
+                  scrollToSlide(activeSlide + 1);
+                } else if (event.key === 'ArrowLeft') {
+                  event.preventDefault();
+                  scrollToSlide(activeSlide - 1);
+                }
+              }}
+            >
+              {cards.map((card, index) => {
+                const isActive = index === activeSlide;
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-label={card.label}
+                    tabIndex={isActive ? 0 : -1}
+                    onClick={() => scrollToSlide(index)}
+                    className={`h-1.5 rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+                      isActive ? 'w-5 bg-blue-600' : 'w-1.5 bg-slate-300 hover:bg-slate-400'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Tablet (2-col) & Desktop (3-col): Balanced horizontal grid */}
+          <section
+            className="hidden sm:grid sm:grid-cols-2 sm:gap-3.5 lg:grid-cols-3 lg:gap-4"
+            aria-label="MCOM wallet summary"
+          >
+            {cards.map((card) => (
+              <article
+                key={card.id}
+                className={`min-w-0 rounded-xl border p-4 lg:p-4.5 ${card.cardClass}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`text-[10px] font-semibold uppercase tracking-[0.08em] leading-none ${card.labelClass}`}>
+                    {card.label}
+                  </span>
+                  <span
+                    className={`material-symbols-outlined text-[16px] leading-none ${card.iconClass}`}
+                    aria-hidden="true"
+                  >
+                    {card.icon}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-bold leading-none tracking-tight tabular-nums lg:text-[26px]">
+                      {card.value}
+                    </span>
+                    <span className={`text-[11px] font-semibold uppercase tracking-wider leading-none ${card.currencyClass}`}>
+                      {card.currency}
+                    </span>
+                  </div>
+                  {card.badge && (
+                    <span className={`text-[10px] font-semibold tabular-nums ${card.badgeClass}`}>
+                      {card.badge}
+                    </span>
+                  )}
+                </div>
+
+                <p className={`mt-1 text-xs leading-snug ${card.descClass}`}>{card.description}</p>
+              </article>
+            ))}
           </section>
 
           <section className="border border-emerald-100 bg-white" aria-label="Referral earnings">
@@ -346,14 +522,11 @@ export default function McomWalletPanel({
                 ))}
               </ul>
             ) : (
-              <div className="border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
-                <span className="material-symbols-outlined text-3xl text-slate-300" aria-hidden="true">
+              <div className="py-10 text-center">
+                <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">
                   account_balance_wallet
                 </span>
-                <h3 className="mt-2 text-sm font-semibold text-slate-900">No transactions yet</h3>
-                <p className="mt-1 text-sm text-slate-600">
-                  Task payments will appear here once a business approves your completed work.
-                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-700">No transactions yet</p>
               </div>
             )}
           </section>

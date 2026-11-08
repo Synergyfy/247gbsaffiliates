@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 export interface AdminStats {
   totalUsers: number;
@@ -26,13 +27,15 @@ export interface AdminStats {
 }
 
 export const useAdminStats = () => {
-  const { data: stats, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['admin-stats'],
-    queryFn: async () => {
-      const response = await apiClient.get('/admin/dashboard/stats');
-      return (response.data?.data ?? response.data) as AdminStats;
-    },
-  });
+  const { data: stats, isLoading, isError, error, refetch } = stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['admin-stats'],
+      queryFn: async () => {
+        const response = await apiClient.get('/admin/dashboard/stats');
+        return (response.data?.data ?? response.data) as AdminStats;
+      },
+    }),
+  );
 
   return { stats, isLoading, isError, error, refetch };
 };

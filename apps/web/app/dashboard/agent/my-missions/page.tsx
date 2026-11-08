@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useTasks, type Task } from '@/hooks/useTasks';
 import { useAuthStore } from '@/store/useAuthStore';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 
 const activeStatuses = new Set(['accepted', 'in_progress', 'submitted', 'revision_requested']);
 
@@ -86,7 +87,7 @@ export default function MyMissionsPage() {
 
     const activeMissions = (tasks || []).filter((task) => activeStatuses.has(task.status));
 
-    if (!user?.id || isLoading) {
+    if (!user?.id || (isLoading && !isError)) {
         return (
             <div className="flex min-h-[50vh] items-center justify-center gap-3 text-sm text-slate-500" role="status">
                 <span className="size-5 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />
@@ -107,21 +108,23 @@ export default function MyMissionsPage() {
             </header>
 
             {isError ? (
-                <section className="border-l-4 border-red-600 bg-red-50 p-4" role="alert">
-                    <h2 className="font-semibold text-red-900">Missions couldn’t be loaded</h2>
-                    <p className="mt-1 text-sm text-red-800">{error instanceof Error ? error.message : 'Check your connection and try again.'}</p>
-                    <button type="button" onClick={() => void refetch()} className="mt-3 min-h-9 rounded-md bg-red-800 px-4 text-sm font-semibold text-white hover:bg-red-900">Try again</button>
-                </section>
+                <RequestErrorState
+                    area="My missions"
+                    label="Active missions"
+                    error={error}
+                    onRetry={() => void refetch()}
+                    supportHref="/dashboard/agent/messages"
+                    compact={false}
+                />
             ) : activeMissions.length ? (
                 <div className="space-y-3">
                     {activeMissions.map((task) => <MissionCard key={task.id} task={task} />)}
                 </div>
             ) : (
-                <section className="border border-dashed border-slate-300 bg-white px-5 py-10 text-center sm:py-12">
+                <section className="py-10 text-center sm:py-12">
                     <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">rocket_launch</span>
-                    <h2 className="mt-3 font-semibold text-slate-900">No active missions</h2>
-                    <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">Accepted or in-progress tasks will appear here. Browse your assigned tasks to review available work.</p>
-                    <Link href="/dashboard/agent/tasks" className="mt-4 inline-flex min-h-10 items-center gap-1 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800">
+                    <h2 className="mt-2 text-sm font-semibold text-slate-700">No active missions</h2>
+                    <Link href="/dashboard/agent/tasks" className="mt-4 inline-flex min-h-10 items-center gap-1 rounded-md bg-blue-700 px-4 text-xs font-semibold text-white hover:bg-blue-800">
                         View my tasks <span className="material-symbols-outlined text-base">arrow_forward</span>
                     </Link>
                 </section>

@@ -32,10 +32,11 @@ export class UsersController {
       roles,
       search,
       limit: Number(limit) || undefined,
-      radiusMiles: Number(radius) || undefined,
+      radiusMiles: radius !== undefined && radius !== '' ? Number(radius) : undefined,
     });
   }
 
+  @Public()
   @Get('postal-code-lookup')
   @ApiOperation({ summary: 'Resolve a UK postal code using the CHS Nominatim lookup approach' })
   @ApiResponse({ status: 200, description: 'Resolved location or found=false when no match exists' })
@@ -65,5 +66,15 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Onboarding completed' })
   async completeOnboarding(@Request() req) {
     return this.usersService.completeOnboarding(req.user.userId);
+  }
+
+  @Patch('profile')
+  @ApiOperation({ summary: 'Update contact details for the authenticated user' })
+  @ApiResponse({ status: 200, description: 'Profile updated' })
+  async updateProfile(
+    @Request() req,
+    @Body() body: { phone?: string; postcode?: string; city?: string; region?: string; country?: string },
+  ) {
+    return this.usersService.update(req.user.userId, body);
   }
 }

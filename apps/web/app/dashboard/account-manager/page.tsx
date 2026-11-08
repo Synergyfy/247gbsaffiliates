@@ -5,9 +5,11 @@ import apiClient from '@/lib/apiClient';
 import { AssignedBusiness, useAssignedBusinesses } from '@/hooks/useAssignedBusinesses';
 import { useLearningProgress, useLearningResources } from '@/hooks/useLearningResources';
 import { Task, useManagedProjects, useManagedTasks, useTasks } from '@/hooks/useTasks';
-import { useWallet } from '@/hooks/useWallet';
+import { useMcomWallet } from '@/hooks/useMcomWallet';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OverviewStage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 import ReferralPanel from '@/components/dashboard/ReferralPanel';
 
 type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string; verificationSubmission?: unknown; referralCode?: string | null; referralLink?: string | null };
@@ -33,17 +35,17 @@ const businessLocation = (business: AssignedBusiness) =>
 
 export default function AccountManagerDashboard() {
     const { user } = useAuthStore();
-    const profileQuery = useQuery({ queryKey: ['affiliate-dashboard-profile'], queryFn: async () => unwrap<Profile>((await apiClient.get('/auth/profile')).data) });
+    const profileQuery = stabilizeErrorRetry(useQuery({ queryKey: ['affiliate-dashboard-profile'], queryFn: async () => unwrap<Profile>((await apiClient.get('/auth/profile')).data) }));
     const profile: Profile | null = profileQuery.data || user as Profile | null;
     const role = (profile?.role || 'account_manager').replace('-', '_');
-    const attemptQuery = useQuery({ queryKey: ['affiliate-dashboard-latest-attempt'], queryFn: async () => unwrap<Attempt>((await apiClient.get('/assessment/latest-attempt')).data) });
+    const attemptQuery = stabilizeErrorRetry(useQuery({ queryKey: ['affiliate-dashboard-latest-attempt'], queryFn: async () => unwrap<Attempt>((await apiClient.get('/assessment/latest-attempt')).data) }));
     const resourcesQuery = useLearningResources(role);
     const progressQuery = useLearningProgress(Boolean(profile?.id));
     const tasksQuery = useTasks({ limit: 50 });
     const reviewTasksQuery = useManagedTasks({ status: 'SUBMITTED', limit: 50 });
     const businessesQuery = useAssignedBusinesses();
     const projectsQuery = useManagedProjects({ limit: 50 });
-    const walletQuery = useWallet();
+    const walletQuery = useMcomWallet();
 
     const myTasks = profile?.id ? (tasksQuery.tasks || []).filter((task) => task.assignedAgentId === profile.id || (task.assigneeEmail && task.assigneeEmail.toLowerCase() === profile.email?.toLowerCase())) : [] as Task[];
     const assignedBusinesses = businessesQuery.data;
@@ -74,12 +76,12 @@ export default function AccountManagerDashboard() {
 
     return (
         <RoleOverview name={displayName.split(/\s+/)[0]} description="Track your account setup and the businesses, projects and tasks assigned to you." stages={stages} nextStep={nextStep} profileHref="/dashboard/account-manager/profile">
-            {profileQuery.isError && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">The latest profile status could not be loaded. Any profile details above are from the signed-in session. <button type="button" onClick={() => void profileQuery.refetch()} className="font-semibold underline">Retry</button></div>}
+            {profileQuery.isError && <RequestErrorState area="Account Manager profile" label="Profile status" error={profileQuery.error} onRetry={() => void profileQuery.refetch()} supportHref="/dashboard/account-manager/messages" />}
             <section>
                 <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                     <div><h2 className="text-lg font-semibold text-slate-950">Account Manager work</h2><p className="mt-0.5 text-sm text-slate-600">Your assigned businesses and personal task queue.</p></div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <SummaryCard title="Assigned businesses" value={businessesQuery.isLoading ? '…' : businessesUnavailable ? '—' : String(businessesQuery.data?.total ?? businesses.length)} detail={businessesUnavailable ? 'Central Hub business data failed to load.' : businesses.length ? 'Businesses matched to you by Central Hub.' : 'Central Hub returned no businesses for your account.'} href="/dashboard/account-manager/businesses" action={businessesUnavailable ? 'Review status' : 'View businesses'} state={businessesUnavailable ? 'Unavailable' : undefined} />
                     <SummaryCard title="My active tasks" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(activeTasks)} detail={tasksQuery.isError ? 'Task assignments could not be loaded.' : activeTasks ? 'Tasks assigned directly to your account.' : 'No tasks are currently assigned to you.'} href="/dashboard/account-manager/tasks" action="Open tasks" state={tasksQuery.isError ? 'Unavailable' : undefined} />
                     <SummaryCard title="Awaiting my review" value={reviewTasksQuery.isLoading ? '…' : reviewTasksQuery.isError ? '—' : String(pendingReview)} detail={reviewTasksQuery.isError ? 'Review submissions could not be loaded.' : 'Managed assignments waiting for your review.'} href="/dashboard/account-manager/tasks" action="Review submissions" state={reviewTasksQuery.isError ? 'Unavailable' : undefined} />
@@ -87,7 +89,7 @@ export default function AccountManagerDashboard() {
                 </div>
             </section>
 
-            <div className="p-4 sm:p-8 space-y-6">
+            <div className="space-y-6">
                 <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="px-6 py-5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -100,11 +102,17 @@ export default function AccountManagerDashboard() {
                             </span>
                         )}
                     </div>
-                    {isLoadingBusinesses ? (
+                    {isLoadingBusinesses && !businessesUnavailable ? (
                         <div className="px-6 py-10 text-center text-sm text-slate-500">Loading assigned businesses…</div>
-                    ) : assignedBusinesses?.error ? (
-                        <div className="px-6 py-8 text-sm text-red-700 bg-red-50 border-t border-red-100">
-                            {assignedBusinesses.error}
+                    ) : businessesUnavailable ? (
+                        <div className="p-4 sm:p-5">
+                            <RequestErrorState
+                                area="Assigned businesses"
+                                label="Assigned businesses"
+                                error={businessesQuery.error ?? new Error(assignedBusinesses?.error || 'Unavailable')}
+                                onRetry={() => void businessesQuery.refetch()}
+                                supportHref="/dashboard/account-manager/messages"
+                            />
                         </div>
                     ) : businesses.length === 0 ? (
                         <div className="px-6 py-12 text-center">
@@ -159,9 +167,28 @@ export default function AccountManagerDashboard() {
                 </section>
             </div>
 
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-                <SummaryCard title="Learning" value={resourcesQuery.isLoading || progressQuery.isLoading ? '…' : resourcesQuery.isError || progressQuery.isError ? '—' : `${completedResources}/${resources.length}`} detail={resourcesQuery.isError || progressQuery.isError ? 'Learning data failed to load.' : resources.length ? 'Published resources completed for your account role.' : 'No learning resources are currently available for this role.'} href="/learning" action="Open Learning Hub" state={resourcesQuery.isError || progressQuery.isError ? 'Unavailable' : undefined} />
-                <SummaryCard title="Wallet" value={walletQuery.isLoading ? '…' : walletQuery.isError ? 'Unavailable' : `${walletQuery.wallet?.currency || 'GBP'} ${Number(walletQuery.wallet?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} detail={walletQuery.isError ? 'Wallet data failed to load.' : 'Current balance from your wallet.'} href="/dashboard/account-manager/revenue" action="Open wallet" state={walletQuery.isError ? 'Unavailable' : undefined} />
+            <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                <SummaryCard title="Learning" value={resourcesQuery.isLoading || progressQuery.isLoading ? '…' : resourcesQuery.isError || progressQuery.isError ? '—' : `${completedResources}/${resources.length}`} detail={resourcesQuery.isError || progressQuery.isError ? 'Learning data failed to load.' : resources.length ? 'Published resources completed for your account role.' : 'No learning resources are currently available for this role.'} href="/dashboard/account-manager/learning" action="Open Learning Hub" state={resourcesQuery.isError || progressQuery.isError ? 'Unavailable' : undefined} />
+                <SummaryCard
+                    title="Wallet"
+                    value={
+                        walletQuery.isLoading
+                            ? '…'
+                            : walletQuery.isError
+                                ? 'Unavailable'
+                                : `${Number(walletQuery.wallet?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} MCOM`
+                    }
+                    detail={
+                        walletQuery.isError
+                            ? 'Wallet data failed to load.'
+                            : walletQuery.holds?.length
+                                ? `${walletQuery.holds.length} hold(s) active · Available: ${Number(walletQuery.wallet?.availableBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} MCOM`
+                                : 'Central Hub MCOM balance for task settlements.'
+                    }
+                    href="/dashboard/account-manager/revenue"
+                    action="Open wallet"
+                    state={walletQuery.isError ? 'Unavailable' : undefined}
+                />
             </section>
 
             <ReferralPanel

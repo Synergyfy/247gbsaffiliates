@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 export interface Agent {
   id: string;
@@ -45,28 +46,31 @@ const unwrapAgents = <T extends Agent>(payload: T[] | AgentListResponse<T> | und
 };
 
 export const useAgents = () => {
-  return useQuery({
-    queryKey: ['agents'],
-    queryFn: async () => {
-      const response = await apiClient.get<Agent[] | AgentListResponse<Agent>>('/users/agents');
-      return unwrapAgents(response.data).map((agent) => ({
-        ...agent,
-        name: agent.name || [agent.firstName, agent.lastName].filter(Boolean).join(' ') || 'Name not provided',
-      }));
-    },
-  });
+  return stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['agents'],
+      queryFn: async () => {
+        const response = await apiClient.get<Agent[] | AgentListResponse<Agent>>('/users/agents');
+        return unwrapAgents(response.data).map((agent) => ({
+          ...agent,
+          name: agent.name || [agent.firstName, agent.lastName].filter(Boolean).join(' ') || 'Name not provided',
+        }));
+      },
+    }),
+  );
 };
 
 /** Manager-scoped roster with verification, assessment and task stats. */
 export const useManagedAgents = () => {
-  return useQuery({
-    queryKey: ['managed-agents'],
-    queryFn: async () => {
-      const response = await apiClient.get<AgentListResponse<ManagedAgent>>('/account-manager/agents');
-      return unwrapAgents(response.data).map((agent) => ({
-        ...agent,
-        name: agent.name || [agent.firstName, agent.lastName].filter(Boolean).join(' ') || 'Name not provided',
-      }));
-    },
-  });
-};
+  return stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['managed-agents'],
+      queryFn: async () => {
+        const response = await apiClient.get<AgentListResponse<ManagedAgent>>('/account-manager/agents');
+        return unwrapAgents(response.data).map((agent) => ({
+          ...agent,
+          name: agent.name || [agent.firstName, agent.lastName].filter(Boolean).join(' ') || 'Name not provided',
+        }));
+      },
+    }),
+  );};

@@ -14,7 +14,7 @@ export default function RevenuePage() {
         <McomWalletPanel
             eyebrow="Account manager workspace"
             title="Revenue Overview"
-            subtitle="Your Central Hub MCOM wallet. Task payouts, affiliate earnings, top-ups and holds are all shown here from the Central ledger."
+            subtitle="Central Hub MCOM wallet for task payouts, affiliate earnings and holds."
         />
     );
 }

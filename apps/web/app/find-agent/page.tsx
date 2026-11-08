@@ -37,6 +37,8 @@ interface AgentRecord {
   country?: string | null;
   languages?: string[];
   isDemoProfile?: boolean;
+  isExactMatch?: boolean;
+  isOutcodeMatch?: boolean;
   mcomUserId?: string | null;
   assessmentScore?: number | null;
   completedTasksCount?: number;
@@ -171,7 +173,6 @@ export default function FindAgentPage() {
   };
 
   useEffect(() => {
-    if (!roleDropdownOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
         setRoleDropdownOpen(false);
@@ -179,7 +180,7 @@ export default function FindAgentPage() {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [roleDropdownOpen]);
+  }, []);
 
   useEffect(() => {
     if (!radiusDropdownOpen) return;
@@ -277,10 +278,8 @@ export default function FindAgentPage() {
   const resultsSectionRef = useRef<HTMLDivElement>(null);
   const heroSearchInputRef = useRef<HTMLInputElement>(null);
 
-  // Live directory results — the API geocodes the searched postcode and every
-  // affiliate postcode, then keeps only members inside the selected radius.
-  // An unfiltered request is only used as a fallback when the postcode lookup
-  // fails, so it can never widen the radius the user asked for.
+  // Live directory results — queries real database affiliates matching the postcode
+  // within the selected radius, nearest first.
   const {
     data: directoryResult,
     isFetching: isSearching,
@@ -308,9 +307,18 @@ export default function FindAgentPage() {
         if (items.length > 0) {
           return {
             items,
-            total: items.length,
+            total: response.data?.total ?? items.length,
             distanceFrom: response.data?.distanceFrom ?? submittedPostcode,
             source: 'live' as const,
+          };
+        }
+
+        if (isDemoPostcode) {
+          return {
+            items: DEMO_AFFILIATES,
+            total: DEMO_AFFILIATES.length,
+            distanceFrom: DEMO_POSTCODE,
+            source: 'demo' as const,
           };
         }
 
@@ -450,10 +458,18 @@ export default function FindAgentPage() {
   return (
     <div className="relative min-h-screen w-full bg-[#f8fafc] font-body text-slate-900 selection:bg-blue-600/20">
 
+      {/* Mobile nav backdrop overlay (outside header so backdrop-blur doesn't trap fixed positioning) */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/20 md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+
       {/* HEADER — mobile hamburger + desktop centered nav */}
-      <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/95 px-3 py-2 backdrop-blur-md sm:px-4 sm:py-3 lg:px-16">
+      <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white px-3 py-2 sm:bg-white/95 sm:px-4 sm:py-3 sm:backdrop-blur-md lg:px-16">
         <div className="mx-auto flex max-w-[1240px] items-center justify-between">
-          <BrandLogo size="sm" label="247gbs affiliate" />
+          <BrandLogo size="sm" label="247GBS Affiliate" />
 
           {/* Desktop nav */}
           <nav className="hidden md:flex flex-1 justify-center gap-7 text-xs font-semibold text-slate-600">
@@ -466,40 +482,36 @@ export default function FindAgentPage() {
 
           {/* Mobile hamburger */}
           <button
-            className="md:hidden p-2 rounded-md text-slate-600 hover:text-blue-600 transition-colors"
+            className="md:hidden p-1.5 rounded-md text-slate-600 hover:text-blue-600 transition-colors flex items-center justify-center"
             onClick={() => setMobileNavOpen(!mobileNavOpen)}
             aria-label="Toggle navigation"
           >
-            <span className="material-symbols-outlined text-xl">{mobileNavOpen ? 'close' : 'menu'}</span>
+            <span className="material-symbols-outlined leading-none" style={{ fontSize: '22px' }}>
+              {mobileNavOpen ? 'close' : 'menu'}
+            </span>
           </button>
         </div>
 
-        {/* Mobile nav drawer — overlays on top of page without pushing content down */}
+        {/* Mobile nav drawer — flush directly under header with zero gap */}
         {mobileNavOpen && (
-          <>
-            <div
-              className="fixed inset-0 top-[49px] z-40 bg-black/20 md:hidden"
-              onClick={() => setMobileNavOpen(false)}
-            />
-            <div className="absolute left-0 right-0 top-full z-50 border-b border-slate-200 bg-white px-4 py-3 shadow-lg space-y-1 md:hidden">
-              {[
-                { href: '/#how-it-works', label: 'How it Works' },
-                { href: '/find-agent', label: 'Find Affiliates' },
-                { href: '/for-agent', label: 'Services' },
-                { href: '/for-account-manager', label: 'Enterprise Solutions' },
-                { href: getAffiliateRegisterUrl(), label: 'Become an Affiliate' },
-              ].map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileNavOpen(false)}
-                  className="block py-2 text-sm font-semibold text-slate-700 hover:text-blue-600 border-b border-slate-100 last:border-0 transition-colors"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </>
+          <div className="absolute left-0 right-0 top-full -mt-px z-50 border-t border-b border-slate-200 bg-white px-4 py-2.5 shadow-lg space-y-0.5 md:hidden">
+            {[
+              { href: '/#how-it-works', label: 'How it Works' },
+              { href: '/find-agent', label: 'Find Affiliates' },
+              { href: '/for-agent', label: 'Services' },
+              { href: '/for-account-manager', label: 'Enterprise Solutions' },
+              { href: getAffiliateRegisterUrl(), label: 'Become an Affiliate' },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileNavOpen(false)}
+                className="block py-2 text-sm font-semibold text-slate-700 hover:text-blue-600 border-b border-slate-100 last:border-0 transition-colors"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
         )}
       </header>
 
@@ -517,7 +529,7 @@ export default function FindAgentPage() {
                 Find accredited affiliates near your postcode.
               </p>
               <p className="mb-4 hidden max-w-xl text-sm leading-relaxed text-slate-500 sm:block">
-                Connect with accredited 247gbs affiliate agents, account managers, and consultants across your territory.
+                Connect with accredited 247GBS Affiliate agents, account managers, and consultants across your territory.
               </p>
 
               {/* POSTCODE SEARCH PANEL */}
@@ -668,24 +680,27 @@ export default function FindAgentPage() {
           <div className="mb-4 flex flex-col justify-between gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center">
             <div>
               <h2 className="text-base font-semibold text-slate-800 sm:text-lg">
-                {displayedAgents.length} {displayedAgents.length === 1 ? 'affiliate' : 'affiliates'} near &ldquo;{submittedPostcode}&rdquo;
+                {displayedAgents.length} {displayedAgents.length === 1 ? 'affiliate' : 'affiliates'} {displayedAgents.some((a) => a.isExactMatch || a.isOutcodeMatch) ? 'matching' : 'near'} &ldquo;{submittedPostcode}&rdquo;
               </h2>
               <p className="mt-0.5 text-[11px] text-slate-500">
                 {directoryResult?.source === 'demo'
                   ? 'Demo profiles shown because the live postcode lookup is unavailable.'
-                  : `Verified members within ${radiusMiles} miles, nearest first.`}
+                  : displayedAgents.some((a) => a.isExactMatch || a.isOutcodeMatch)
+                    ? `Verified members matching postcode “${submittedPostcode}”.`
+                    : `Verified members within ${radiusMiles} miles, nearest first.`}
               </p>
             </div>
 
-            {/* Multi-select role filter dropdown + Clear filter control (always single row) */}
+            {/* Filter controls: Role dropdown */}
             <div className="flex w-full items-center gap-1.5 sm:w-auto">
+              {/* Multi-select role filter dropdown */}
               <div ref={roleDropdownRef} className="relative min-w-0 flex-1 sm:flex-initial">
                 <button
                   type="button"
                   onClick={() => setRoleDropdownOpen((prev) => !prev)}
                   aria-expanded={roleDropdownOpen}
                   aria-haspopup="listbox"
-                  className="inline-flex w-full items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 sm:min-w-[180px] sm:px-3"
+                  className="inline-flex w-full items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 sm:min-w-[170px] sm:px-3"
                 >
                   <span className="inline-flex min-w-0 items-center gap-1 truncate">
                     <span
@@ -948,10 +963,9 @@ export default function FindAgentPage() {
                 const agentKey = agent.id || String(index);
                 const roleBadge = getAgentRoleBadge(agent);
                 const locationArea =
-                  agent.city ||
-                  [agent.city, agent.region].filter(Boolean).join(', ') ||
-                  agent.country ||
-                  'United Kingdom';
+                  agent.city && agent.region && !agent.region.toLowerCase().includes(agent.city.toLowerCase())
+                    ? `${agent.region}, ${agent.city}`
+                    : agent.region || agent.city || agent.country || 'United Kingdom';
                 const distanceShort = formatDistance(agent.distanceMiles, agent.distanceLabel);
 
                 return (
@@ -965,7 +979,8 @@ export default function FindAgentPage() {
                         <div className="relative size-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 sm:size-14">
                           <Image
                             src={getAgentAvatarUrl(agent)}
-                            alt={displayName}
+                            alt=""
+                            aria-hidden="true"
                             fill
                             unoptimized
                             sizes="56px"
@@ -991,15 +1006,15 @@ export default function FindAgentPage() {
                       </div>
 
                       {/* Location + Distance with bottom divider */}
-                      <div className="flex items-center gap-1 border-b border-slate-100 pb-2 text-xs font-medium text-slate-700">
+                      <div className="flex items-center gap-1.5 border-b border-slate-100 pb-2 text-xs font-medium text-slate-700">
                         <span
                           className="material-symbols-outlined shrink-0 leading-none text-blue-500"
-                          style={{ fontSize: '13px' }}
+                          style={{ fontSize: '14px' }}
                         >
                           location_on
                         </span>
                         <span className="truncate">
-                          {locationArea}
+                          {agent.postcode ? `${agent.postcode} · ` : ''}{locationArea}
                           {distanceShort ? `, ${distanceShort}` : ''}
                         </span>
                       </div>
@@ -1087,7 +1102,7 @@ export default function FindAgentPage() {
             {[
               { step: '01', title: 'Enter your Postcode', desc: 'Identify local accredited affiliates stationed in your corporate territory with real-time capacity.' },
               { step: '02', title: 'Select & Scope', desc: 'Review capability profiles, role expertise, and detail your specific technical project deliverables.' },
-              { step: '03', title: 'Admin Review & Dispatch', desc: '247gbs affiliate central management verifies scope, secures milestone funds in escrow, and activates the workspace.' },
+              { step: '03', title: 'Admin Review & Dispatch', desc: '247GBS Affiliate central management verifies scope, secures milestone funds in escrow, and activates the workspace.' },
             ].map((item, idx) => (
               <div key={idx} className="rounded-lg bg-white p-4 border border-slate-200 shadow-sm">
                 <span className="inline-block px-2 py-0.5 rounded-sm bg-blue-100 text-blue-700 font-bold text-xs font-mono mb-3">{item.step}</span>
@@ -1104,7 +1119,7 @@ export default function FindAgentPage() {
         <div className="max-w-[1240px] mx-auto">
           <div className="text-center max-w-xl mx-auto mb-6">
             <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-1 block font-display">Enterprise Assurance</span>
-            <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900 mb-2">Why enterprise brands hire through 247gbs affiliate</h2>
+            <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900 mb-2">Why enterprise brands hire through 247GBS Affiliate</h2>
             <p className="text-xs text-slate-500 leading-relaxed">We eliminate the hazards of hiring independent talent through rigorous accreditation and escrow governance.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1137,8 +1152,8 @@ export default function FindAgentPage() {
             {[
               { q: 'What is the difference between an Agent, Account Manager, and Consultant?', a: 'Agents handle hands-on tactical tasks like running ad sets and lead generation. Account Managers manage multi-agent teams and client campaign delivery. Consultants advise on commercial escrow, tracking architecture, and overall growth strategy.' },
               { q: 'How does the postal code search work?', a: 'When you enter your postcode, the platform scans its verified affiliate directory to locate accredited members in that territory with available capacity.' },
-              { q: 'What happens after I submit a work request?', a: 'Your request is dispatched to the selected affiliate and logged in the 247gbs affiliate administrative queue. The affiliate reviews your scope and contacts you to confirm milestones and activation.' },
-              { q: 'Are my payments protected?', a: 'Yes. All enterprise contracts utilize 247gbs affiliate milestone escrow. Funds are never released to the affiliate until you review and approve the agreed deliverable.' },
+              { q: 'What happens after I submit a work request?', a: 'Your request is dispatched to the selected affiliate and logged in the 247GBS Affiliate administrative queue. The affiliate reviews your scope and contacts you to confirm milestones and activation.' },
+              { q: 'Are my payments protected?', a: 'Yes. All enterprise contracts utilize 247GBS Affiliate milestone escrow. Funds are never released to the affiliate until you review and approve the agreed deliverable.' },
             ].map((faq, i) => {
               const isOpen = openFaq === i;
               return (
@@ -1302,7 +1317,7 @@ export default function FindAgentPage() {
                   </h4>
                   <p className="text-xs leading-snug text-slate-700">
                     {selectedAgent.bio ||
-                      'Accredited 247gbs affiliate partner verified for commercial execution, milestone delivery, and regional business support.'}
+                      'Accredited 247GBS Affiliate partner verified for commercial execution, milestone delivery, and regional business support.'}
                   </p>
                 </div>
 
@@ -1460,8 +1475,8 @@ export default function FindAgentPage() {
             </div>
           </div>
           <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-[10px] text-slate-400">
-            <p>© {new Date().getFullYear()} 247gbs affiliate Operations Group. All rights reserved.</p>
-            <p className="max-w-sm">Regulatory Disclosure: 247gbs affiliate acts as an accredited task routing network and independent escrow fulfillment infrastructure for enterprise partners.</p>
+            <p>© {new Date().getFullYear()} 247GBS Affiliate Operations Group. All rights reserved.</p>
+            <p className="max-w-sm">Regulatory Disclosure: 247GBS Affiliate acts as an accredited task routing network and independent escrow fulfillment infrastructure for enterprise partners.</p>
           </div>
         </div>
       </footer>

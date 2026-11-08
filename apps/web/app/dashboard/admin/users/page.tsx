@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useAdminUsers } from '@/hooks/useAdminUsers';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 
 export default function AdminUsersPage() {
     const [search, setSearch] = useState('');
@@ -15,7 +16,7 @@ export default function AdminUsersPage() {
     const [actionError, setActionError] = useState('');
     const [actionNotice, setActionNotice] = useState('');
     const [page, setPage] = useState(1);
-    const { users = [], meta, isLoading, isError, refetch, updateStatus, isUpdating } = useAdminUsers({
+    const { users = [], meta, isLoading, isError, error, refetch, updateStatus, isUpdating } = useAdminUsers({
         page,
         limit: 25,
         search: search.trim() || undefined,
@@ -61,7 +62,7 @@ export default function AdminUsersPage() {
             {actionError && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{actionError}</p>}
             {actionNotice && <p role="status" className="mb-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{actionNotice}</p>}
 
-            {isError ? <section className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">Affiliate records could not be loaded. <button onClick={() => void refetch()} className="font-bold underline">Retry</button></section> : isLoading ? <div className="flex min-h-48 items-center justify-center"><span className="size-8 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div> : (
+            {isError ? <RequestErrorState area="Admin affiliates" label="Affiliate records" error={error} onRetry={() => void refetch()} supportHref="/dashboard/admin" /> : isLoading ? <div className="flex min-h-48 items-center justify-center"><span className="size-8 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div> : (
                 <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                     <table className="w-full min-w-[1120px] text-left">
                         <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr>

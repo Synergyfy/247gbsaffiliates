@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useAdminStats } from '@/hooks/useAdminStats';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 import { AcquisitionActivityFeed } from '@/components/business-acquisition/AcquisitionActivityFeed';
 
 const metrics = [
@@ -14,10 +15,10 @@ const metrics = [
 ] as const;
 
 export default function AdminDashboard() {
-    const { stats, isLoading, isError, refetch } = useAdminStats();
+    const { stats, isLoading, isError, error, refetch } = useAdminStats();
 
-    if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><span className="size-9 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div>;
-    if (isError || !stats) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">Admin metrics could not be loaded. <button onClick={() => void refetch()} className="font-bold underline">Try again</button></div>;
+    if (isLoading && !isError) return <div className="flex min-h-[50vh] items-center justify-center"><span className="size-9 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div>;
+    if (isError || !stats) return <div className="mx-auto w-full max-w-7xl"><RequestErrorState area="Admin overview" label="Admin metrics" error={error} onRetry={() => void refetch()} supportHref="/dashboard/admin" compact={false} /></div>;
 
     return (
         <div className="mx-auto w-full max-w-7xl font-display">
@@ -27,7 +28,7 @@ export default function AdminDashboard() {
                 <p className="mt-1 text-sm text-text-secondary">Current account verification, qualification, assessment and task activity.</p>
             </header>
 
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Affiliate lifecycle metrics">
+            <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Affiliate lifecycle metrics">
                 {metrics.map((metric) => (
                     <Link key={metric.key} href={metric.href} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md">
                         <div className="flex items-center justify-between gap-3">

@@ -12,7 +12,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const router = useRouter();
     const pathname = usePathname();
     const isAssessmentStatusPage = pathname === '/dashboard/agent/assessment';
-    const [isChecking, setIsChecking] = useState(!user);
+    const [isChecking, setIsChecking] = useState(true);
     const [verificationBannerDismissed, setVerificationBannerDismissed] = useState(false);
 
     const verificationBannerKey = user?.id
@@ -73,6 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
                     const hasSubmittedVerification = Boolean(profile.verificationSubmission);
                     const isAwaitingVerification = ['pending', 'rejected'].includes(profile.verificationStatus);
+                    const hasPassedAssessment = Boolean(profile.isQuizPassed);
 
                     // Keep each affiliate inside their own role workspace.
                     const section = pathname.startsWith('/dashboard/') ? pathname.split('/')[2] : null;
@@ -89,7 +90,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         return;
                     }
 
-                    if (profile.role !== 'admin' && !isOnboarded && !isSkipped && !isAssessmentStatusPage && !(isAwaitingVerification && hasSubmittedVerification)) {
+                    if (profile.role !== 'admin' && !isOnboarded && !isSkipped && !isAssessmentStatusPage && !hasPassedAssessment && !(isAwaitingVerification && hasSubmittedVerification)) {
                         router.push('/onboarding');
                         return;
                     }
@@ -108,7 +109,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 const isSkipped = useOnboardingStore.getState().assessmentSkipped || Boolean(user?.assessmentSkipped);
                 const hasSubmittedVerification = Boolean(user.verificationSubmission);
                 const isAwaitingVerification = ['pending', 'rejected'].includes(user.verificationStatus || '');
-                if (user.role !== 'admin' && !user.isOnboarded && !isSkipped && !isAssessmentStatusPage && !(isAwaitingVerification && hasSubmittedVerification)) {
+                const hasPassedAssessment = Boolean(user.isQuizPassed);
+                if (user.role !== 'admin' && !user.isOnboarded && !isSkipped && !isAssessmentStatusPage && !hasPassedAssessment && !(isAwaitingVerification && hasSubmittedVerification)) {
                     router.push('/onboarding');
                     return;
                 }

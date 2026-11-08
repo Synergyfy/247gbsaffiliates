@@ -69,7 +69,7 @@ export function RoleOverview({
                         });
                         setActiveStage(nearestIndex + 1);
                     }}
-                    className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-6 px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-2.5 sm:overflow-visible sm:scroll-px-0 sm:px-0 sm:pb-0 sm:snap-none md:grid-cols-3 2xl:grid-cols-6"
+                    className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-3 px-3 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-2.5 sm:overflow-visible sm:scroll-px-0 sm:px-0 sm:pb-0 sm:snap-none md:grid-cols-3 2xl:grid-cols-6"
                 >
                     {stages.map((stage, index) => (
                         <Link key={stage.title} href={stage.href} data-progress-slide={index} className="group min-h-[100px] w-[min(50vw,200px)] shrink-0 snap-start rounded-md border border-slate-200 bg-white p-2 transition-colors hover:border-blue-300 hover:bg-blue-50/30 sm:min-h-[120px] sm:w-auto sm:shrink sm:p-3">
@@ -132,9 +132,57 @@ export function SummaryCard({ title, value, detail, href, action, state }: { tit
     );
 }
 
-export function QueryMessage({ loading, error, empty, onRetry, children }: { loading: boolean; error: boolean; empty: boolean; onRetry: () => void; children: React.ReactNode }) {
-    if (loading) return <p className="px-1 py-3 text-xs text-slate-500">Loading…</p>;
-    if (error) return <div role="alert" className="bg-rose-50 px-3 py-2 text-xs text-rose-800">This information could not be loaded. <button type="button" onClick={onRetry} className="font-semibold underline">Try again</button></div>;
-    if (empty) return <p className="px-1 py-3 text-xs text-slate-500">No records available yet.</p>;
+export function QueryMessage({
+    loading,
+    error,
+    empty,
+    onRetry,
+    emptyContent,
+    children
+}: {
+    loading: boolean;
+    error: boolean;
+    empty: boolean;
+    onRetry: () => void;
+    emptyContent?: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    const [rotation, setRotation] = useState(0);
+    if (loading && !error) return <p className="px-1 py-3 text-xs text-slate-500">Loading…</p>;
+    if (error) {
+        return (
+            <div role="alert" className="flex w-full min-w-0 items-center justify-between gap-2.5 rounded-lg border border-rose-200/80 bg-rose-50/40 px-3 py-2 text-xs [contain:inline-size]">
+                <span className="flex min-w-0 items-center gap-2 text-slate-700">
+                    <span className="material-symbols-outlined shrink-0 text-rose-600" style={{ fontSize: '15px' }}>error_outline</span>
+                    <span className="truncate font-medium">Couldn&apos;t load data</span>
+                </span>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setRotation((prev) => prev + 360);
+                        onRetry();
+                    }}
+                    aria-label="Retry"
+                    title="Retry"
+                    className="inline-flex shrink-0 items-center justify-center gap-1 rounded-md p-1.5 text-rose-700 hover:text-rose-900 sm:border sm:border-slate-200 sm:bg-white sm:px-2.5 sm:py-1 sm:text-[11px] sm:font-semibold sm:text-slate-700 sm:hover:bg-slate-50"
+                >
+                    <span
+                        className="material-symbols-outlined leading-none"
+                        style={{
+                            fontSize: '18px',
+                            display: 'inline-block',
+                            transform: `rotate(${rotation}deg)`,
+                            transition: 'transform 550ms cubic-bezier(0.4, 0, 0.2, 1)',
+                        }}
+                        aria-hidden="true"
+                    >
+                        refresh
+                    </span>
+                    <span className="hidden sm:inline">Retry</span>
+                </button>
+            </div>
+        );
+    }
+    if (empty) return emptyContent ? <>{emptyContent}</> : <p className="px-1 py-3 text-xs text-slate-500">No records available yet.</p>;
     return <>{children}</>;
 }

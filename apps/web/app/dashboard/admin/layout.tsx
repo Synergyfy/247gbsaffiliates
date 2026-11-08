@@ -82,7 +82,7 @@ export default function AdminLayout({
                         </button>
                     </div>
                 </header>
-                <main className="p-8">
+                <main className="min-w-0 overflow-x-clip p-3 sm:p-6 lg:p-8">
                     {children}
                 </main>
             </div>

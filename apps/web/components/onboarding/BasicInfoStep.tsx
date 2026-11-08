@@ -4,6 +4,7 @@ import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import AuthInput from '@/components/auth/AuthInput';
+import apiClient from '@/lib/apiClient';
 
 const BasicInfoStep: React.FC = () => {
     const { basicInfo, updateBasicInfo, setStep } = useOnboardingStore();
@@ -71,15 +72,40 @@ const BasicInfoStep: React.FC = () => {
         }
     }, [basicInfo.zipCode, basicInfo.phone, setStep]);
 
-    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setShowValidation(true);
         if (!basicInfo.phone.trim()) return;
         if (!basicInfo.zipCode.trim()) return;
+
+        try {
+            await apiClient.patch('/users/profile', {
+                phone: basicInfo.phone.trim(),
+                postcode: basicInfo.zipCode.trim(),
+                city: basicInfo.city.trim() || undefined,
+                region: basicInfo.region.trim() || undefined,
+                country: basicInfo.country.trim() || undefined,
+            });
+        } catch (err) {
+            console.warn('Could not save basic contact info to backend:', err);
+        }
+
         setStep('profile-info');
     };
 
-    const locationLabel = [basicInfo.city, basicInfo.region].filter(Boolean).join(', ');
+    const locationLabel = (() => {
+        const c = (basicInfo.city || '').trim();
+        const r = (basicInfo.region || '').trim();
+        if (c && r) {
+            if (c.toLowerCase() === r.toLowerCase()) return c;
+            if (r.toLowerCase().includes(c.toLowerCase())) return r;
+            if (c.toLowerCase().includes(r.toLowerCase())) return c;
+            return `${r}, ${c}`;
+        }
+        return c || r || '';
+    })();
+
+    const isSyncedFromCentral = Boolean(user?.postalCode || user?.postcode);
 
     return (
         <div className="mx-auto w-full max-w-2xl px-1 sm:px-0">
@@ -88,40 +114,60 @@ const BasicInfoStep: React.FC = () => {
                 <p className="mx-auto max-w-xs text-[11px] leading-normal text-slate-500 sm:max-w-md md:text-sm">Confirm your contact details before setting up your professional profile.</p>
             </div>
 
-            <form onSubmit={handleSubmit} noValidate className="space-y-3.5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6 md:space-y-6 md:rounded-[2.5rem] md:p-8">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 md:p-4">
-                    <div className="mb-2 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-base text-primary">location_on</span>
-                        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 md:text-sm">Location from Central Hub</h2>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Postcode</p>
-                            <p className="text-sm font-semibold text-slate-800">{basicInfo.zipCode || 'Not synced yet'}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">City / Region</p>
-                            <p className="text-sm font-semibold text-slate-800">{locationLabel || 'Not synced yet'}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Country</p>
-                            <p className="text-sm font-semibold text-slate-800">{basicInfo.country || 'Not synced yet'}</p>
-                        </div>
-                    </div>
-                    <p className="mt-2 text-[10px] leading-relaxed text-slate-500 md:text-xs">
-                        Your postcode is captured when you sign up with Central Hub and is used to match you with nearby work. To change it, update your Central Hub profile and sign in again.
-                    </p>
+            <form onSubmit={handleSubmit} noValidate className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6 md:space-y-6 md:rounded-[2.5rem] md:p-8">
+                {/* Postcode */}
+                <div>
+                    <AuthInput
+                        id="affiliate-postcode"
+                        label="Postcode"
+                        icon="pin_drop"
+                        type="text"
+                        value={basicInfo.zipCode || ''}
+                        readOnly
+                        tabIndex={-1}
+                        className="cursor-default bg-slate-50/70 text-slate-800"
+                    />
                     {showValidation && !basicInfo.zipCode.trim() && (
-                        <p className="mt-2 text-xs font-medium text-red-700" role="alert">
-                            We could not find your postcode. Add it in your Central Hub profile and sign in again.
+                        <p className="mt-1 text-xs font-medium text-red-700" role="alert">
+                            Postcode is required. Please update it in Central Hub.
                         </p>
                     )}
                 </div>
 
+                {/* City / Region */}
+                <div>
+                    <AuthInput
+                        id="affiliate-city-region"
+                        label="City / Region"
+                        icon="location_city"
+                        type="text"
+                        value={locationLabel || ''}
+                        readOnly
+                        tabIndex={-1}
+                        className="cursor-default bg-slate-50/70 text-slate-800"
+                    />
+                </div>
+
+                {/* Country */}
+                <div>
+                    <AuthInput
+                        id="affiliate-country"
+                        label="Country"
+                        icon="public"
+                        type="text"
+                        value={basicInfo.country || 'United Kingdom'}
+                        readOnly
+                        tabIndex={-1}
+                        className="cursor-default bg-slate-50/70 text-slate-800"
+                    />
+                </div>
+
+                {/* Phone Number Field */}
                 <div>
                     <AuthInput
                         id="affiliate-phone"
                         label="Phone Number"
+                        icon="call"
                         type="tel"
                         placeholder="+44 7700 900123"
                         value={basicInfo.phone}
@@ -135,7 +181,7 @@ const BasicInfoStep: React.FC = () => {
 
                 <button
                     type="submit"
-                    className="mt-2.5 flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-primary text-xs font-display font-bold text-white shadow-sm shadow-primary/20 transition-all hover:bg-primary-dark active:scale-[0.99] md:mt-6 md:h-14 md:gap-2 md:rounded-2xl md:text-base md:shadow-md"
+                    className="mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-primary text-xs font-display font-bold text-white shadow-sm shadow-primary/20 transition-all hover:bg-primary-dark active:scale-[0.99] md:mt-6 md:h-14 md:gap-2 md:rounded-2xl md:text-base md:shadow-md cursor-pointer"
                 >
                     <span className="md:hidden">Continue</span>
                     <span className="hidden md:inline">Continue to Profile Details</span>

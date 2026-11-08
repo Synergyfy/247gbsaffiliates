@@ -18,7 +18,7 @@ export default function LandingFooter() {
                             ></path>
                         </svg>
                     </div>
-                    <span className="text-lg font-extrabold">247gbs affiliate</span>
+                    <span className="text-lg font-extrabold">247GBS Affiliate</span>
                 </div>
                 <div className="flex gap-8 text-sm font-semibold text-text-secondary">
                     <Link className="hover:text-primary transition-colors" href="/privacy">
@@ -32,7 +32,7 @@ export default function LandingFooter() {
                     </Link>
                 </div>
                 <p className="text-sm text-text-secondary">
-                    © {new Date().getFullYear()} 247gbs affiliate. All rights reserved.
+                    © {new Date().getFullYear()} 247GBS Affiliate. All rights reserved.
                 </p>
             </div>
         </footer>

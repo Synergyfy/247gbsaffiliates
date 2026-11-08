@@ -42,7 +42,12 @@ const mode = process.argv[2] === 'start' ? 'start' : 'dev';
 
 console.log(`[web] next ${mode} on http://${host}:${port} (PORT/HOST from env or .env.local)`);
 
-const result = spawnSync('npx', ['next', mode, '-H', host, '-p', String(port)], {
+const nextArgs = ['next', mode, '-H', host, '-p', String(port)];
+if (mode === 'dev' && !process.argv.includes('--turbo') && !process.argv.includes('--turbopack')) {
+  nextArgs.push('--webpack');
+}
+
+const result = spawnSync('npx', nextArgs, {
   cwd: root,
   stdio: 'inherit',
   shell: true,

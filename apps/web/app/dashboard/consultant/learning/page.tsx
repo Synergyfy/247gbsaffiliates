@@ -1,2 +1,7 @@
-import { redirect } from 'next/navigation';
-export default function ConsultantLearningPage() { redirect('/learning'); }
+'use client';
+
+import { RoleLearningHub } from '@/components/dashboard/RoleLearningHub';
+
+export default function ConsultantLearningPage() {
+    return <RoleLearningHub roleOverride="consultant" />;
+}
