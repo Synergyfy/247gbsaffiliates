@@ -23,6 +23,14 @@ export interface PostalLookupResult {
   displayName?: string;
 }
 
+export interface GeoDetails {
+  point: GeoPoint | null;
+  adminDistrict?: string;
+  region?: string;
+  postTown?: string;
+  formattedLocation?: string;
+}
+
 interface PostcodesIoResult {
   postcode?: string;
   post_town?: string;
@@ -54,8 +62,8 @@ interface NominatimMatch {
 }
 
 const GEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_DIRECTORY_RADIUS_MILES = 50;
-const MAX_DIRECTORY_RADIUS_MILES = 500;
+const DEFAULT_DIRECTORY_RADIUS_MILES = 5;
+const MAX_DIRECTORY_RADIUS_MILES = 5;
 const MAX_DIRECTORY_CANDIDATES = 500;
 
 @Injectable()
@@ -63,7 +71,7 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   private readonly geoCache = new Map<
     string,
-    { at: number; point: GeoPoint | null }
+    { at: number; data: GeoDetails }
   >();
 
   constructor(
@@ -148,18 +156,22 @@ export class UsersService {
     radiusMiles?: number;
   }) {
     const limit = Math.min(100, Math.max(1, Number(filters.limit) || 50));
-    const radiusMiles = Math.min(
-      MAX_DIRECTORY_RADIUS_MILES,
-      Math.max(1, Number(filters.radiusMiles) || DEFAULT_DIRECTORY_RADIUS_MILES),
-    );
+    const rawRadius = filters.radiusMiles !== undefined ? Number(filters.radiusMiles) : undefined;
+    const radiusMiles = rawRadius !== undefined
+      ? Math.max(0, Math.min(MAX_DIRECTORY_RADIUS_MILES, rawRadius))
+      : DEFAULT_DIRECTORY_RADIUS_MILES;
+    const isExactOnly = radiusMiles === 0;
     const role = (filters.role || '').toLowerCase().replace('-', '_');
     const search = (filters.search || '').trim().toLowerCase();
 
+    const searchPostcode = this.normalizePostcode(filters.postcode);
+    const searchCompact = this.compactPostcode(filters.postcode);
+
     let territory: { city?: string; region?: string; postcode?: string } | null = null;
     let origin: GeoPoint | null = null;
-    if (filters.postcode?.trim()) {
+    if (searchCompact) {
       try {
-        const resolved = await this.lookupPostalCode(filters.postcode);
+        const resolved = await this.lookupPostalCode(filters.postcode!);
         if (resolved?.found) {
           territory = {
             city: resolved.city,
@@ -172,7 +184,7 @@ export class UsersService {
         }
       } catch (err) {
         this.logger.warn(
-          `Postal lookup unavailable for "${filters.postcode}", returning directory without distance filter: ${
+          `Postal lookup unavailable for "${filters.postcode}", matching by postcode pattern: ${
             err instanceof Error ? err.message : String(err)
           }`,
         );
@@ -181,7 +193,9 @@ export class UsersService {
 
     const qb = this.usersRepository
       .createQueryBuilder('user')
-      .where('user.status = :active', { active: UserStatus.ACTIVE });
+      .where('user.status = :active', { active: UserStatus.ACTIVE })
+      .andWhere('user.verificationStatus = :verified', { verified: VerificationStatus.VERIFIED })
+      .andWhere('user.isOnboarded = :onboarded', { onboarded: true });
 
     if (role && role !== 'all') {
       if (role === 'account_manager') qb.andWhere('user.role = :role', { role: UserRole.ACCOUNT_MANAGER });
@@ -200,25 +214,51 @@ export class UsersService {
       );
     }
 
-    const users = await qb
+    const rawUsers = await qb
       .orderBy('user.isOnboarded', 'DESC')
       .addOrderBy('user.createdAt', 'DESC')
       .take(origin ? MAX_DIRECTORY_CANDIDATES : limit)
       .getMany();
 
-    const geoByPostcode = origin
-      ? await this.bulkGeocodePostcodes(users.map((user) => user.postcode))
-      : new Map<string, GeoPoint>();
+    const users = rawUsers.filter(
+      (user) =>
+        user.role !== UserRole.AGENT ||
+        (user.isQuizPassed && Array.isArray(user.skills) && user.skills.length > 0),
+    );
+
+    const geoByPostcode = await this.bulkGeocodePostcodes(users.map((user) => user.postcode));
 
     const items = users.map((user) => {
-      const point = origin && user.postcode
-        ? geoByPostcode.get(this.compactPostcode(user.postcode)) ?? null
-        : null;
-      const km = origin && point ? this.haversineKm(origin, point) : null;
-      const miles = km != null ? km * 0.621371 : null;
+      const userCompact = this.compactPostcode(user.postcode);
+      const isExactMatch = Boolean(
+        searchCompact && userCompact && userCompact === searchCompact,
+      );
+      const isOutcodeMatch = Boolean(
+        !isExactMatch &&
+          searchCompact &&
+          userCompact &&
+          (userCompact.startsWith(searchCompact) || searchCompact.startsWith(userCompact)),
+      );
+
+      const geo = user.postcode ? geoByPostcode.get(userCompact) : null;
+      const point = origin && geo?.point ? geo.point : null;
+      const km = isExactMatch ? 0 : origin && point ? this.haversineKm(origin, point) : null;
+      const miles = isExactMatch ? 0 : km != null ? km * 0.621371 : null;
+
+      // Always use full geographic hierarchy (e.g. "Westminster, Greater London" or "Islington, Greater London")
+      const resolvedRegion =
+        geo?.formattedLocation ||
+        (user.region && user.city && user.region.toLowerCase() !== user.city.toLowerCase()
+          ? user.region
+          : geo?.adminDistrict
+            ? `${geo.adminDistrict}, Greater London`
+            : user.region || 'Greater London');
+      const resolvedCity = geo?.postTown || user.city || 'London';
 
       return {
         id: user.id,
+        centralUserId: user.mcomUserId ?? undefined,
+        email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
         name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0],
@@ -231,37 +271,64 @@ export class UsersService {
         timezone: user.timezone,
         role: user.role,
         postcode: user.postcode,
-        city: user.city,
-        region: user.region,
+        city: resolvedCity,
+        region: resolvedRegion,
         country: user.country,
         isOnboarded: user.isOnboarded,
         isQuizPassed: user.isQuizPassed,
         verificationStatus: user.verificationStatus,
         isPaidVisible: user.isPaidVisible,
         createdAt: user.createdAt,
-        distanceKm: km != null ? Math.round(km * 10) / 10 : null,
-        distanceMiles: miles != null ? Math.round(miles * 10) / 10 : null,
-        distanceLabel: miles != null
-          ? `${Math.max(0.1, Math.round(miles * 10) / 10)} mi away`
-          : origin
-            ? 'Distance unavailable'
-            : null,
+        isExactMatch,
+        isOutcodeMatch,
+        distanceKm: isExactMatch ? 0 : km != null ? Math.round(km * 10) / 10 : null,
+        distanceMiles: isExactMatch ? 0 : miles != null ? Math.round(miles * 10) / 10 : null,
+        distanceLabel: isExactMatch
+          ? 'Exact postcode match'
+          : isOutcodeMatch
+            ? 'Same postcode area'
+            : miles != null
+              ? `${Math.max(0.1, Math.round(miles * 10) / 10)} mi away`
+              : origin
+                ? 'Distance unavailable'
+                : null,
       };
     });
 
-    // Keep affiliates whose postcode is null / not yet geocoded so real database
-    // affiliates are never hidden when postal-code lookup is not yet configured.
-    const matching = origin
-      ? items
-        .filter((item) => item.distanceMiles == null || item.distanceMiles <= radiusMiles)
-        .sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity))
-      : items;
+    let matching = items;
+    if (searchCompact) {
+      // 1. Strict priority: exact postcode match or outward code match (as much as the postcode spans)
+      const exactOrOutcodeMatches = items.filter(
+        (item) => item.isExactMatch || item.isOutcodeMatch,
+      );
+
+      if (exactOrOutcodeMatches.length > 0) {
+        // When matches in this postcode or outward area exist, strictly return only them
+        matching = exactOrOutcodeMatches;
+      } else if (origin) {
+        // Fallback only if no exact/outcode matches: search within 5 miles or less
+        const effectiveRadius = Math.min(radiusMiles, DEFAULT_DIRECTORY_RADIUS_MILES);
+        matching = items.filter(
+          (item) => item.distanceMiles != null && item.distanceMiles <= effectiveRadius,
+        );
+      } else {
+        matching = [];
+      }
+    }
+
+    matching.sort((a, b) => {
+      if (a.isExactMatch && !b.isExactMatch) return -1;
+      if (!a.isExactMatch && b.isExactMatch) return 1;
+      if (a.isOutcodeMatch && !b.isOutcodeMatch) return -1;
+      if (!a.isOutcodeMatch && b.isOutcodeMatch) return 1;
+      return (a.distanceMiles ?? 9999) - (b.distanceMiles ?? 9999);
+    });
 
     return {
       items: matching.slice(0, limit),
       total: matching.length,
       territory,
-      distanceFrom: territory?.postcode ?? null,
+      distanceFrom: territory?.postcode ?? (searchPostcode || null),
     };
   }
 
@@ -292,8 +359,8 @@ export class UsersService {
    */
   private async bulkGeocodePostcodes(
     postcodes: Array<string | null | undefined>,
-  ): Promise<Map<string, GeoPoint>> {
-    const found = new Map<string, GeoPoint>();
+  ): Promise<Map<string, GeoDetails>> {
+    const found = new Map<string, GeoDetails>();
     const unique = Array.from(
       new Set(postcodes.map((postcode) => this.compactPostcode(postcode)).filter(Boolean)),
     );
@@ -303,7 +370,7 @@ export class UsersService {
     for (const compact of unique) {
       const cached = this.geoCache.get(compact);
       if (cached && Date.now() - cached.at < GEO_CACHE_TTL_MS) {
-        if (cached.point) found.set(compact, cached.point);
+        if (cached.data) found.set(compact, cached.data);
       } else {
         missing.push(compact);
       }
@@ -325,8 +392,36 @@ export class UsersService {
           const lng = row?.result?.longitude;
           const point =
             typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null;
-          this.geoCache.set(compact, { at: Date.now(), point });
-          if (point) found.set(compact, point);
+
+          const district = row?.result?.admin_district || '';
+          const broadRegion = row?.result?.region === 'London'
+            ? 'Greater London'
+            : (row?.result?.region || row?.result?.admin_county || '');
+          const town = row?.result?.post_town || '';
+
+          let formattedLocation = '';
+          if (district && broadRegion) {
+            formattedLocation = district.toLowerCase() === broadRegion.toLowerCase()
+              ? district
+              : `${district}, ${broadRegion}`;
+          } else if (district) {
+            formattedLocation = district;
+          } else if (town && broadRegion) {
+            formattedLocation = `${town}, ${broadRegion}`;
+          } else {
+            formattedLocation = town || broadRegion || '';
+          }
+
+          const data: GeoDetails = {
+            point,
+            adminDistrict: district,
+            region: broadRegion,
+            postTown: town,
+            formattedLocation,
+          };
+
+          this.geoCache.set(compact, { at: Date.now(), data });
+          found.set(compact, data);
         }
       } catch (error) {
         this.logger.warn(
@@ -375,6 +470,37 @@ export class UsersService {
       );
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
+        // Fallback for partial / outward postcodes (e.g. EC1A, SW1A)
+        try {
+          const outcodeRes = await axios.get<{
+            status: number;
+            result: {
+              outcode: string;
+              latitude: number;
+              longitude: number;
+              admin_district?: string[];
+              parish?: string[];
+              country?: string[];
+            };
+          }>(`https://api.postcodes.io/outcodes/${encodeURIComponent(clean)}`, { timeout: 8000 });
+          const outResult = outcodeRes.data?.result;
+          if (outResult) {
+            const city = outResult.admin_district?.[0] || '';
+            const region = outResult.admin_district?.[1] || outResult.admin_district?.[0] || '';
+            return {
+              found: true,
+              postalCode: outResult.outcode || postcode,
+              city,
+              region,
+              country: 'United Kingdom',
+              latitude: outResult.latitude ?? null,
+              longitude: outResult.longitude ?? null,
+              displayName: [outResult.outcode, city, 'United Kingdom'].filter(Boolean).join(', '),
+            };
+          }
+        } catch {
+          // Fall through to 404
+        }
         throw new BadRequestException('We could not find that UK postcode.');
       }
       throw error;
@@ -385,23 +511,30 @@ export class UsersService {
       throw new Error('postcodes.io returned no result payload');
     }
 
-    const city =
-      result.post_town ||
-      result.admin_district ||
-      result.region ||
-      result.admin_county ||
-      '';
-    const region = result.region || result.admin_county || '';
+    const district = result.admin_district || '';
+    const broadRegion = result.region === 'London'
+      ? 'Greater London'
+      : (result.region || result.admin_county || '');
+    const town = result.post_town || district || broadRegion || 'United Kingdom';
+
+    let region = '';
+    if (district && broadRegion) {
+      region = district.toLowerCase() === broadRegion.toLowerCase()
+        ? district
+        : `${district}, ${broadRegion}`;
+    } else {
+      region = district || broadRegion;
+    }
 
     return {
-      found: Boolean(city || region),
+      found: Boolean(town || region),
       postalCode: result.postcode || postcode,
-      city,
+      city: town,
       region,
       country: 'United Kingdom',
       latitude: result.latitude ?? null,
       longitude: result.longitude ?? null,
-      displayName: [result.postcode, city, 'United Kingdom'].filter(Boolean).join(', '),
+      displayName: [result.postcode, region, 'United Kingdom'].filter(Boolean).join(', '),
     };
   }
 
@@ -524,10 +657,12 @@ export class UsersService {
    * skill. Returns only non-sensitive profile fields.
    */
   async listAffiliateDirectory(): Promise<Array<Partial<User>>> {
-    return this.usersRepository.find({
+    const rows = await this.usersRepository.find({
       where: {
         role: In([UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT]),
         status: UserStatus.ACTIVE,
+        verificationStatus: VerificationStatus.VERIFIED,
+        isOnboarded: true,
       },
       select: [
         'id',
@@ -543,5 +678,11 @@ export class UsersService {
       ],
       order: { createdAt: 'DESC' },
     });
+
+    return rows.filter(
+      (user) =>
+        user.role !== UserRole.AGENT ||
+        (user.isQuizPassed && Array.isArray(user.skills) && user.skills.length > 0),
+    );
   }
 }

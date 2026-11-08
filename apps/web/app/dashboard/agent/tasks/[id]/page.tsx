@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   TaskAttachment,
   TaskReviewEntry,
@@ -16,18 +16,27 @@ import { getActionFailureMessage, reportRequestFailure } from '@/lib/requestErro
 const formatDate = (value?: string | null) => {
     if (!value) return 'Not specified';
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? 'Not specified' : new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(date);
+    return Number.isNaN(date.getTime())
+        ? 'Not specified'
+        : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
 };
 
 const formatDateTime = (value?: string | null) => {
     if (!value) return null;
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+    return Number.isNaN(date.getTime())
+        ? null
+        : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 };
 
-const formatMoney = (task: { budget?: number; currency?: string }) => {
-    if (task.budget == null || !Number.isFinite(Number(task.budget))) return null;
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'USD' }).format(Number(task.budget));
+const formatMoney = (task: { budget?: number; currency?: string; compensationAmount?: number | null; compensationCurrency?: string | null }) => {
+    if (task.budget != null && Number.isFinite(Number(task.budget)) && Number(task.budget) > 0) {
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'USD' }).format(Number(task.budget));
+    }
+    if (task.compensationAmount != null && Number.isFinite(Number(task.compensationAmount)) && Number(task.compensationAmount) > 0) {
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(Number(task.compensationAmount));
+    }
+    return null;
 };
 
 const getErrorMessage = (error: unknown, area: string) => {
@@ -50,6 +59,105 @@ const statusStyles: Record<string, string> = {
 
 const statusLabel = (status: string) => status.replaceAll('_', ' ');
 
+interface ParsedBrief {
+    summary: string;
+    instructions: string[];
+    deliverables: string[];
+    closingNote: string | null;
+}
+
+function parseTaskDescription(raw?: string | null, explicitDeliverables?: string[] | null): ParsedBrief {
+    const text = (raw || '').trim();
+    if (!text) {
+        return {
+            summary: 'No additional instructions were provided.',
+            instructions: [],
+            deliverables: explicitDeliverables?.filter(Boolean) ?? [],
+            closingNote: null,
+        };
+    }
+
+    const instructionsIdx = text.search(/\*\*Instructions:?\*\*/i);
+    const deliverablesIdx = text.search(/\*\*Deliverables:?\*\*/i);
+
+    if (instructionsIdx === -1 && deliverablesIdx === -1) {
+        const lines = text
+            .replace(/\*\*([^*]+)\*\*/g, '$1')
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter(Boolean);
+        const bulletLines = lines.filter((l) => /^[-•*]\s+/.test(l)).map((l) => l.replace(/^[-•*]\s+/, '').trim());
+        const nonBulletLines = lines.filter((l) => !/^[-•*]\s+/.test(l));
+        return {
+            summary: nonBulletLines.join('\n') || text.replace(/\*\*([^*]+)\*\*/g, '$1'),
+            instructions: bulletLines,
+            deliverables: explicitDeliverables?.filter(Boolean) ?? [],
+            closingNote: null,
+        };
+    }
+
+    let summaryPart = text;
+    let instructionsPart = '';
+    let deliverablesPart = '';
+
+    if (instructionsIdx !== -1 && deliverablesIdx !== -1) {
+        if (instructionsIdx < deliverablesIdx) {
+            summaryPart = text.slice(0, instructionsIdx);
+            instructionsPart = text.slice(instructionsIdx, deliverablesIdx);
+            deliverablesPart = text.slice(deliverablesIdx);
+        } else {
+            summaryPart = text.slice(0, deliverablesIdx);
+            deliverablesPart = text.slice(deliverablesIdx, instructionsIdx);
+            instructionsPart = text.slice(instructionsIdx);
+        }
+    } else if (instructionsIdx !== -1) {
+        summaryPart = text.slice(0, instructionsIdx);
+        instructionsPart = text.slice(instructionsIdx);
+    } else if (deliverablesIdx !== -1) {
+        summaryPart = text.slice(0, deliverablesIdx);
+        deliverablesPart = text.slice(deliverablesIdx);
+    }
+
+    const cleanSummary = summaryPart.replace(/\*\*([^*]+)\*\*/g, '$1').trim();
+
+    const rawInstructionsBody = instructionsPart.replace(/^\*\*Instructions:?\*\*/i, '').replace(/\*\*([^*]+)\*\*/g, '$1').trim();
+    const instructions = rawInstructionsBody
+        ? rawInstructionsBody
+              .split(/(?:^|\s+)-\s+|\r?\n/)
+              .map((item) => item.trim())
+              .filter(Boolean)
+        : [];
+
+    const rawDeliverablesBody = deliverablesPart.replace(/^\*\*Deliverables:?\*\*/i, '').replace(/\*\*([^*]+)\*\*/g, '$1').trim();
+    let closingNote: string | null = null;
+    let deliverablesFromText: string[] = [];
+
+    if (rawDeliverablesBody) {
+        const approvalMatch = rawDeliverablesBody.match(/(All deliverables must be[^\n]+)$/i);
+        const bodyWithoutClosing = approvalMatch
+            ? rawDeliverablesBody.slice(0, approvalMatch.index).trim()
+            : rawDeliverablesBody;
+        if (approvalMatch) {
+            closingNote = approvalMatch[1].trim();
+        }
+        deliverablesFromText = bodyWithoutClosing
+            .split(/(?:^|\s+)\d+\.\s+|\r?\n/)
+            .map((item) => item.replace(/^[-•*]\s+/, '').trim())
+            .filter(Boolean);
+    }
+
+    const mergedDeliverables = Array.from(
+        new Set([...(explicitDeliverables?.filter(Boolean) ?? []), ...deliverablesFromText]),
+    );
+
+    return {
+        summary: cleanSummary,
+        instructions,
+        deliverables: mergedDeliverables,
+        closingNote,
+    };
+}
+
 const isImageAttachment = (attachment: TaskAttachment) =>
     /^image\//i.test(attachment.mimeType || '') ||
     /\.(png|jpe?g|gif|webp)$/i.test(attachment.url);
@@ -61,9 +169,9 @@ function AttachmentPreview({ attachment }: { attachment: TaskAttachment }) {
                 <img
                     src={attachment.url}
                     alt={attachment.fileName || 'Submission attachment'}
-                    className="h-20 w-20 rounded-md border border-slate-200 object-cover transition group-hover:opacity-90"
+                    className="h-16 w-16 rounded-lg border border-slate-200 object-cover transition group-hover:opacity-90"
                 />
-                <span className="mt-1 block max-w-20 truncate text-[10px] text-slate-500">{attachment.fileName || 'Image'}</span>
+                <span className="mt-1 block max-w-16 truncate text-[10px] text-slate-500">{attachment.fileName || 'Image'}</span>
             </a>
         );
     }
@@ -72,11 +180,11 @@ function AttachmentPreview({ attachment }: { attachment: TaskAttachment }) {
             href={attachment.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex min-h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
         >
-            <span className="material-symbols-outlined text-base">description</span>
-            <span className="max-w-48 truncate">{attachment.fileName || 'Attachment'}</span>
-            <span className="material-symbols-outlined text-sm">open_in_new</span>
+            <span className="material-symbols-outlined !text-sm">description</span>
+            <span className="max-w-40 truncate">{attachment.fileName || 'Attachment'}</span>
+            <span className="material-symbols-outlined !text-xs">open_in_new</span>
         </a>
     );
 }
@@ -84,17 +192,17 @@ function AttachmentPreview({ attachment }: { attachment: TaskAttachment }) {
 function ReviewEntry({ entry, latest }: { entry: TaskReviewEntry; latest?: boolean }) {
     const approved = entry.decision === 'APPROVED';
     return (
-        <li className={`rounded-lg border p-3 ${approved ? 'border-emerald-200 bg-emerald-50/60' : 'border-orange-200 bg-orange-50/60'}`}>
+        <li className={`rounded-lg border p-2.5 ${approved ? 'border-emerald-200 bg-emerald-50/60' : 'border-orange-200 bg-orange-50/60'}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className={`inline-flex items-center gap-1 text-xs font-bold ${approved ? 'text-emerald-800' : 'text-orange-800'}`}>
-                    <span className="material-symbols-outlined text-base">{approved ? 'check_circle' : 'error'}</span>
-                    {approved ? 'Approved' : 'Changes requested'} · round {entry.round}
+                    <span className="material-symbols-outlined !text-sm">{approved ? 'check_circle' : 'error'}</span>
+                    {approved ? 'Approved' : 'Changes requested'} · Round {entry.round}
                 </span>
                 <span className="text-[11px] text-slate-500">{formatDateTime(entry.reviewedAt) || ''}</span>
             </div>
-            {entry.notes ? <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700">{entry.notes}</p> : null}
+            {entry.notes ? <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">{entry.notes}</p> : null}
             {latest && approved && entry.acknowledgedAt ? (
-                <p className="mt-1 text-[11px] text-slate-500">Acknowledged {formatDateTime(entry.acknowledgedAt)}</p>
+                <p className="mt-1 text-[10px] text-slate-500">Acknowledged {formatDateTime(entry.acknowledgedAt)}</p>
             ) : null}
         </li>
     );
@@ -126,10 +234,10 @@ export default function AgentTaskDetailsPage() {
     const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState('');
+    const [instructionsExpanded, setInstructionsExpanded] = useState(true);
+    const [deliverablesExpanded, setDeliverablesExpanded] = useState(true);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Seed the submission form from any previous submission (e.g. after a
-    // changes-requested review) without overwriting edits on refetch.
     useEffect(() => {
         if (!task) return;
         setNotes(task.submissionData?.notes ?? '');
@@ -137,6 +245,11 @@ export default function AgentTaskDetailsPage() {
         setAttachments(task.submissionData?.attachments ?? []);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [task?.id]);
+
+    const parsedBrief = useMemo(
+        () => parseTaskDescription(task?.description, task?.deliverables),
+        [task?.description, task?.deliverables],
+    );
 
     const isQualified = user?.role === 'agent'
         ? user?.verificationStatus === 'verified' && user?.isOnboarded === true && user?.isQuizPassed === true
@@ -196,14 +309,32 @@ export default function AgentTaskDetailsPage() {
     };
 
     if (isLoading) {
-        return <div className="flex min-h-[50vh] items-center justify-center gap-3 text-sm text-slate-500" role="status"><span className="size-5 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />Loading task…</div>;
+        return (
+            <div className="flex min-h-[40vh] items-center justify-center gap-2.5 text-xs font-medium text-slate-500" role="status">
+                <span className="size-4 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />
+                Loading task workspace…
+            </div>
+        );
     }
 
     if (isError || !task) {
         return (
-            <div className="mx-auto max-w-3xl px-4 py-8">
-                <Link href={`${basePath}/tasks`} className="text-sm font-semibold text-blue-700 hover:underline">← Back to tasks</Link>
-                <div className="mt-5"><RequestErrorState area="Assigned task details" label="Task details" error={error} onRetry={() => void refetch()} supportHref={`${basePath}/messages`} compact={false} /></div>
+            <div className="mx-auto w-full max-w-[1600px] space-y-3">
+                <Link
+                    href={`${basePath}/tasks`}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                >
+                    <span className="material-symbols-outlined !text-sm">arrow_back</span>
+                    <span>Back to tasks</span>
+                </Link>
+                <RequestErrorState
+                    area="Assigned task details"
+                    label="Task details"
+                    error={error}
+                    onRetry={() => void refetch()}
+                    supportHref={`${basePath}/messages`}
+                    compact={false}
+                />
             </div>
         );
     }
@@ -219,250 +350,651 @@ export default function AgentTaskDetailsPage() {
     const submission = task.submissionData;
     const hasSubmission = Boolean(submission && (submission.notes || submission.links?.length || submission.attachments?.length));
 
-    return (
-        <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-            <Link href={`${basePath}/tasks`} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-blue-700 hover:underline">
-                <span className="material-symbols-outlined text-base">arrow_back</span> Back to tasks
-            </Link>
+    const compensationText = money
+        ? money
+        : task.compensationModel === 'MEMBERSHIP_INCLUDED'
+          ? 'Included in membership'
+          : 'Agreed with AM';
 
-            <article className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">{isCentralTask ? 'Central Hub delegated task' : 'Assigned task'}</p>
-                        <h1 className="mt-1 text-2xl font-bold text-slate-950">{task.title}</h1>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                            {task.centralBusinessName && <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700"><span className="material-symbols-outlined text-sm">storefront</span>{task.centralBusinessName}</span>}
-                            {(task.platforms ?? []).map((platform) => <span key={platform} className="rounded-md bg-blue-50 px-2 py-1 text-[11px] font-semibold capitalize text-blue-800">{platform}</span>)}
-                            {task.category && <span className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] font-semibold capitalize text-indigo-800">{task.category} task</span>}
-                            {task.projectName && <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800"><span className="material-symbols-outlined text-sm">folder</span>{task.projectName}</span>}
-                            {task.taskType && <span className="rounded-md bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">{task.taskType.replaceAll('_', ' ')}</span>}
+    const showDistinctProjectName =
+        Boolean(task.projectName) &&
+        task.projectName?.trim().toLowerCase() !== task.title.trim().toLowerCase();
+
+    return (
+        <div className="mx-auto w-full max-w-[1600px] space-y-2.5">
+            {/* Compact Command Header Card */}
+            <header className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.04)] sm:p-4">
+                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                        {/* Title Row */}
+                        <div className="flex items-start gap-2">
+                            <Link
+                                href={`${basePath}/tasks`}
+                                aria-label="Back to tasks"
+                                title="Back to tasks"
+                                className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-950"
+                            >
+                                <span className="material-symbols-outlined !text-base leading-none">arrow_back</span>
+                            </Link>
+                            <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <h1 className="text-[15px] font-bold leading-snug tracking-tight text-slate-950 sm:text-lg">
+                                        {task.title}
+                                    </h1>
+                                    <span
+                                        className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                                            statusStyles[task.status] || statusStyles.assigned
+                                        }`}
+                                    >
+                                        {statusLabel(task.status)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Full-Width Compact Metadata Chips (no left indent on mobile) */}
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            {task.centralBusinessName && (
+                                <span className="inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                                    <span className="material-symbols-outlined !text-xs leading-none">storefront</span>
+                                    <span className="truncate">{task.centralBusinessName}</span>
+                                </span>
+                            )}
+                            {isCentralTask && (
+                                <span className="whitespace-nowrap rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                                    Central Hub
+                                </span>
+                            )}
+                            {task.category && (
+                                <span className="whitespace-nowrap rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-indigo-800">
+                                    {task.category}
+                                </span>
+                            )}
+                            {showDistinctProjectName && (
+                                <span className="inline-flex max-w-[220px] items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 sm:max-w-xs">
+                                    <span className="material-symbols-outlined shrink-0 !text-xs leading-none">folder</span>
+                                    <span className="truncate">{task.projectName}</span>
+                                </span>
+                            )}
+                            {(task.platforms ?? []).map((platform) => (
+                                <span
+                                    key={platform}
+                                    className="whitespace-nowrap rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-blue-800"
+                                >
+                                    {platform}
+                                </span>
+                            ))}
                         </div>
                     </div>
-                    <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold capitalize ${statusStyles[task.status] || statusStyles.assigned}`}>{statusLabel(task.status)}</span>
+
+                    {/* Desktop Quick Actions */}
+                    {(task.executionUrl || canRespond) && (
+                        <div className="hidden shrink-0 items-center gap-2 sm:flex">
+                            {task.executionUrl && (
+                                <a
+                                    href={task.executionUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                                >
+                                    <span>Open work link</span>
+                                    <span className="material-symbols-outlined !text-sm leading-none">open_in_new</span>
+                                </a>
+                            )}
+                            {canRespond && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            void run(
+                                                () => acceptTask(taskId),
+                                                'Task accepted. You can now work on it and submit it for review when ready.',
+                                            )
+                                        }
+                                        disabled={!isQualified || isAccepting || isDeclining || waitingForCharge}
+                                        title={waitingForCharge ? 'The business must approve the charge first' : undefined}
+                                        className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-700 px-3.5 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <span className="material-symbols-outlined !text-sm leading-none">check_circle</span>
+                                        <span>{isAccepting ? 'Accepting…' : waitingForCharge ? 'Awaiting charge approval' : 'Accept task'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void run(() => declineTask(taskId), 'Task declined.')}
+                                        disabled={isAccepting || isDeclining}
+                                        className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                                    >
+                                        <span>{isDeclining ? 'Declining…' : 'Decline'}</span>
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
 
+                {/* Compact 4-Column Key Facts Strip */}
+                <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2 text-xs sm:grid-cols-4 sm:px-3">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="material-symbols-outlined shrink-0 !text-sm text-slate-400">calendar_today</span>
+                        <div className="min-w-0">
+                            <dt className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Created</dt>
+                            <dd className="truncate font-semibold text-slate-900">{formatDate(task.createdAt)}</dd>
+                        </div>
+                    </div>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="material-symbols-outlined shrink-0 !text-sm text-amber-500">event</span>
+                        <div className="min-w-0">
+                            <dt className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Deadline</dt>
+                            <dd className="truncate font-semibold text-slate-900">{formatDate(task.dueDate)}</dd>
+                        </div>
+                    </div>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="material-symbols-outlined shrink-0 !text-sm text-emerald-600">payments</span>
+                        <div className="min-w-0">
+                            <dt className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Compensation</dt>
+                            <dd className="truncate font-semibold text-slate-900">{compensationText}</dd>
+                        </div>
+                    </div>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="material-symbols-outlined shrink-0 !text-sm text-blue-600">hub</span>
+                        <div className="min-w-0">
+                            <dt className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Source</dt>
+                            <dd className="truncate font-semibold text-slate-900">
+                                {task.originSystem ? task.originSystem.replaceAll('_', ' ') : '247GBS Direct'}
+                            </dd>
+                        </div>
+                    </div>
+                </dl>
+
+                {/* Mobile Full-Width Action Bar */}
+                {(task.executionUrl || canRespond) && (
+                    <div className="mt-2.5 flex items-center gap-2 sm:hidden">
+                        {canRespond && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        void run(
+                                            () => acceptTask(taskId),
+                                            'Task accepted. You can now work on it and submit it for review when ready.',
+                                        )
+                                    }
+                                    disabled={!isQualified || isAccepting || isDeclining || waitingForCharge}
+                                    title={waitingForCharge ? 'The business must approve the charge first' : undefined}
+                                    className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-700 px-3 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <span className="material-symbols-outlined !text-sm leading-none">check_circle</span>
+                                    <span>{isAccepting ? 'Accepting…' : waitingForCharge ? 'Awaiting approval' : 'Accept task'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void run(() => declineTask(taskId), 'Task declined.')}
+                                    disabled={isAccepting || isDeclining}
+                                    className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                                >
+                                    <span>{isDeclining ? 'Declining…' : 'Decline'}</span>
+                                </button>
+                            </>
+                        )}
+                        {task.executionUrl && (
+                            <a
+                                href={task.executionUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                            >
+                                <span>Open work link</span>
+                                <span className="material-symbols-outlined !text-sm leading-none">open_in_new</span>
+                            </a>
+                        )}
+                    </div>
+                )}
+
+                {/* Inline Banners for Alerts / Feedback */}
+                {actionError && (
+                    <p className="mt-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800" role="alert">
+                        {actionError}
+                    </p>
+                )}
+                {actionMessage && (
+                    <p className="mt-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800" role="status">
+                        {actionMessage}
+                    </p>
+                )}
                 {isRevision && (
-                    <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 p-4" role="status">
-                        <p className="flex items-center gap-1.5 text-sm font-bold text-orange-900"><span className="material-symbols-outlined text-base">rate_review</span>Changes requested</p>
-                        {task.reviewNotes ? <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-orange-900">{task.reviewNotes}</p> : <p className="mt-1 text-sm text-orange-900">Review the feedback, update your deliverables, and resubmit.</p>}
+                    <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2" role="status">
+                        <div className="min-w-0 flex-1">
+                            <p className="flex items-center gap-1 text-xs font-bold text-orange-900">
+                                <span className="material-symbols-outlined !text-sm">rate_review</span>
+                                Changes requested
+                            </p>
+                            <p className="mt-0.5 text-xs text-orange-900">
+                                {task.reviewNotes || 'Review the feedback, update your deliverables, and resubmit.'}
+                            </p>
+                        </div>
                         <button
                             type="button"
-                            onClick={() => void run(() => acknowledgeReview(taskId), 'Review acknowledged. You can now update your submission.')}
+                            onClick={() =>
+                                void run(
+                                    () => acknowledgeReview(taskId),
+                                    'Review acknowledged. You can now update your submission.',
+                                )
+                            }
                             disabled={isAcknowledgingReview}
-                            className="mt-3 inline-flex min-h-10 items-center gap-1 rounded-lg border border-orange-300 bg-white px-3 text-xs font-semibold text-orange-900 hover:bg-orange-100 disabled:opacity-50"
+                            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-orange-300 bg-white px-2.5 text-[11px] font-bold text-orange-900 hover:bg-orange-100 disabled:opacity-50"
                         >
-                            <span className="material-symbols-outlined text-base">check</span>
+                            <span className="material-symbols-outlined !text-sm">check</span>
                             {isAcknowledgingReview ? 'Acknowledging…' : 'Acknowledge & start revision'}
                         </button>
                     </div>
                 )}
-
                 {task.chargeApprovalRequired && (
-                    <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4" role="status">
-                        <p className="flex items-center gap-1.5 text-sm font-bold text-amber-900">
-                            <span className="material-symbols-outlined text-base">lock_clock</span>
-                            Waiting for business approval
-                        </p>
-                        <p className="mt-1 text-sm leading-6 text-amber-900">
-                            This is chargeable work{task.businessChargeAmount != null ? ` (${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.businessChargeCurrency || 'GBP' }).format(Number(task.businessChargeAmount))})` : ''}. The business must approve the charge before you can accept the task.
-                        </p>
+                    <div className="mt-2.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">
+                        <strong className="font-bold">Waiting for business approval:</strong> This is chargeable work
+                        {task.businessChargeAmount != null
+                            ? ` (${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.businessChargeCurrency || 'GBP' }).format(Number(task.businessChargeAmount))})`
+                            : ''}
+                        . The business must approve the charge before you can accept the task.
                     </div>
                 )}
-
-                <dl className="mt-5 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-3">
-                    <div><dt className="text-xs text-slate-500">Task created</dt><dd className="mt-1 font-semibold text-slate-900">{formatDate(task.createdAt)}</dd></div>
-                    <div><dt className="text-xs text-slate-500">Deadline</dt><dd className="mt-1 font-semibold text-slate-900">{formatDate(task.dueDate)}</dd></div>
-                    {money && <div><dt className="text-xs text-slate-500">Budget</dt><dd className="mt-1 font-semibold text-slate-900">{money}</dd></div>}
-                    {task.originSystem && <div><dt className="text-xs text-slate-500">Source</dt><dd className="mt-1 font-semibold text-slate-900">{task.originSystem.replaceAll('_', ' ')}</dd></div>}
-                    {task.submittedAt && <div><dt className="text-xs text-slate-500">Last submitted</dt><dd className="mt-1 font-semibold text-slate-900">{formatDate(task.submittedAt)}</dd></div>}
-                    {typeof task.revisionCount === 'number' && task.revisionCount > 0 && <div><dt className="text-xs text-slate-500">Revisions</dt><dd className="mt-1 font-semibold text-slate-900">{task.revisionCount}</dd></div>}
-                </dl>
-
-                <section className="mt-6">
-                    <h2 className="text-base font-semibold text-slate-950">Instructions</h2>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{task.description || 'No additional instructions were provided.'}</p>
-                    {task.executionUrl && <a href={task.executionUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800">Open work link<span className="material-symbols-outlined text-base">open_in_new</span></a>}
-                </section>
-
-                {task.deliverables?.length ? (
-                    <section className="mt-6 border-t border-slate-100 pt-5">
-                        <h2 className="text-base font-semibold text-slate-950">Agreed deliverables</h2>
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                            {task.deliverables.map((item) => <li key={item}>{item}</li>)}
-                        </ul>
-                    </section>
-                ) : null}
-
-                {task.materials ? (
-                    <section className="mt-6 border-t border-slate-100 pt-5">
-                        <h2 className="text-base font-semibold text-slate-950">Materials supplied</h2>
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{task.materials}</p>
-                    </section>
-                ) : null}
-
-                {(task.compensationAmount != null || task.compensationModel) && (
-                    <section className="mt-6 border-t border-slate-100 pt-5">
-                        <h2 className="text-base font-semibold text-slate-950">Compensation</h2>
-                        <p className="mt-2 text-sm text-slate-700">
-                            {task.compensationModel === 'MEMBERSHIP_INCLUDED'
-                                ? 'Included in the CHS membership service arrangement.'
-                                : task.compensationAmount != null
-                                    ? `${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(Number(task.compensationAmount))} payable on approved completion.`
-                                    : 'To be agreed with the account manager before work begins.'}
-                        </p>
-                        {task.paymentStatus && <p className="mt-1 text-xs capitalize text-slate-500">Payment status: {task.paymentStatus.replaceAll('_', ' ').toLowerCase()}</p>}
-                    </section>
-                )}
-
-                {task.requiredSkills?.length ? (
-                    <section className="mt-6 border-t border-slate-100 pt-5">
-                        <h2 className="text-base font-semibold text-slate-950">Requirements</h2>
-                        <ul className="mt-2 flex flex-wrap gap-2">
-                            {task.requiredSkills.map((skill) => <li key={skill} className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800">{skill}</li>)}
-                        </ul>
-                    </section>
-                ) : null}
-
-                {reviewHistory.length > 0 && (
-                    <section className="mt-6 border-t border-slate-100 pt-5">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h2 className="text-base font-semibold text-slate-950">Review history</h2>
-                            {latestReview && <span className="text-xs text-slate-500">Latest: round {latestReview.round} · {latestReview.decision === 'APPROVED' ? 'approved' : 'changes requested'}</span>}
-                        </div>
-                        <ul className="mt-3 space-y-2">
-                            {[...reviewHistory].reverse().map((entry, index) => <ReviewEntry key={`${entry.round}-${entry.reviewedAt}`} entry={entry} latest={index === 0} />)}
-                        </ul>
-                    </section>
-                )}
-
-                {hasSubmission && (
-                    <section className="mt-6 border-t border-slate-100 pt-5">
-                        <h2 className="text-base font-semibold text-slate-950">Your submission</h2>
-                        {submission?.notes && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{submission.notes}</p>}
-                        {submission?.links?.length ? (
-                            <ul className="mt-2 space-y-1">
-                                {submission.links.map((link) => <li key={link}><a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center gap-1 text-sm font-semibold text-blue-700 hover:underline"><span className="material-symbols-outlined text-base">link</span>{link}</a></li>)}
-                            </ul>
-                        ) : null}
-                        {submission?.attachments?.length ? (
-                            <div className="mt-3 flex flex-wrap gap-3">
-                                {submission.attachments.map((attachment) => <AttachmentPreview key={attachment.url} attachment={attachment} />)}
-                            </div>
-                        ) : null}
-                    </section>
-                )}
-
-                {task.status === 'submitted' && (
-                    <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
-                        Submitted{task.submittedAt ? ` ${formatDate(task.submittedAt)}` : ''} · awaiting {isCentralTask ? 'Central Hub' : 'administrator'} review.
-                    </p>
-                )}
-                {task.status === 'pending_business_approval' && (
-                    <p className="mt-5 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900" role="status">
-                        Your work was checked by the account manager and is awaiting the business owner&apos;s approval.
-                    </p>
-                )}
-                {(task.status === 'approved' || task.status === 'completed') && (
-                    <p className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
-                        {task.status === 'approved' ? 'Approved' : 'Completed'}{task.completedAt ? ` ${formatDate(task.completedAt)}` : ''}. Thank you for your work.
-                    </p>
-                )}
-                {task.status === 'open' && (
-                    <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" role="status">
-                        This task is in the open pool. An administrator will assign it before you can accept it.
-                    </p>
-                )}
-                {(task.status === 'declined' || task.status === 'cancelled') && (
-                    <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" role="status">
-                        This task is {statusLabel(task.status)} and no further action is required.
-                    </p>
-                )}
-
                 {!isQualified && (canRespond || canSubmit) && (
-                    <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                        Your account needs completed onboarding before you can accept or submit work. <Link href={user?.role === 'agent' ? `${basePath}/assessment` : basePath} className="font-semibold underline">Review qualification</Link>.
+                    <div className="mt-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        Your account needs completed onboarding before you can accept or submit work.{' '}
+                        <Link href={user?.role === 'agent' ? `${basePath}/assessment` : basePath} className="font-bold underline">
+                            Review qualification
+                        </Link>
+                        .
                     </div>
                 )}
-                {actionError && <p className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{actionError}</p>}
-                {actionMessage && <p className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{actionMessage}</p>}
+            </header>
 
-                {canRespond && (
-                    <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
-                        <button type="button" onClick={() => void run(() => acceptTask(taskId), 'Task accepted. You can now work on it and submit it for review when ready.')} disabled={!isQualified || isAccepting || isDeclining || waitingForCharge} title={waitingForCharge ? 'The business must approve the charge first' : undefined} className="min-h-11 rounded-lg bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">{isAccepting ? 'Accepting…' : waitingForCharge ? 'Awaiting business approval' : 'Accept task'}</button>
-                        <button type="button" onClick={() => void run(() => declineTask(taskId), 'Task declined.')} disabled={isAccepting || isDeclining} className="min-h-11 rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{isDeclining ? 'Declining…' : 'Decline'}</button>
-                    </div>
-                )}
-
-                {canSubmit && (
-                    <form onSubmit={handleSubmit} className="mt-6 space-y-4 border-t border-slate-100 pt-5">
-                        <div>
-                            <h2 className="text-base font-semibold text-slate-950">{isRevision ? 'Resubmit your work' : 'Submit your work'}</h2>
-                            <p className="mt-1 text-sm text-slate-600">Add notes, links, photos, PDFs or documents. {isCentralTask ? 'Central Hub' : 'An administrator'} will review your submission.</p>
-                        </div>
-
-                        <label className="block text-xs font-semibold text-slate-700">
-                            Notes for the reviewer
-                            <textarea
-                                value={notes}
-                                onChange={(event) => setNotes(event.target.value)}
-                                rows={4}
-                                maxLength={5000}
-                                placeholder="What did you complete? Anything the reviewer should check?"
-                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                            />
-                        </label>
-
-                        <label className="block text-xs font-semibold text-slate-700">
-                            Links <span className="font-normal text-slate-500">(one per line)</span>
-                            <textarea
-                                value={linksText}
-                                onChange={(event) => setLinksText(event.target.value)}
-                                rows={2}
-                                placeholder="https://…"
-                                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                            />
-                        </label>
-
-                        <div>
-                            <span className="block text-xs font-semibold text-slate-700">Photos, PDFs or documents</span>
-                            <div className="mt-2 flex flex-wrap items-center gap-3">
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    multiple
-                                    accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.txt,.csv,.xlsx"
-                                    onChange={(event) => void handleUpload(event.target.files)}
-                                    disabled={isUploading}
-                                    className="block w-full max-w-sm text-xs text-slate-600 file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
-                                />
-                                {isUploading && <span className="inline-flex items-center gap-2 text-xs text-slate-500"><span className="size-4 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />Uploading…</span>}
+            {/* Full-Width 12-Column Split Workspace */}
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start">
+                {/* Left Column: Brief, Instructions & Deliverables (8 cols) */}
+                <div className="space-y-3 lg:col-span-7 xl:col-span-8">
+                    {/* Instructions & Scope Card (Collapsible) */}
+                    <section className="rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4">
+                        <button
+                            type="button"
+                            onClick={() => setInstructionsExpanded((prev) => !prev)}
+                            aria-expanded={instructionsExpanded}
+                            className="flex w-full items-center justify-between gap-2 text-left"
+                        >
+                            <div className="flex items-center gap-2">
+                                <span className="inline-flex size-6 items-center justify-center rounded-md bg-blue-50 text-blue-700">
+                                    <span className="material-symbols-outlined !text-sm leading-none">description</span>
+                                </span>
+                                <h2 className="text-sm font-bold text-slate-950">Task Brief & Instructions</h2>
                             </div>
-                            {uploadError && <p className="mt-2 text-xs text-red-700" role="alert">{uploadError}</p>}
-                            {attachments.length > 0 && (
-                                <div className="mt-3 flex flex-wrap gap-3">
-                                    {attachments.map((attachment) => (
-                                        <div key={attachment.url} className="relative">
-                                            <AttachmentPreview attachment={attachment} />
-                                            <button
-                                                type="button"
-                                                onClick={() => setAttachments((current) => current.filter((item) => item.url !== attachment.url))}
-                                                className="absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:text-red-700"
-                                                aria-label={`Remove ${attachment.fileName || 'attachment'}`}
-                                            >
-                                                <span className="material-symbols-outlined text-sm">close</span>
-                                            </button>
-                                        </div>
-                                    ))}
+                            <span className="inline-flex size-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                                <span className="material-symbols-outlined !text-base leading-none">
+                                    {instructionsExpanded ? 'expand_less' : 'expand_more'}
+                                </span>
+                            </span>
+                        </button>
+
+                        {instructionsExpanded && (
+                            <div className="mt-2.5 space-y-2.5 border-t border-slate-100 pt-2.5">
+                                {parsedBrief.summary && (
+                                    <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700 sm:text-[13px]">
+                                        {parsedBrief.summary}
+                                    </p>
+                                )}
+
+                                {parsedBrief.instructions.length > 0 && (
+                                    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 sm:p-3">
+                                        <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                            Step-by-step instructions ({parsedBrief.instructions.length})
+                                        </h3>
+                                        <ul className="mt-1.5 space-y-1.5">
+                                            {parsedBrief.instructions.map((item, idx) => (
+                                                <li key={idx} className="flex items-start gap-2 text-xs leading-5 text-slate-700">
+                                                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-blue-600" />
+                                                    <span>{item}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Agreed Deliverables Card (Collapsible) */}
+                    {parsedBrief.deliverables.length > 0 && (
+                        <section className="rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4">
+                            <button
+                                type="button"
+                                onClick={() => setDeliverablesExpanded((prev) => !prev)}
+                                aria-expanded={deliverablesExpanded}
+                                className="flex w-full items-center justify-between gap-2 text-left"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <span className="inline-flex size-6 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+                                        <span className="material-symbols-outlined !text-sm leading-none">checklist</span>
+                                    </span>
+                                    <h2 className="text-sm font-bold text-slate-950">
+                                        Agreed Deliverables ({parsedBrief.deliverables.length})
+                                    </h2>
                                 </div>
+                                <span className="inline-flex size-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                                    <span className="material-symbols-outlined !text-base leading-none">
+                                        {deliverablesExpanded ? 'expand_less' : 'expand_more'}
+                                    </span>
+                                </span>
+                            </button>
+
+                            {deliverablesExpanded && (
+                                <div className="mt-2.5 border-t border-slate-100 pt-2.5">
+                                    <ol className="space-y-1.5">
+                                        {parsedBrief.deliverables.map((item, idx) => (
+                                            <li
+                                                key={idx}
+                                                className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-2 text-xs leading-5 text-slate-700"
+                                            >
+                                                <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-800">
+                                                    {idx + 1}
+                                                </span>
+                                                <span>{item}</span>
+                                            </li>
+                                        ))}
+                                    </ol>
+                                    {parsedBrief.closingNote && (
+                                        <p className="mt-2 text-[11px] font-medium text-slate-500">
+                                            {parsedBrief.closingNote}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </section>
+                    )}
+
+                    {/* Materials Supplied */}
+                    {task.materials && (
+                        <section className="rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4">
+                            <div className="flex items-center gap-2">
+                                <span className="inline-flex size-6 items-center justify-center rounded-md bg-indigo-50 text-indigo-700">
+                                    <span className="material-symbols-outlined !text-sm leading-none">folder_open</span>
+                                </span>
+                                <h2 className="text-sm font-bold text-slate-950">Materials Supplied</h2>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap border-t border-slate-100 pt-2 text-xs leading-5 text-slate-700">
+                                {task.materials}
+                            </p>
+                        </section>
+                    )}
+                </div>
+
+                {/* Right Column: Action Studio, Skills, Compensation & Reviews (4 cols) */}
+                <div className="space-y-3 lg:col-span-5 xl:col-span-4">
+                    {/* Task Action / Submission Studio Card */}
+                    <section
+                        className={`rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4 ${
+                            canRespond && !canSubmit ? 'hidden lg:block' : ''
+                        }`}
+                    >
+                        <div className="flex items-center justify-between gap-2">
+                            <h2 className="text-sm font-bold text-slate-950">
+                                {canSubmit
+                                    ? isRevision
+                                        ? 'Resubmit Deliverables'
+                                        : 'Submit Deliverables'
+                                    : canRespond
+                                      ? 'Respond to Assignment'
+                                      : 'Task Status'}
+                            </h2>
+                            {task.submittedAt && (
+                                <span className="text-[11px] text-slate-500">
+                                    Submitted {formatDate(task.submittedAt)}
+                                </span>
                             )}
                         </div>
 
-                        <button type="submit" disabled={!isQualified || isSubmitting || isUploading} className="min-h-11 rounded-lg bg-blue-700 px-5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">
-                            {isSubmitting ? 'Submitting…' : isRevision ? 'Resubmit for review' : 'Submit for review'}
-                        </button>
-                    </form>
-                )}
-            </article>
+                        {canRespond && (
+                            <div className="mt-2.5 border-t border-slate-100 pt-2.5">
+                                <p className="text-xs leading-5 text-slate-600">
+                                    Review the instructions and deliverables on the left. Accept the task to unlock the deliverable submission form.
+                                </p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            void run(
+                                                () => acceptTask(taskId),
+                                                'Task accepted. You can now work on it and submit it for review when ready.',
+                                            )
+                                        }
+                                        disabled={!isQualified || isAccepting || isDeclining || waitingForCharge}
+                                        title={waitingForCharge ? 'The business must approve the charge first' : undefined}
+                                        className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-700 px-4 text-xs font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <span className="material-symbols-outlined !text-sm">check_circle</span>
+                                        <span>{isAccepting ? 'Accepting…' : waitingForCharge ? 'Awaiting approval' : 'Accept task'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void run(() => declineTask(taskId), 'Task declined.')}
+                                        disabled={isAccepting || isDeclining}
+                                        className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 px-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                    >
+                                        {isDeclining ? 'Declining…' : 'Decline'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {canSubmit && (
+                            <form onSubmit={handleSubmit} className="mt-2.5 space-y-3 border-t border-slate-100 pt-2.5">
+                                <p className="text-xs text-slate-500">
+                                    Provide notes, proof links, or file attachments for {isCentralTask ? 'Central Hub' : 'administrator'} QA review.
+                                </p>
+
+                                <label className="block text-xs font-semibold text-slate-700">
+                                    Notes for reviewer
+                                    <textarea
+                                        value={notes}
+                                        onChange={(event) => setNotes(event.target.value)}
+                                        rows={3}
+                                        maxLength={5000}
+                                        placeholder="Summary of completed deliverables, leads generated, and outcomes…"
+                                        className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-normal text-slate-900 outline-none focus:border-blue-600"
+                                    />
+                                </label>
+
+                                <label className="block text-xs font-semibold text-slate-700">
+                                    Proof links <span className="font-normal text-slate-400">(one per line)</span>
+                                    <textarea
+                                        value={linksText}
+                                        onChange={(event) => setLinksText(event.target.value)}
+                                        rows={2}
+                                        placeholder="https://…"
+                                        className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-normal text-slate-900 outline-none focus:border-blue-600"
+                                    />
+                                </label>
+
+                                <div>
+                                    <span className="block text-xs font-semibold text-slate-700">Photos, PDFs or documents</span>
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            multiple
+                                            accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.txt,.csv,.xlsx"
+                                            onChange={(event) => void handleUpload(event.target.files)}
+                                            disabled={isUploading}
+                                            className="block w-full text-xs text-slate-600 file:mr-2.5 file:h-8 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                                        />
+                                        {isUploading && (
+                                            <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                                                <span className="size-3.5 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />
+                                                Uploading…
+                                            </span>
+                                        )}
+                                    </div>
+                                    {uploadError && <p className="mt-1.5 text-xs text-red-700" role="alert">{uploadError}</p>}
+                                    {attachments.length > 0 && (
+                                        <div className="mt-2.5 flex flex-wrap gap-2.5">
+                                            {attachments.map((attachment) => (
+                                                <div key={attachment.url} className="relative">
+                                                    <AttachmentPreview attachment={attachment} />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setAttachments((current) =>
+                                                                current.filter((item) => item.url !== attachment.url),
+                                                            )
+                                                        }
+                                                        className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-xs hover:text-red-700"
+                                                        aria-label={`Remove ${attachment.fileName || 'attachment'}`}
+                                                    >
+                                                        <span className="material-symbols-outlined !text-xs">close</span>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={!isQualified || isSubmitting || isUploading}
+                                    className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-blue-700 px-4 text-xs font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <span className="material-symbols-outlined !text-sm">send</span>
+                                    <span>{isSubmitting ? 'Submitting…' : isRevision ? 'Resubmit for review' : 'Submit for review'}</span>
+                                </button>
+                            </form>
+                        )}
+
+                        {task.status === 'submitted' && (
+                            <p className="mt-2.5 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900" role="status">
+                                Submitted{task.submittedAt ? ` ${formatDate(task.submittedAt)}` : ''} · awaiting {isCentralTask ? 'Central Hub' : 'administrator'} review.
+                            </p>
+                        )}
+                        {task.status === 'pending_business_approval' && (
+                            <p className="mt-2.5 rounded-lg border border-violet-200 bg-violet-50 p-2.5 text-xs text-violet-900" role="status">
+                                Checked by the account manager and awaiting business owner approval.
+                            </p>
+                        )}
+                        {(task.status === 'approved' || task.status === 'completed') && (
+                            <p className="mt-2.5 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-900" role="status">
+                                {task.status === 'approved' ? 'Approved' : 'Completed'}
+                                {task.completedAt ? ` ${formatDate(task.completedAt)}` : ''}. Thank you for your work.
+                            </p>
+                        )}
+                        {task.status === 'open' && (
+                            <p className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700" role="status">
+                                This task is in the open pool. An administrator will assign it before you can accept it.
+                            </p>
+                        )}
+                        {(task.status === 'declined' || task.status === 'cancelled') && (
+                            <p className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700" role="status">
+                                This task is {statusLabel(task.status)} and no further action is required.
+                            </p>
+                        )}
+                    </section>
+
+                    {/* Requirements & Compensation Side Card */}
+                    <section className="rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4">
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                            Requirements & Compensation
+                        </h2>
+
+                        <div className="mt-2.5 space-y-2.5">
+                            <div>
+                                <p className="text-[11px] font-semibold text-slate-700">Payout arrangement</p>
+                                <p className="mt-0.5 text-xs text-slate-600">
+                                    {task.compensationModel === 'MEMBERSHIP_INCLUDED'
+                                        ? 'Included in the CHS membership service arrangement.'
+                                        : task.compensationAmount != null && Number(task.compensationAmount) > 0
+                                          ? `${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(Number(task.compensationAmount))} payable on approved completion.`
+                                          : money
+                                            ? `${money} task budget.`
+                                            : 'To be agreed with the account manager before work begins.'}
+                                </p>
+                                {task.paymentStatus && (
+                                    <p className="mt-0.5 text-[11px] capitalize text-slate-400">
+                                        Payment status: {task.paymentStatus.replaceAll('_', ' ').toLowerCase()}
+                                    </p>
+                                )}
+                            </div>
+
+                            {task.requiredSkills?.length ? (
+                                <div className="border-t border-slate-100 pt-2.5">
+                                    <p className="text-[11px] font-semibold text-slate-700">
+                                        Required skills ({task.requiredSkills.length})
+                                    </p>
+                                    <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                                        {task.requiredSkills.map((skill) => (
+                                            <li
+                                                key={skill}
+                                                className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-800"
+                                            >
+                                                {skill}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ) : null}
+                        </div>
+                    </section>
+
+                    {/* Your Submission Summary */}
+                    {hasSubmission && (
+                        <section className="rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4">
+                            <h2 className="text-sm font-bold text-slate-950">Your Submission</h2>
+                            {submission?.notes && (
+                                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-700">
+                                    {submission.notes}
+                                </p>
+                            )}
+                            {submission?.links?.length ? (
+                                <ul className="mt-2 space-y-1">
+                                    {submission.links.map((link) => (
+                                        <li key={link}>
+                                            <a
+                                                href={link}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+                                            >
+                                                <span className="material-symbols-outlined !text-sm">link</span>
+                                                <span className="truncate">{link}</span>
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : null}
+                            {submission?.attachments?.length ? (
+                                <div className="mt-2.5 flex flex-wrap gap-2">
+                                    {submission.attachments.map((attachment) => (
+                                        <AttachmentPreview key={attachment.url} attachment={attachment} />
+                                    ))}
+                                </div>
+                            ) : null}
+                        </section>
+                    )}
+
+                    {/* Review History */}
+                    {reviewHistory.length > 0 && (
+                        <section className="rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <h2 className="text-sm font-bold text-slate-950">Review History</h2>
+                                {latestReview && (
+                                    <span className="text-[11px] text-slate-500">
+                                        Round {latestReview.round} · {latestReview.decision === 'APPROVED' ? 'approved' : 'changes requested'}
+                                    </span>
+                                )}
+                            </div>
+                            <ul className="mt-2.5 space-y-2">
+                                {[...reviewHistory].reverse().map((entry, index) => (
+                                    <ReviewEntry key={`${entry.round}-${entry.reviewedAt}`} entry={entry} latest={index === 0} />
+                                ))}
+                            </ul>
+                        </section>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

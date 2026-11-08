@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 import type { User, UserRole } from '@/types/auth';
 
 export interface AdminAffiliate extends User {
@@ -36,18 +37,20 @@ export interface AdminUserFilters {
 
 export const useAdminUsers = (filters: AdminUserFilters = {}) => {
   const queryClient = useQueryClient();
-  const usersQuery = useQuery({
-    queryKey: ['admin-users', filters],
-    queryFn: async () => {
-      const response = await apiClient.get('/admin/users', { params: filters });
-      const data = response.data?.data ?? response.data;
-      if (Array.isArray(data)) return { items: data as AdminAffiliate[], meta: undefined };
-      return {
-        items: Array.isArray(data?.items) ? data.items as AdminAffiliate[] : [],
-        meta: data?.meta as { total: number; page: number; lastPage: number } | undefined,
-      };
-    },
-  });
+  const usersQuery = stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['admin-users', filters],
+      queryFn: async () => {
+        const response = await apiClient.get('/admin/users', { params: filters });
+        const data = response.data?.data ?? response.data;
+        if (Array.isArray(data)) return { items: data as AdminAffiliate[], meta: undefined };
+        return {
+          items: Array.isArray(data?.items) ? (data.items as AdminAffiliate[]) : [],
+          meta: data?.meta as { total: number; page: number; lastPage: number } | undefined,
+        };
+      },
+    }),
+  );
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ userId, status }: { userId: string; status: string }) => {
@@ -69,16 +72,19 @@ export const useAdminUsers = (filters: AdminUserFilters = {}) => {
   };
 };
 
-export const useAdminAffiliate = (id: string) => useQuery({
-  queryKey: ['admin-affiliate', id],
-  enabled: Boolean(id),
-  queryFn: async () => {
-    const response = await apiClient.get(`/admin/users/${id}`);
-    return (response.data?.data ?? response.data) as AdminAffiliate & {
-      profile: Record<string, unknown>;
-      assessmentAttempts: Array<{ id: string; score: number; maxScore: number; percentage: number; band: string; answers: unknown[]; createdAt: string }>;
-      learningCompletedCount: number;
-      learningResourceCount: number;
-    };
-  },
-});
+export const useAdminAffiliate = (id: string) =>
+  stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['admin-affiliate', id],
+      enabled: Boolean(id),
+      queryFn: async () => {
+        const response = await apiClient.get(`/admin/users/${id}`);
+        return (response.data?.data ?? response.data) as AdminAffiliate & {
+          profile: Record<string, unknown>;
+          assessmentAttempts: Array<{ id: string; score: number; maxScore: number; percentage: number; band: string; answers: unknown[]; createdAt: string }>;
+          learningCompletedCount: number;
+          learningResourceCount: number;
+        };
+      },
+    }),
+  );

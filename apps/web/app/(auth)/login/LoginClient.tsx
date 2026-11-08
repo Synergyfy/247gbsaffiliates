@@ -94,7 +94,7 @@ export function LoginClient() {
                                 <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                             </svg>
                         </div>
-                        <span className="text-2xl font-bold text-text-main tracking-tight font-display">247gbs affiliate</span>
+                        <span className="text-2xl font-bold text-text-main tracking-tight font-display">247GBS Affiliate</span>
                     </div>
 
                     <div className="mb-8">
@@ -137,7 +137,7 @@ export function LoginClient() {
                     </div>
 
                     <p className="mt-12 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest font-display">
-                        &copy; 2026 247gbs affiliate professional marketplace
+                        &copy; 2026 247GBS Affiliate professional marketplace
                     </p>
                 </div>
             </div>

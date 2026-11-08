@@ -5,6 +5,8 @@ import { useParams, usePathname } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { QuizStep } from '@/components/onboarding/QuizStep';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 type AssignedAssessmentDetail = {
     id: string;
@@ -21,11 +23,13 @@ export default function AssignedAssessmentPage() {
     const pathname = usePathname();
     const dashboardRoot = pathname.split('/').slice(0, 2).join('/');
     const queryClient = useQueryClient();
-    const assignmentQuery = useQuery({
-        queryKey: ['assigned-assessment', params.assignmentId],
-        queryFn: async () => (await apiClient.get<AssignedAssessmentDetail>(`/assessment/assignments/${params.assignmentId}`)).data,
-        enabled: Boolean(params.assignmentId),
-    });
+    const assignmentQuery = stabilizeErrorRetry(
+        useQuery({
+            queryKey: ['assigned-assessment', params.assignmentId],
+            queryFn: async () => (await apiClient.get<AssignedAssessmentDetail>(`/assessment/assignments/${params.assignmentId}`)).data,
+            enabled: Boolean(params.assignmentId),
+        }),
+    );
     const submit = useMutation({
         mutationFn: async (answers: Array<{ questionId: string; selectedOptionIndex: number }>) => apiClient.post(`/assessment/assignments/${params.assignmentId}/submit`, { answers }),
         onSuccess: async () => {
@@ -34,8 +38,22 @@ export default function AssignedAssessmentPage() {
         },
     });
 
-    if (assignmentQuery.isLoading) return <div className="mx-auto max-w-3xl py-12 text-center text-sm text-slate-500">Loading assigned assessment…</div>;
-    if (assignmentQuery.isError || !assignmentQuery.data) return <main className="mx-auto max-w-3xl py-8"><section className="rounded-xl border border-red-200 bg-white p-5"><h1 className="font-bold text-red-900">Assessment unavailable</h1><p className="mt-1 text-sm text-red-800">This assessment could not be loaded. It may have been removed or assigned to another account.</p><button onClick={() => assignmentQuery.refetch()} className="mt-3 rounded-md border border-red-200 px-3 py-2 text-sm font-semibold text-red-800">Try again</button><Link href={`${dashboardRoot}/assessment`} className="ml-3 text-sm font-semibold text-blue-700">Back to assessments</Link></section></main>;
+    if (assignmentQuery.isLoading && !assignmentQuery.isError) return <div className="mx-auto max-w-3xl py-12 text-center text-sm text-slate-500">Loading assigned assessment…</div>;
+    if (assignmentQuery.isError || !assignmentQuery.data) {
+        return (
+            <main className="mx-auto max-w-3xl space-y-4 py-8">
+                <Link href={`${dashboardRoot}/assessment`} className="text-sm font-semibold text-blue-700 hover:underline">← Back to assessments</Link>
+                <RequestErrorState
+                    area="Assigned assessment"
+                    label="Assessment"
+                    error={assignmentQuery.error}
+                    onRetry={() => void assignmentQuery.refetch()}
+                    supportHref={`${dashboardRoot}/messages`}
+                    compact={false}
+                />
+            </main>
+        );
+    }
 
     const assessment = assignmentQuery.data;
     const submitted = ['pass', 'partial', 'fail'].includes(assessment.status);

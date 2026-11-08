@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { getVisibleSubmissionEntries } from '@/lib/profile-submission';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 type VerificationRecord = {
     id: string;
@@ -36,10 +38,10 @@ export default function AdminVerificationsPage() {
     const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
     const [actionError, setActionError] = useState<string | null>(null);
 
-    const queueQuery = useQuery({
+    const queueQuery = stabilizeErrorRetry(useQuery({
         queryKey: ['admin-verifications'],
         queryFn: async () => (await apiClient.get<VerificationRecord[]>('/admin/verifications')).data,
-    });
+    }));
 
     const decisionMutation = useMutation({
         mutationFn: async ({ id, status, notes }: { id: string; status: 'verified' | 'rejected'; notes?: string }) => {
@@ -68,12 +70,12 @@ export default function AdminVerificationsPage() {
         }
     };
 
-    if (queueQuery.isLoading) {
+    if (queueQuery.isLoading && !queueQuery.isError) {
         return <div className="flex min-h-[50vh] items-center justify-center"><div className="size-10 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div>;
     }
 
     if (queueQuery.isError) {
-        return <div className="p-8"><p className="text-sm font-semibold text-red-700">Could not load verification submissions.</p><button onClick={() => void queueQuery.refetch()} className="mt-2 text-xs font-bold text-primary underline">Try again</button></div>;
+        return <div className="mx-auto max-w-7xl p-4 sm:p-8"><RequestErrorState area="Admin verifications" label="Verification submissions" error={queueQuery.error} onRetry={() => void queueQuery.refetch()} supportHref="/dashboard/admin" compact={false} /></div>;
     }
 
     const records = queueQuery.data || [];
@@ -89,7 +91,10 @@ export default function AdminVerificationsPage() {
             {actionError && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-800">{actionError}</p>}
 
             {records.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">No affiliate accounts are awaiting verification.</div>
+                <div className="py-10 text-center">
+                    <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">verified_user</span>
+                    <p className="mt-2 text-sm font-semibold text-slate-700">No accounts awaiting verification</p>
+                </div>
             ) : (
                 <div className="space-y-4">
                     {records.map((record) => {
@@ -106,7 +111,7 @@ export default function AdminVerificationsPage() {
                                     <span className={`w-fit rounded-full px-2.5 py-1 text-[9px] font-bold uppercase ${record.submitted ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>{record.submitted ? 'Submission received' : 'Awaiting profile and ID'}</span>
                                 </header>
 
-                                <div className="grid gap-4 py-4 lg:grid-cols-[1fr_280px]">
+                                <div className="grid grid-cols-1 gap-4 py-4 lg:grid-cols-[1fr_280px]">
                                     <section>
                                         <h3 className="text-xs font-bold uppercase tracking-wide text-slate-700">Submitted profile information</h3>
                                         {fields.length ? (

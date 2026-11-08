@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { useAdminUsers } from '@/hooks/useAdminUsers';
 import { getCentralHubUrl } from '@/lib/centralHub';
+import { RequestErrorState, ResponsiveRetryAction } from '@/components/dashboard/RequestErrorState';
 
 type TaskForm = { title: string; description: string; executionUrl: string; budget: string; type: 'one_time' | 'recurring'; dueDate: string; requiredSkills: string };
 const blankForm: TaskForm = { title: '', description: '', executionUrl: '', budget: '5', type: 'one_time', dueDate: '', requiredSkills: '' };
@@ -50,7 +51,7 @@ export default function AdminTasksPage() {
 
             <form onSubmit={(event) => void saveTask(event)} className="mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                 <h2 className="mb-4 font-bold text-slate-900">Create task</h2>
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <label className="text-xs font-semibold text-slate-700">Title <span className="text-red-600" aria-hidden="true">*</span><input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
                     <label className="text-xs font-semibold text-slate-700">Budget ($) <span className="text-red-600" aria-hidden="true">*</span><span className="mt-1 flex w-full overflow-hidden rounded-md border border-slate-200 bg-white text-sm font-normal"><span className="flex items-center border-r border-slate-200 bg-slate-50 px-3 text-slate-500">$</span><input required type="number" min="5" step="0.01" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} className="min-w-0 flex-1 px-3 py-2 outline-none" /></span></label>
                     <label className="text-xs font-semibold text-slate-700 md:col-span-2">Instructions / description <span className="text-red-600" aria-hidden="true">*</span><textarea required rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
@@ -64,8 +65,8 @@ export default function AdminTasksPage() {
             </form>
 
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><h2 className="font-bold text-slate-900">Tasks and assignments</h2><button onClick={() => void refetch()} className="text-xs font-semibold text-primary hover:underline">Refresh</button></div>
-                {isLoading ? <p className="p-6 text-sm text-slate-500">Loading tasks…</p> : isError ? <p className="p-6 text-sm text-red-700">Tasks could not be loaded: {error instanceof Error ? error.message : 'Unknown error'}</p> : tasks.length ? <div className="divide-y divide-slate-100">{tasks.map((task) => {
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><h2 className="font-bold text-slate-900">Tasks and assignments</h2>{!isError && <ResponsiveRetryAction onRetry={() => refetch()} label="Refresh" tone="neutral" />}</div>
+                {isLoading && !isError ? <p className="p-6 text-sm text-slate-500">Loading tasks…</p> : isError ? <div className="p-4"><RequestErrorState area="Admin tasks" label="Tasks" error={error} onRetry={() => void refetch()} supportHref="/dashboard/admin" /></div> : tasks.length ? <div className="divide-y divide-slate-100">{tasks.map((task) => {
                     const assignedAgent = task.assignedAgent;
                     const agentLabel = assignedAgent ? `${assignedAgent.firstName || ''} ${assignedAgent.lastName || ''}`.trim() || assignedAgent.email : '';
                     const review = latestReview(task);

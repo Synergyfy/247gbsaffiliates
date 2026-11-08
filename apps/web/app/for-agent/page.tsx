@@ -61,7 +61,7 @@ export default function ForAgentPage() {
                                 Engineered for Excellence
                             </h2>
                             <p className="text-text-secondary text-lg lg:text-xl font-medium max-w-[700px] mx-auto leading-relaxed">
-                                We've stripped away the noise. 247gbs provides the tools you need to maximize your output and build a legitimate career.
+                                We've stripped away the noise. 247GBS Affiliate provides the tools you need to maximize your output and build a legitimate career.
                             </p>
                         </div>
 

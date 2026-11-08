@@ -7,6 +7,8 @@ import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useLearningProgress, useLearningResources } from '@/hooks/useLearningResources';
 import { useTasks } from '@/hooks/useTasks';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 type WorkflowStatus = 'not_started' | 'in_progress' | 'pending_review' | 'completed' | 'blocked' | 'failed';
 type DashboardProfile = {
@@ -107,30 +109,36 @@ export default function AgentDashboard() {
     const { user } = useAuthStore();
     const lifecycleSliderRef = useRef<HTMLDivElement>(null);
     const [activeLifecycleStage, setActiveLifecycleStage] = useState(1);
-    const profileQuery = useQuery({
-        queryKey: ['affiliate-dashboard-profile'],
-        queryFn: async () => unwrap<DashboardProfile>((await apiClient.get('/auth/profile')).data),
-    });
+    const profileQuery = stabilizeErrorRetry(
+        useQuery({
+            queryKey: ['affiliate-dashboard-profile'],
+            queryFn: async () => unwrap<DashboardProfile>((await apiClient.get('/auth/profile')).data),
+        }),
+    );
     const profile = profileQuery.data || user as DashboardProfile | null;
     const userId = profile?.id || user?.id;
     const rawRole = profile?.role || user?.role || null;
     const role = rawRole === 'account-manager' ? 'account_manager' : rawRole;
-    const attemptQuery = useQuery({
-        queryKey: ['affiliate-dashboard-latest-attempt'],
-        queryFn: async () => unwrap<AssessmentAttempt | null>((await apiClient.get('/assessment/latest-attempt')).data),
-    });
+    const attemptQuery = stabilizeErrorRetry(
+        useQuery({
+            queryKey: ['affiliate-dashboard-latest-attempt'],
+            queryFn: async () => unwrap<AssessmentAttempt | null>((await apiClient.get('/assessment/latest-attempt')).data),
+        }),
+    );
     const resourcesQuery = useLearningResources(role);
     const learningProgressQuery = useLearningProgress(Boolean(userId && role));
     const hasTaskAccess = Boolean(profile?.verificationStatus === 'verified' && profile.isOnboarded && profile.isQuizPassed && profile.skills?.length);
     const tasksQuery = useTasks({ assignedAgentId: userId, limit: 50, enabled: Boolean(userId && hasTaskAccess) });
-    const acquisitionQuery = useQuery({
-        queryKey: ['business-acquisition-overview'],
-        queryFn: async () => unwrap<{
-            summary: { approached: number; registered: number; onboardingCompleted: number; verified: number };
-            settings: { targetCount: number; dueDate?: string | null };
-        }>((await apiClient.get('/business-acquisition/summary')).data),
-        enabled: Boolean(userId),
-    });
+    const acquisitionQuery = stabilizeErrorRetry(
+        useQuery({
+            queryKey: ['business-acquisition-overview'],
+            queryFn: async () => unwrap<{
+                summary: { approached: number; registered: number; onboardingCompleted: number; verified: number };
+                settings: { targetCount: number; dueDate?: string | null };
+            }>((await apiClient.get('/business-acquisition/summary')).data),
+            enabled: Boolean(userId),
+        }),
+    );
 
     const isLoading = profileQuery.isLoading || attemptQuery.isLoading || resourcesQuery.isLoading || learningProgressQuery.isLoading || (hasTaskAccess && tasksQuery.isLoading);
     const hasAssessmentPassed = Boolean(profile?.isQuizPassed) || ['pass', 'partial'].includes(attemptQuery.data?.band?.toLowerCase() || '');
@@ -215,7 +223,7 @@ export default function AgentDashboard() {
     } else if (hasProfileSubmission && verificationStatus === 'pending') {
         nextAction = { ...nextAction, title: 'Your identity verification is under review', description: 'You can continue learning while an administrator reviews your submission. We’ll show the persisted verification status here.', href: '/dashboard/agent/verification', action: 'View verification status', icon: 'hourglass_top' };
     } else if (verificationStatus === 'verified' && !hasAssessmentPassed && latestAttempt?.band?.toLowerCase() === 'fail') {
-        nextAction = { ...nextAction, title: 'Review learning resources before retaking your assessment', description: 'Your latest assessment result was not a pass. Review the published learning materials, then return to the assessment when retake rules allow.', href: '/learning', action: 'Open Learning Hub', icon: 'school' };
+        nextAction = { ...nextAction, title: 'Review learning resources before retaking your assessment', description: 'Your latest assessment result was not a pass. Review the published learning materials, then return to the assessment when retake rules allow.', href: '/dashboard/agent/learning', action: 'Open Learning Hub', icon: 'school' };
     } else if (verificationStatus === 'verified' && !hasAssessmentPassed) {
         nextAction = { ...nextAction, title: 'Complete your assessment', description: 'Your profile is verified. Take the existing affiliate assessment to continue toward qualification.', href: '/dashboard/agent/assessment', action: 'Open assessment', icon: 'quiz' };
     } else if (!isQualified && hasAssessmentPassed) {
@@ -232,7 +240,7 @@ export default function AgentDashboard() {
     const stageItems = [
         { title: 'Profile', description: hasProfileSubmission ? 'Information submitted' : 'Profile information needed', status: profileStatus, href: '/dashboard/agent/profile' },
         { title: 'Verification', description: verificationStatus === 'verified' ? 'Admin review complete' : verificationStatus === 'pending' && hasProfileSubmission ? 'Awaiting admin review' : verificationStatus === 'rejected' ? 'Update submission' : 'Submit profile and identity details', status: verificationStageStatus, href: '/dashboard/agent/verification' },
-        { title: 'Learning', description: learningResources.length ? `${completedResources} of ${learningResources.length} published resources complete` : 'No published resources for your role', status: learningStatus, href: '/learning' },
+        { title: 'Learning', description: learningResources.length ? `${completedResources} of ${learningResources.length} published resources complete` : 'No published resources for your role', status: learningStatus, href: '/dashboard/agent/learning' },
         { title: 'Assessment', description: latestAttempt ? `${latestAttempt.band} · ${latestAttempt.percentage}%` : hasAssessmentPassed ? 'Passed' : 'No result recorded', status: assessmentStageStatus, href: '/dashboard/agent/assessment' },
         { title: 'Qualification', description: isQualified ? 'Current requirements complete' : missingQualificationRequirements[0] || 'Requirements remain', status: qualificationStatus, href: '/dashboard/agent/qualification' },
         { title: 'Tasks', description: !isQualified ? 'Available after qualification' : tasks.length ? `${tasks.length} assigned task${tasks.length === 1 ? '' : 's'}` : 'Waiting for an admin assignment', status: assignedTaskStatus, href: '/dashboard/agent/tasks' },
@@ -242,10 +250,18 @@ export default function AgentDashboard() {
 
     return (
         <div className="mx-auto w-full max-w-[1500px] space-y-4 sm:space-y-7">
-            {(profileQuery.isError || attemptQuery.isError) && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-red-600 bg-red-50 px-4 py-3 text-xs text-red-900">
-                <span>Some account or assessment information could not be refreshed. Displayed values may be from your current signed-in profile.</span>
-                <button type="button" onClick={() => { void profileQuery.refetch(); void attemptQuery.refetch(); }} className="font-semibold underline">Retry</button>
-            </div>}
+            {(profileQuery.isError || attemptQuery.isError) && (
+                <RequestErrorState
+                    area="Agent overview"
+                    label="Account status"
+                    error={profileQuery.error ?? attemptQuery.error}
+                    onRetry={() => {
+                        void profileQuery.refetch();
+                        void attemptQuery.refetch();
+                    }}
+                    supportHref="/dashboard/agent/messages"
+                />
+            )}
 
             <section className="flex flex-col justify-between gap-2 border-b border-slate-200 pb-3 sm:gap-4 sm:pb-5 sm:flex-row sm:items-end">
                 <div className="min-w-0">
@@ -281,7 +297,7 @@ export default function AgentDashboard() {
                         });
                         setActiveLifecycleStage(nearestIndex + 1);
                     }}
-                    className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-6 px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-2.5 sm:overflow-visible sm:scroll-px-0 sm:px-0 sm:pb-0 sm:snap-none md:grid-cols-3 2xl:grid-cols-6"
+                    className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-3 px-3 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-2.5 sm:overflow-visible sm:scroll-px-0 sm:px-0 sm:pb-0 sm:snap-none md:grid-cols-3 2xl:grid-cols-6"
                 >
                     {stageItems.map((stage, index) => <StageCard key={stage.title} number={index + 1} slideIndex={index} {...stage} />)}
                 </div>
@@ -309,7 +325,7 @@ export default function AgentDashboard() {
                 </div>
             </section>
 
-            <section aria-labelledby="next-action-heading" className="grid gap-3 rounded-lg bg-[#202b42] px-4 py-4 text-white shadow-sm sm:gap-4 sm:rounded-xl sm:px-7 sm:py-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <section aria-labelledby="next-action-heading" className="grid grid-cols-1 gap-3 rounded-lg bg-[#202b42] px-4 py-4 text-white shadow-sm sm:gap-4 sm:rounded-xl sm:px-7 sm:py-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="max-w-3xl">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-blue-200">{nextAction.eyebrow}</p>
                     <h2 id="next-action-heading" className="mt-1.5 text-base font-semibold leading-snug sm:mt-2 sm:text-xl">{nextAction.title}</h2>
@@ -324,14 +340,14 @@ export default function AgentDashboard() {
                 <div className="mb-2 flex flex-wrap items-end justify-between gap-2 sm:mb-3">
                     <div><h2 id="capabilities-heading" className="text-base font-semibold text-slate-950">Your account at a glance</h2><p className="mt-0.5 text-xs text-slate-500">Current status and the next useful place to go.</p></div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     <CapabilityCard icon="person" title="Profile Completion" status={profileStatus} href="/dashboard/agent/profile" action="Manage profile">
                         {hasProfileSubmission ? 'Your profile information has been submitted for verification.' : 'Complete and submit your profile information to begin verification.'}
                     </CapabilityCard>
                     <CapabilityCard icon="verified_user" title="Identity & Verification" status={verificationStageStatus} href="/dashboard/agent/verification" action="View verification">
                         {verificationStatus === 'rejected' ? profile?.verificationNotes || 'Update your submission for another review.' : verificationStatus === 'pending' ? 'Your submitted identity information is awaiting administrator review.' : verificationStatus === 'verified' ? 'An administrator has verified your identity.' : 'Submit your identity document and profile for administrator review.'}
                     </CapabilityCard>
-                    <CapabilityCard icon="school" title="Learning Hub" status={learningStatus} href="/learning" action="Open Learning Hub">
+                    <CapabilityCard icon="school" title="Learning Hub" status={learningStatus} href="/dashboard/agent/learning" action="Open Learning Hub">
                         {resourcesQuery.isError || learningProgressQuery.isError ? 'Learning progress could not be loaded.' : learningResources.length ? `${completedResources} of ${learningResources.length} published resources completed.` : 'No published learning resources are currently available for your role.'}
                     </CapabilityCard>
                     <CapabilityCard icon="quiz" title="Assessment" status={assessmentStageStatus} href="/dashboard/agent/assessment" action="View assessment">

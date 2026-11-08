@@ -6,6 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { QuizStep } from '@/components/onboarding/QuizStep';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 type Profile = { isQuizPassed?: boolean };
 type Attempt = { band?: string; createdAt?: string } | null;
@@ -23,14 +25,14 @@ function unwrap<T,>(payload: unknown): T {
 export function RoleQuizRetakePage({ root, role }: { root: string; role: string }) {
     const { clearQuizAnswers, setStep, retakeAvailableAt } = useOnboardingStore();
     const [now, setNow] = useState(0);
-    const profileQuery = useQuery({
+    const profileQuery = stabilizeErrorRetry(useQuery({
         queryKey: ['assessment-profile'],
         queryFn: async () => unwrap<Profile>((await apiClient.get('/auth/profile')).data),
-    });
-    const attemptQuery = useQuery({
+    }));
+    const attemptQuery = stabilizeErrorRetry(useQuery({
         queryKey: ['assessment-latest-attempt'],
         queryFn: async () => unwrap<Attempt>((await apiClient.get('/assessment/latest-attempt')).data),
-    });
+    }));
 
     useEffect(() => {
         clearQuizAnswers();
@@ -51,12 +53,12 @@ export function RoleQuizRetakePage({ root, role }: { root: string; role: string 
     const remainingHours = locked ? Math.ceil((cooldownUntil - now) / (60 * 60 * 1000)) : 0;
     const backHref = `${root}/assessment`;
 
-    if (profileQuery.isLoading || attemptQuery.isLoading) {
+    if ((profileQuery.isLoading || attemptQuery.isLoading) && !profileQuery.isError && !attemptQuery.isError) {
         return <main className="mx-auto w-full max-w-3xl px-3 py-4 sm:px-5"><p className="text-sm text-slate-500">Preparing your assessment…</p></main>;
     }
 
     if (profileQuery.isError || attemptQuery.isError) {
-        return <main className="mx-auto w-full max-w-3xl space-y-3 px-3 py-4 sm:px-5"><Link href={backHref} className="text-xs font-semibold text-blue-700">← Back to assessment</Link><div role="alert" className="bg-rose-50 p-3 text-sm text-rose-800">Your assessment status could not be verified. Try again before starting a retake.<button type="button" onClick={() => { void profileQuery.refetch(); void attemptQuery.refetch(); }} className="ml-2 font-semibold underline">Retry</button></div></main>;
+        return <main className="mx-auto w-full max-w-3xl space-y-3 px-3 py-4 sm:px-5"><Link href={backHref} className="text-xs font-semibold text-blue-700">← Back to assessment</Link><RequestErrorState area={`${role} quiz retake`} label="Assessment status" error={profileQuery.error ?? attemptQuery.error} onRetry={() => { void profileQuery.refetch(); void attemptQuery.refetch(); }} supportHref={`${root}/messages`} /></main>;
     }
 
     if (passed || locked) {

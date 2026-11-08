@@ -16,7 +16,7 @@ export default function AuthInput({ label, icon, ...props }: AuthInputProps) {
                     </div>
                 )}
                 <input
-                    className={`block w-full ${icon ? "pl-9 md:pl-10" : "px-3.5 md:px-4"} pr-3.5 md:pr-4 py-2.5 md:py-3 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-text-main placeholder-gray-400 transition-all outline-none font-medium text-sm md:text-base`}
+                    className={`block w-full ${icon ? "pl-9 md:pl-10" : "px-3.5 md:px-4"} pr-3.5 md:pr-4 py-2.5 md:py-3 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-text-main placeholder-gray-400 transition-all outline-none font-medium text-sm md:text-base ${props.className || ''}`}
                     {...props}
                 />
             </div>

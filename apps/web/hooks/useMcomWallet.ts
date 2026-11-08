@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 export interface McomWalletTransaction {
   id: string;
@@ -55,23 +56,17 @@ export interface McomWalletSnapshot {
  * delegated-task payouts; the ledger is owned by Central, not by 247GBS.
  */
 export const useMcomWallet = (page = 1, limit = 20) => {
-  const query = useQuery({
-    queryKey: ['mcom-wallet', page, limit],
-    queryFn: async () => {
-      try {
+  const query = stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['mcom-wallet', page, limit],
+      queryFn: async () => {
         const response = await apiClient.get('/wallet/mcom', { params: { page, limit } });
         return (response.data?.data ?? response.data) as McomWalletSnapshot;
-      } catch (error: any) {
-        throw new Error(
-          error?.response?.data?.message ||
-            error?.message ||
-            'Could not load your MCOM wallet.',
-        );
-      }
-    },
-    staleTime: 15_000,
-    retry: 1,
-  });
+      },
+      staleTime: 15_000,
+      retry: 1,
+    }),
+  );
 
   return {
     wallet: query.data?.wallet,

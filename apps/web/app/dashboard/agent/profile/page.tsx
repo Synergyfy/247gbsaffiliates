@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 type ProfileSubmission = {
     bio?: string | null;
@@ -94,10 +96,12 @@ export default function AgentProfilePage() {
     const pathname = usePathname();
     const dashboardRoot = pathname.split('/').slice(0, 3).join('/');
     const { user } = useAuthStore();
-    const profileQuery = useQuery({
-        queryKey: ['affiliate-dashboard-profile'],
-        queryFn: async () => unwrap<Profile>((await apiClient.get('/auth/profile')).data),
-    });
+    const profileQuery = stabilizeErrorRetry(
+        useQuery({
+            queryKey: ['affiliate-dashboard-profile'],
+            queryFn: async () => unwrap<Profile>((await apiClient.get('/auth/profile')).data),
+        }),
+    );
     const sectorsQuery = useQuery({
         queryKey: ['profile-sectors'],
         queryFn: async () => unwrap<Sector[]>((await apiClient.get('/sectors')).data),
@@ -108,11 +112,21 @@ export default function AgentProfilePage() {
     });
 
     const profile = (profileQuery.data || user) as Profile | null;
-    if (profileQuery.isLoading && !user) {
+    if (profileQuery.isLoading && !profileQuery.isError && !user) {
         return <p className="mx-auto max-w-6xl py-8 text-sm text-slate-500">Loading your profile…</p>;
     }
     if (!profile) {
-        return <div role="alert" className="mx-auto max-w-6xl border-l-4 border-red-600 bg-red-50 p-4 text-sm text-red-900">Your profile could not be loaded. <button type="button" onClick={() => void profileQuery.refetch()} className="font-semibold underline">Try again</button></div>;
+        return (
+            <div className="mx-auto max-w-6xl py-4">
+                <RequestErrorState
+                    area="Agent profile"
+                    label="Profile"
+                    error={profileQuery.error}
+                    onRetry={() => void profileQuery.refetch()}
+                    supportHref={`${dashboardRoot}/messages`}
+                />
+            </div>
+        );
     }
 
     const submission = profile.verificationSubmission || {};
@@ -164,7 +178,15 @@ export default function AgentProfilePage() {
                 </div>
             </header>
 
-            {profileQuery.isError && user && <div role="status" className="border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-xs text-amber-900">Showing the profile details available in your signed-in session. Refresh the page to retry loading your latest details.</div>}
+            {profileQuery.isError && user && (
+                <RequestErrorState
+                    area="Agent profile"
+                    label="Latest profile details"
+                    error={profileQuery.error}
+                    onRetry={() => void profileQuery.refetch()}
+                    supportHref={`${dashboardRoot}/messages`}
+                />
+            )}
 
             <section className="border border-slate-200 bg-white p-4 sm:p-5" aria-label="Profile identity and completion">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -198,14 +220,14 @@ export default function AgentProfilePage() {
                 </div>
             </section>
 
-            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.9fr)] lg:gap-5">
+            <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.9fr)] lg:gap-5">
                 <div className="min-w-0 space-y-4 sm:space-y-5">
                     <section className="border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="personal-details-title">
                         <div className="mb-2 border-b border-slate-100 pb-3">
                             <h2 id="personal-details-title" className="text-sm font-semibold text-slate-950">Personal Information</h2>
                             <p className="mt-0.5 text-[11px] text-slate-500">Your account identity and professional summary.</p>
                         </div>
-                        <dl className="grid gap-x-6 sm:grid-cols-2">
+                        <dl className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
                             <ProfileField label="Full legal name" value={fullName || null} />
                             <ProfileField label="Registered email" value={displayValue(profile.email)} />
                             <ProfileField label="Professional bio" value={bio} hint="Add a short summary during profile setup." wide />
@@ -221,7 +243,7 @@ export default function AgentProfilePage() {
                             <h3 className="text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-500">Skills</h3>
                             <p className="mt-1 break-words text-sm text-slate-900">{skills.join(', ')}</p>
                         </div>}
-                        <dl className="grid gap-x-6 sm:grid-cols-2">
+                        <dl className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
                             {skills.length === 0 && <ProfileField label="Skills" value={null} hint="Choose your skills during profile setup." />}
                             <ProfileField label="Sector" value={sectorValue} />
                             <ProfileField label="Category" value={categoryValue} />

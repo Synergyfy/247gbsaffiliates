@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
@@ -7,7 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import { Task, TaskStatus } from '../tasks/entities/task.entity';
 import { Wallet } from '../wallet/entities/wallet.entity';
 import { Transaction, TransactionType } from '../wallet/entities/transaction.entity';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User, UserRole, UserStatus, VerificationStatus } from '../users/entities/user.entity';
 
 @Injectable()
 export class AccountManagerService {
@@ -95,15 +95,78 @@ export class AccountManagerService {
   private async centralPost<T>(accountManagerId: string, path: string, body: unknown) {
     const connection = await this.centralConnection(accountManagerId);
     if (!connection) {
-      throw new Error('Central Hub account is not linked.');
+      throw new BadRequestException('Central Hub account is not linked.');
     }
-    const response = await firstValueFrom(
-      this.http.post<T>(`${connection.url}${path}`, body, {
-        headers: connection.headers,
-        timeout: 15000,
-      }),
-    );
-    return response.data;
+    try {
+      const response = await firstValueFrom(
+        this.http.post<T>(`${connection.url}${path}`, body, {
+          headers: connection.headers,
+          timeout: 15000,
+        }),
+      );
+      return response.data;
+    } catch (error: any) {
+      this.logger.warn(
+        `Central manager POST failed (${path}): ${JSON.stringify(error?.response?.data || error?.message)}`,
+      );
+      if (error instanceof HttpException) throw error;
+      const status = typeof error?.response?.status === 'number' ? error.response.status : null;
+      if (status) {
+        throw new HttpException(error.response.data || error.message, status);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Resolve a 247GBS directory affiliate id, Central Hub user id, or email into
+   * the canonical identifier Central Hub expects, while preserving local active
+   * affiliate eligibility checks.
+   */
+  private async resolveCentralAssigneeId(assigneeUserId: string): Promise<string> {
+    const trimmed = assigneeUserId.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Assignee user id is required.');
+    }
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+    const localUser = await this.usersRepo.findOne({
+      where: [
+        ...(isUuid ? [{ id: trimmed }] : []),
+        { mcomUserId: trimmed },
+        ...(trimmed.includes('@') ? [{ email: trimmed.toLowerCase() }] : []),
+      ],
+    });
+
+    if (localUser) {
+      if (
+        ![UserRole.AGENT, UserRole.CONSULTANT, UserRole.ACCOUNT_MANAGER].includes(localUser.role)
+      ) {
+        throw new ForbiddenException('Selected user is not an eligible affiliate.');
+      }
+      if (localUser.status !== UserStatus.ACTIVE) {
+        throw new ForbiddenException('Selected affiliate is not active.');
+      }
+      if (
+        localUser.verificationStatus &&
+        localUser.verificationStatus !== VerificationStatus.VERIFIED
+      ) {
+        throw new ForbiddenException('Selected affiliate is not verified yet.');
+      }
+      if (localUser.isOnboarded === false) {
+        throw new ForbiddenException('Selected affiliate has not completed onboarding.');
+      }
+      if (
+        localUser.role === UserRole.AGENT &&
+        (localUser.isQuizPassed === false ||
+          (Array.isArray(localUser.skills) && localUser.skills.length === 0))
+      ) {
+        throw new ForbiddenException('Selected agent has not completed assessment and skill qualification.');
+      }
+      return localUser.mcomUserId || localUser.email;
+    }
+
+    return trimmed;
   }
 
   /** All tasks across the businesses this manager coordinates. */
@@ -124,12 +187,16 @@ export class AccountManagerService {
     return this.centralPost(accountManagerId, `/tasks/${encodeURIComponent(taskId)}/review`, body);
   }
 
-  assignManagedTask(
+  async assignManagedTask(
     accountManagerId: string,
     taskId: string,
     body: { assigneeUserId: string; note?: string },
   ) {
-    return this.centralPost(accountManagerId, `/tasks/${encodeURIComponent(taskId)}/assign`, body);
+    const resolvedAssigneeId = await this.resolveCentralAssigneeId(body.assigneeUserId);
+    return this.centralPost(accountManagerId, `/tasks/${encodeURIComponent(taskId)}/assign`, {
+      ...body,
+      assigneeUserId: resolvedAssigneeId,
+    });
   }
 
   getManagedRequests(accountManagerId: string, query: Record<string, unknown>) {
@@ -160,6 +227,27 @@ export class AccountManagerService {
 
   getManagedProjects(accountManagerId: string, query: Record<string, unknown>) {
     return this.centralGet(accountManagerId, '/projects', query);
+  }
+
+  async createManagedProjectTask(
+    accountManagerId: string,
+    projectId: string,
+    body: Record<string, unknown>,
+  ) {
+    const payload: Record<string, unknown> = {
+      ...body,
+      projectId,
+    };
+    if (typeof payload.assigneeUserId === 'string' && payload.assigneeUserId.trim()) {
+      payload.assigneeUserId = await this.resolveCentralAssigneeId(payload.assigneeUserId);
+    } else {
+      delete payload.assigneeUserId;
+    }
+    return this.centralPost(
+      accountManagerId,
+      `/projects/${encodeURIComponent(projectId)}/tasks`,
+      payload,
+    );
   }
 
   closeManagedProject(

@@ -53,7 +53,7 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children, hi
                                         <path clipRule="evenodd" d="M24 4H42V17.3333V30.6667H24V44H6V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
                                     </svg>
                                 </div>
-                                <h2 className="text-text-main text-base md:text-2xl font-bold font-display tracking-tight">247gbs affiliate</h2>
+                                <h2 className="text-text-main text-base md:text-2xl font-bold font-display tracking-tight">247GBS Affiliate</h2>
                             </div>
                         </div>
 
@@ -135,7 +135,7 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children, hi
 
             <footer className="py-4 md:py-10 border-t border-slate-100 bg-white mt-auto">
                 <div className="max-w-5xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-3 md:gap-6">
-                    <p className="text-[10px] md:text-xs text-slate-400 font-medium tracking-tight font-display italic text-center md:text-left">© {new Date().getFullYear()} 247gbs affiliate professional marketplace</p>
+                    <p className="text-[10px] md:text-xs text-slate-400 font-medium tracking-tight font-display italic text-center md:text-left">© {new Date().getFullYear()} 247GBS Affiliate professional marketplace</p>
                     <div className="flex gap-4 md:gap-8 text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest justify-center">
                         <a className="hover:text-primary transition-colors" href="#">Privacy Policy</a>
                         <a className="hover:text-primary transition-colors" href="#">Terms of Service</a>

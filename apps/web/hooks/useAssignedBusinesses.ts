@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 export interface AssignedBusiness {
   id: string;
@@ -35,19 +36,21 @@ interface AssignedBusinessesResponse {
 }
 
 export const useAssignedBusinesses = (enabled = true) =>
-  useQuery({
-    queryKey: ['account-manager-businesses'],
-    enabled,
-    queryFn: async () => {
-      const response = await apiClient.get<AssignedBusinessesResponse & { data?: AssignedBusinessesResponse }>(
-        '/account-manager/businesses',
-      );
-      const data = response.data?.data ?? response.data;
-      return {
-        manager: data?.manager ?? null,
-        businesses: Array.isArray(data?.businesses) ? data.businesses : [],
-        total: Number(data?.total ?? 0),
-        error: data?.error,
-      } satisfies AssignedBusinessesResponse;
-    },
-  });
+  stabilizeErrorRetry(
+    useQuery({
+      queryKey: ['account-manager-businesses'],
+      enabled,
+      queryFn: async () => {
+        const response = await apiClient.get<AssignedBusinessesResponse & { data?: AssignedBusinessesResponse }>(
+          '/account-manager/businesses',
+        );
+        const data = response.data?.data ?? response.data;
+        return {
+          manager: data?.manager ?? null,
+          businesses: Array.isArray(data?.businesses) ? data.businesses : [],
+          total: Number(data?.total ?? 0),
+          error: data?.error,
+        } satisfies AssignedBusinessesResponse;
+      },
+    }),
+  );

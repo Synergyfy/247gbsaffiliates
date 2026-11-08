@@ -46,8 +46,12 @@ export default function ConsultantBusinessesPage() {
         {assignments.isLoading ? (
           <div className="p-5 text-xs text-slate-500">Loading assignments…</div>
         ) : (assignments.data?.assignments?.length ?? 0) === 0 ? (
-          <div className="p-5 text-xs text-slate-500">
-            No active business assignments yet.
+          <div className="p-10 text-center">
+            <span className="material-symbols-outlined text-4xl text-slate-300">assignment_ind</span>
+            <p className="mt-2 text-sm font-semibold text-slate-700">No active business assignments yet</p>
+            <p className="mx-auto mt-1 max-w-md text-xs text-slate-500">
+              When a business in CHS is assigned to you for specialist work, it will appear here.
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">

@@ -5,9 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { useLearningProgress, useLearningResources } from '@/hooks/useLearningResources';
 import { Task, useTasks } from '@/hooks/useTasks';
-import { useWallet } from '@/hooks/useWallet';
+import { useMcomWallet } from '@/hooks/useMcomWallet';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OverviewStage, QueryMessage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string };
 type Attempt = { band?: string; percentage?: number } | null;
@@ -24,14 +26,14 @@ const isClosed = (task: Task) => ['completed', 'approved', 'cancelled', 'decline
 
 export default function ConsultantDashboard() {
     const { user } = useAuthStore();
-    const profileQuery = useQuery({ queryKey: ['affiliate-dashboard-profile'], queryFn: async () => unwrap<Profile>((await apiClient.get('/auth/profile')).data) });
+    const profileQuery = stabilizeErrorRetry(useQuery({ queryKey: ['affiliate-dashboard-profile'], queryFn: async () => unwrap<Profile>((await apiClient.get('/auth/profile')).data) }));
     const profile: Profile | null = profileQuery.data || user as Profile | null;
     const role = (profile?.role || 'consultant').replace('-', '_');
-    const attemptQuery = useQuery({ queryKey: ['affiliate-dashboard-latest-attempt'], queryFn: async () => unwrap<Attempt>((await apiClient.get('/assessment/latest-attempt')).data) });
+    const attemptQuery = stabilizeErrorRetry(useQuery({ queryKey: ['affiliate-dashboard-latest-attempt'], queryFn: async () => unwrap<Attempt>((await apiClient.get('/assessment/latest-attempt')).data) }));
     const resourcesQuery = useLearningResources(role);
     const progressQuery = useLearningProgress(Boolean(profile?.id));
     const tasksQuery = useTasks({ limit: 50 });
-    const walletQuery = useWallet();
+    const walletQuery = useMcomWallet();
 
     const myTasks = profile?.id ? (tasksQuery.tasks || []).filter((task) => task.assignedAgentId === profile.id || (task.assigneeEmail && task.assigneeEmail.toLowerCase() === profile.email?.toLowerCase())) : [] as Task[];
     const sessions = myTasks.filter((task) => task.type?.toLowerCase() === 'consultancy');
@@ -61,10 +63,10 @@ export default function ConsultantDashboard() {
 
     return (
         <RoleOverview name={displayName.split(/\s+/)[0]} description="Follow your professional progress and manage consultancy work assigned to you." stages={stages} nextStep={nextStep} profileHref="/dashboard/consultant/profile">
-            {profileQuery.isError && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">The latest profile status could not be loaded. Any profile details above are from the signed-in session. <button type="button" onClick={() => void profileQuery.refetch()} className="font-semibold underline">Retry</button></div>}
+            {profileQuery.isError && <RequestErrorState area="Consultant profile" label="Profile status" error={profileQuery.error} onRetry={() => void profileQuery.refetch()} supportHref="/dashboard/consultant/messages" />}
             <section>
                 <div className="mb-3 flex flex-wrap items-end justify-between gap-2"><div><h2 className="text-lg font-semibold text-slate-950">Consultant work</h2><p className="mt-0.5 text-xs text-slate-600">Assigned work, sessions and delivery status from your account.</p></div></div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <SummaryCard title="Active assignments" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(activeTasks.length)} detail={tasksQuery.isError ? 'Your assignments could not be loaded.' : activeTasks.length ? 'Tasks currently assigned to your account.' : 'No active assignments are recorded.'} href="/dashboard/consultant/tasks" action="Open tasks" state={tasksQuery.isError ? 'Unavailable' : undefined} />
                     <SummaryCard title="Awaiting review" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(awaitingReview.length)} detail={tasksQuery.isError ? 'Submission status could not be loaded.' : 'Work you submitted and is awaiting reviewer action.'} href="/dashboard/consultant/tasks" action="View submissions" state={tasksQuery.isError ? 'Unavailable' : undefined} />
                     <SummaryCard title="Changes requested" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(changesRequested.length)} detail={tasksQuery.isError ? 'Revision status could not be loaded.' : 'Assignments returned with feedback for revision.'} href="/dashboard/consultant/tasks" action="Review feedback" state={tasksQuery.isError ? 'Unavailable' : undefined} />
@@ -72,22 +74,69 @@ export default function ConsultantDashboard() {
                 </div>
             </section>
 
-            <div className="grid gap-4 xl:grid-cols-5">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
                 <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-span-3">
                     <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-950">Assigned work</h2><p className="mt-1 text-xs text-slate-500">Personal assignments only</p></div><Link href="/dashboard/consultant/tasks" className="text-xs font-semibold text-blue-700 hover:underline">View all</Link></div>
-                    <QueryMessage loading={tasksQuery.isLoading} error={tasksQuery.isError} empty={myTasks.length === 0} onRetry={() => void tasksQuery.refetch()}>
+                    <QueryMessage
+                        loading={tasksQuery.isLoading}
+                        error={tasksQuery.isError}
+                        empty={myTasks.length === 0}
+                        onRetry={() => void tasksQuery.refetch()}
+                        emptyContent={
+                            <div className="py-8 text-center">
+                                <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">assignment</span>
+                                <p className="mt-2 text-sm font-semibold text-slate-700">No tasks assigned yet</p>
+                                <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">
+                                    Tasks delegated to your account from CHS businesses will appear here.
+                                </p>
+                            </div>
+                        }
+                    >
                         <ul className="divide-y divide-slate-100">{myTasks.slice(0, 5).map((task) => <li key={task.id}><Link href={`/dashboard/consultant/tasks/${task.id}`} className="flex flex-wrap justify-between gap-2 py-3"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{task.title}</span><span className="mt-0.5 block text-xs text-slate-500">{task.centralBusinessName || 'Assigned by Central Hub'}{task.dueDate ? ` · Due ${new Date(task.dueDate).toLocaleDateString()}` : ''}</span></span><span className="self-center text-xs capitalize text-slate-600">{task.status.replaceAll('_', ' ')}</span></Link></li>)}</ul>
                     </QueryMessage>
                 </section>
                 <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-span-2">
                     <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-950">Consultancy sessions</h2><p className="mt-1 text-xs text-slate-500">Consultancy-type assignments in your task records</p></div><Link href="/dashboard/consultant/sessions" className="text-xs font-semibold text-blue-700 hover:underline">Sessions</Link></div>
-                    {tasksQuery.isLoading ? <p className="py-3 text-xs text-slate-500">Loading sessions…</p> : tasksQuery.isError ? <div role="alert" className="py-2 text-xs text-rose-800">Sessions could not be loaded. <button type="button" onClick={() => void tasksQuery.refetch()} className="font-semibold underline">Try again</button></div> : sessions.length ? <ul className="divide-y divide-slate-100">{sessions.slice(0, 4).map((session) => <li key={session.id}><Link href={`/dashboard/consultant/tasks/${session.id}`} className="flex justify-between gap-2 py-3"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{session.title}</span><span className="mt-0.5 block text-xs text-slate-500">{session.dueDate ? `Due ${new Date(session.dueDate).toLocaleDateString()}` : 'No date recorded'}</span></span><span className="self-center text-xs capitalize text-slate-600">{session.status.replaceAll('_', ' ')}</span></Link></li>)}</ul> : <p className="py-3 text-xs text-slate-500">No sessions are returned. The current task API does not expose a separate session schedule; assignments remain available under My Tasks.</p>}
+                    {tasksQuery.isLoading && !tasksQuery.isError ? (
+                        <p className="py-3 text-xs text-slate-500">Loading sessions…</p>
+                    ) : tasksQuery.isError ? (
+                        <RequestErrorState area="Consultancy sessions" label="Consultancy sessions" error={tasksQuery.error} onRetry={() => void tasksQuery.refetch()} supportHref="/dashboard/consultant/messages" />
+                    ) : sessions.length ? (
+                        <ul className="divide-y divide-slate-100">{sessions.slice(0, 4).map((session) => <li key={session.id}><Link href={`/dashboard/consultant/tasks/${session.id}`} className="flex justify-between gap-2 py-3"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{session.title}</span><span className="mt-0.5 block text-xs text-slate-500">{session.dueDate ? `Due ${new Date(session.dueDate).toLocaleDateString()}` : 'No date recorded'}</span></span><span className="self-center text-xs capitalize text-slate-600">{session.status.replaceAll('_', ' ')}</span></Link></li>)}</ul>
+                    ) : (
+                        <div className="py-8 text-center">
+                            <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">event_available</span>
+                            <p className="mt-2 text-sm font-semibold text-slate-700">No consultancy sessions yet</p>
+                            <p className="mx-auto mt-1 max-w-xs text-xs text-slate-500">
+                                Scheduled client appointments and consultation sessions will appear here.
+                            </p>
+                        </div>
+                    )}
                 </section>
             </div>
 
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-                <SummaryCard title="Earnings" value={walletQuery.isLoading ? '…' : walletQuery.isError ? 'Unavailable' : `${walletQuery.wallet?.currency || 'GBP'} ${Number(walletQuery.wallet?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} detail={walletQuery.isError ? 'Wallet data failed to load.' : 'Current wallet balance; transaction details are available on Earnings.'} href="/dashboard/consultant/earnings" action="Open earnings" state={walletQuery.isError ? 'Unavailable' : undefined} />
-                <SummaryCard title="Learning" value={resourcesQuery.isLoading || progressQuery.isLoading ? '…' : resourcesQuery.isError || progressQuery.isError ? '—' : `${completedResources}/${resources.length}`} detail={resourcesQuery.isError || progressQuery.isError ? 'Learning data failed to load.' : resources.length ? 'Published resources completed for your account role.' : 'No learning resources are currently available for this role.'} href="/dashboard/learning" action="Open Learning Hub" state={resourcesQuery.isError || progressQuery.isError ? 'Unavailable' : undefined} />
+            <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                <SummaryCard
+                    title="Earnings"
+                    value={
+                        walletQuery.isLoading
+                            ? '…'
+                            : walletQuery.isError
+                                ? 'Unavailable'
+                                : `${Number(walletQuery.wallet?.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} MCOM`
+                    }
+                    detail={
+                        walletQuery.isError
+                            ? 'Wallet data failed to load.'
+                            : walletQuery.holds?.length
+                                ? `${walletQuery.holds.length} hold(s) active · Available: ${Number(walletQuery.wallet?.availableBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} MCOM`
+                                : 'Current Central Hub MCOM balance; transaction details are available on Earnings.'
+                    }
+                    href="/dashboard/consultant/earnings"
+                    action="Open earnings"
+                    state={walletQuery.isError ? 'Unavailable' : undefined}
+                />
+                <SummaryCard title="Learning" value={resourcesQuery.isLoading || progressQuery.isLoading ? '…' : resourcesQuery.isError || progressQuery.isError ? '—' : `${completedResources}/${resources.length}`} detail={resourcesQuery.isError || progressQuery.isError ? 'Learning data failed to load.' : resources.length ? 'Published resources completed for your account role.' : 'No learning resources are currently available for this role.'} href="/dashboard/consultant/learning" action="Open Learning Hub" state={resourcesQuery.isError || progressQuery.isError ? 'Unavailable' : undefined} />
             </section>
         </RoleOverview>
     );

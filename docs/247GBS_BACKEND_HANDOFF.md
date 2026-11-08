@@ -5,6 +5,23 @@ This document consolidates the end-to-end technical audit of `apps/api` and the 
 
 ---
 
+## Status Update (6 November 2026 - Latest Session Fixes)
+
+The following recent integration and resilience issues have been investigated, resolved, and verified:
+
+1. **Tasks 403 Forbidden on Unverified/New Affiliates (`GET /tasks`):**
+   - **Resolved**: `TasksService.findAll` previously threw `403 Forbidden` (`assertQualifiedAffiliate`) for affiliates who had not completed onboarding or verification. It has been updated to catch qualification assertions and return an empty task collection `{ items: [], meta: { total: 0 } }`. Affiliates now see a clean empty state rather than an error banner.
+2. **CHS MCOM Wallet Handshake (`GET /affiliate/wallets/:userId`):**
+   - **Resolved**: CHS (`McomSolutions/apps/backend/.env`) was missing `INTERNAL_API_KEY="dev-internal-api-key"`, causing `AffiliateApiKeyGuard` to reject requests with 401 Unauthorized. The internal secret was added, allowing 247GBS backend calls to authenticate successfully.
+3. **CHS Businesses 503 Service Unavailable (`GET /business-acquisition/acquired`):**
+   - **Resolved**: In `BusinessAcquisitionService.getCentralBusinesses`, CHS requests that return 404/not found for affiliates with no attributed businesses are now caught and return `{ total: 0, businesses: [] }` instead of throwing an unhandled `503 ServiceUnavailableException`.
+4. **Dashboard Empty States Standardization:**
+   - **Resolved**: Standardized centered empty states with icons and descriptive helper text across **Assigned Tasks** (`AgentTasksPage`), **Consultancy Sessions** (`SessionsPage`), **Business Acquisition** (`BusinessAcquisitionWorkspace`), and **Consultant Overview** (`consultant/page.tsx`).
+5. **Brand Name Standardization:**
+   - **Resolved**: Replaced all remaining standalone "247gbs" mentions with the official brand name **"247GBS Affiliate"**.
+
+---
+
 ## Current Repository State
 
 - **Repository**: `/home/davestack/Documents/247gbsaffiliates`
@@ -108,10 +125,14 @@ The `/find-agent` page (`apps/web/app/find-agent/page.tsx`) was updated with:
 
 ## Priority 4 — Consultant, Qualification & Wallet Contracts
 
-### 4.1 Consultant Sessions Persistence
-- **Files**: `apps/web/app/dashboard/consultant/sessions/page.tsx`, `apps/api/src/tasks/entities/task.entity.ts`
-- **Issue**: The Consultant Sessions page filters `/tasks` for `type === 'consultancy'`, and the Campaign creation form has an `isConsultancy` toggle, but `TaskType` enum in `task.entity.ts` only defines `ONE_TIME`, `RECURRING`, and `CAMPAIGN` (`CreateTaskDto` rejects or strips `isConsultancy`).
-- **Required Fix**: Add `CONSULTANCY = 'consultancy'` to `TaskType` (or introduce a dedicated Consultancy Session entity/endpoint) and allow `type: 'consultancy'` in `CreateTaskDto`.
+### 4.1 Appointments & Consultant Sessions Architecture
+- **Files**: `apps/web/app/dashboard/consultant/sessions/page.tsx`, `apps/api/src/appointments/`
+- **Issue**: The Consultant Sessions page previously filtered `/tasks` for `type === 'consultancy'`. Rather than overloading tasks or creating three separate appointment systems, a dedicated `Appointment` module (`apps/api/src/appointments/`) is approved for Stage 1.
+- **Design Decisions**:
+  - Unified appointments table serving all three affiliate roles (**Agent**, **Account Manager**, **Consultant**).
+  - Concurrency-safe slot booking to prevent double-booking.
+  - Linked to `centralBusinessId` and prepares audit columns (`convertedTaskId`, `convertedAt`, `convertedByUserId`) for conversion into delegated tasks in Task 2.
+- **Status**: Stage 1 backend implementation pending approval/execution.
 
 ### 4.2 Persisted Qualification State for Account Managers & Consultants
 - **Files**: `apps/api/src/users/entities/user.entity.ts`, `apps/api/src/users/users.service.ts`
@@ -137,6 +158,6 @@ The `/find-agent` page (`apps/web/app/find-agent/page.tsx`) was updated with:
 | 7 | **High** | Error Handling | Return `409` / `503` (instead of `200` empty array) when Central Hub is unlinked or unreachable |
 | 8 | **Medium** | Find Affiliates | Return real `assessmentScore` and `completedTasksCount` in `GET /users/directory` |
 | 9 | **Medium** | Postcode Lookup | Fix `users.service.spec.ts` test mismatch for `SW1A 1AA` and verify live postcode lookup |
-| 10 | **Medium** | Consultant | Add `consultancy` task type support in `TaskType` and `CreateTaskDto` |
+| 10 | **High** | Appointments | Build unified Appointment module for all roles (Agent/Manager/Consultant) with task conversion support |
 | 11 | **Medium** | Wallet | Implement `POST /wallet/withdraw` or align with Central Hub MCOM Wallet payout flow |
 | 12 | **Medium** | Database | Verify and apply pending SQL migrations in `apps/api/migrations/` up to `202611050002` |

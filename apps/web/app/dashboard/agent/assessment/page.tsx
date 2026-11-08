@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
 
 type AssessmentAttempt = {
     id: string;
@@ -30,18 +32,24 @@ export default function AssessmentQualificationPage() {
     const { user } = useAuthStore();
     const [now, setNow] = useState(0);
 
-    const profileQuery = useQuery({
-        queryKey: ['assessment-profile'],
-        queryFn: async () => (await apiClient.get<AssessmentProfile>('/auth/profile')).data,
-    });
-    const attemptQuery = useQuery({
-        queryKey: ['assessment-latest-attempt'],
-        queryFn: async () => (await apiClient.get<AssessmentAttempt | null>('/assessment/latest-attempt')).data,
-    });
-    const assignmentsQuery = useQuery({
-        queryKey: ['my-assessment-assignments'],
-        queryFn: async () => (await apiClient.get<AssignedAssessment[]>('/assessment/assignments')).data,
-    });
+    const profileQuery = stabilizeErrorRetry(
+        useQuery({
+            queryKey: ['assessment-profile'],
+            queryFn: async () => (await apiClient.get<AssessmentProfile>('/auth/profile')).data,
+        }),
+    );
+    const attemptQuery = stabilizeErrorRetry(
+        useQuery({
+            queryKey: ['assessment-latest-attempt'],
+            queryFn: async () => (await apiClient.get<AssessmentAttempt | null>('/assessment/latest-attempt')).data,
+        }),
+    );
+    const assignmentsQuery = stabilizeErrorRetry(
+        useQuery({
+            queryKey: ['my-assessment-assignments'],
+            queryFn: async () => (await apiClient.get<AssignedAssessment[]>('/assessment/assignments')).data,
+        }),
+    );
 
     useEffect(() => {
         const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -65,12 +73,9 @@ export default function AssessmentQualificationPage() {
             ? 'In progress'
             : 'Pending assessment';
 
-    const retakeAvailableTime = useMemo(() => {
-        if (!isFailed) return null;
-        const savedCooldown = retakeAvailableAt ?? 0;
-        const attemptCooldown = latestAttempt ? new Date(latestAttempt.createdAt).getTime() + RETAKE_DELAY_MS : 0;
-        return Math.max(savedCooldown, attemptCooldown) || null;
-    }, [isFailed, latestAttempt, retakeAvailableAt]);
+    const savedCooldown = isFailed ? retakeAvailableAt ?? 0 : 0;
+    const attemptCooldown = isFailed && latestAttempt ? new Date(latestAttempt.createdAt).getTime() + RETAKE_DELAY_MS : 0;
+    const retakeAvailableTime = isFailed ? Math.max(savedCooldown, attemptCooldown) || null : null;
     const isRetakeLocked = Boolean(retakeAvailableTime && retakeAvailableTime > now);
     const remainingHours = retakeAvailableTime && isRetakeLocked
         ? Math.ceil((retakeAvailableTime - now) / (60 * 60 * 1000))
@@ -104,11 +109,20 @@ export default function AssessmentQualificationPage() {
                         )}
                     </div>
 
-                    {isLoading ? (
+                    {isLoading && !hasError ? (
                         <p className="mt-2 text-xs text-slate-500">Loading your assessment status…</p>
                     ) : hasError ? (
-                        <div className="mt-2 rounded-md bg-red-50 p-3 text-xs text-red-800">
-                            We couldn’t load your assessment status. Refresh the page to try again.
+                        <div className="mt-2">
+                            <RequestErrorState
+                                area="Assessment status"
+                                label="Assessment status"
+                                error={profileQuery.error ?? attemptQuery.error}
+                                onRetry={() => {
+                                    void profileQuery.refetch();
+                                    void attemptQuery.refetch();
+                                }}
+                                supportHref="/dashboard/agent/messages"
+                            />
                         </div>
                     ) : (
                         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -138,7 +152,7 @@ export default function AssessmentQualificationPage() {
                         <div><h2 className="text-sm font-bold">Assessments assigned to you</h2><p className="mt-1 text-xs text-slate-600">These are separate assessments assigned directly by an administrator.</p></div>
                         {assignmentsQuery.data?.length ? <span className="text-[10px] text-slate-500">{assignmentsQuery.data.length} assigned</span> : null}
                     </div>
-                    {assignmentsQuery.isLoading ? <p className="mt-3 text-xs text-slate-500">Loading assigned assessments…</p> : assignmentsQuery.isError ? <div className="mt-3 flex items-center justify-between gap-3 rounded-md bg-red-50 p-3 text-xs text-red-800"><span>Assigned assessments couldn’t be loaded.</span><button onClick={() => assignmentsQuery.refetch()} className="font-bold underline">Try again</button></div> : assignmentsQuery.data?.length ? (
+                    {assignmentsQuery.isLoading && !assignmentsQuery.isError ? <p className="mt-3 text-xs text-slate-500">Loading assigned assessments…</p> : assignmentsQuery.isError ? <div className="mt-3"><RequestErrorState area="Assigned assessments" label="Assigned assessments" error={assignmentsQuery.error} onRetry={() => void assignmentsQuery.refetch()} supportHref="/dashboard/agent/messages" /></div> : assignmentsQuery.data?.length ? (
                         <div className="mt-3 divide-y divide-slate-100">
                             {assignmentsQuery.data.map((assignment) => {
                                 const isFinal = ['pass', 'partial', 'fail'].includes(assignment.status);
@@ -163,8 +177,8 @@ export default function AssessmentQualificationPage() {
                     {isFailed && isRetakeLocked && <p className="mt-1 text-[10px] font-semibold text-amber-800">Retake available in about {remainingHours} hour{remainingHours === 1 ? '' : 's'}.</p>}
                 </section>
 
-                <div className="grid gap-2 sm:grid-cols-2">
-                    <Link href="/learning" className="flex min-h-10 items-center justify-center gap-2 rounded-md border border-blue-700 bg-white px-4 py-2.5 text-xs font-bold text-blue-800 hover:bg-blue-50">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <Link href="/dashboard/agent/learning" className="flex min-h-10 items-center justify-center gap-2 rounded-md border border-blue-700 bg-white px-4 py-2.5 text-xs font-bold text-blue-800 hover:bg-blue-50">
                         <span className="material-symbols-outlined text-base">school</span>
                         Go to Learning Hub
                     </Link>
@@ -179,7 +193,7 @@ export default function AssessmentQualificationPage() {
                     </button>
                 </div>
 
-                <section className="grid gap-2 border-t border-slate-200 pt-3 sm:grid-cols-2">
+                <section className="grid grid-cols-1 gap-2 border-t border-slate-200 pt-3 sm:grid-cols-2">
                     <article className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
                         <h2 className="text-xs font-bold sm:text-sm">Why the assessment matters</h2>
                         <p className="mt-1 text-[11px] leading-relaxed text-slate-600 sm:text-xs">
@@ -195,11 +209,6 @@ export default function AssessmentQualificationPage() {
                 </section>
                 {hasPassedAssessment && !isQualified && (
                     <p className="text-center text-[10px] text-slate-500">Your assessment result alone does not complete qualification. Required profile and onboarding checks still apply.</p>
-                )}
-                {!isLoading && hasError && (
-                    <button type="button" onClick={() => { void profileQuery.refetch(); void attemptQuery.refetch(); }} className="mx-auto block text-[10px] font-semibold text-blue-700 underline">
-                        Refresh status
-                    </button>
                 )}
                 <p className="text-center text-[9px] text-slate-500">Signed in as {user?.email || 'your account'}</p>
             </div>

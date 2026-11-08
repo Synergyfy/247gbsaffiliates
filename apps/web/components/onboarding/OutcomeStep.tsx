@@ -37,19 +37,27 @@ export const OutcomeStep: React.FC = () => {
                 verificationStatus: profile?.verificationStatus,
                 verificationNotes: profile?.verificationNotes,
                 verificationSubmission: profile?.verificationSubmission,
+                role: profile?.role || user?.role || role,
             });
+
+            const resolvedRole = String(profile?.role || user?.role || role || 'agent').toLowerCase().replace(/_/g, '-');
+            const target =
+                resolvedRole === 'agent' ? '/dashboard/agent'
+                : resolvedRole === 'account-manager' ? '/dashboard/account-manager'
+                : resolvedRole === 'consultant' ? '/dashboard/consultant'
+                : '/dashboard';
+            window.location.assign(target);
+            return;
         } catch (err) {
             console.warn('Could not refresh account status:', err);
         }
-        const targetRole = role;
-        resetOnboarding();
+
+        const fallbackRole = String(user?.role || role || 'agent').toLowerCase().replace(/_/g, '-');
         const target =
-            targetRole === 'agent' ? '/dashboard/agent'
-            : targetRole === 'account-manager' || targetRole === 'account_manager' ? '/dashboard/account-manager'
-            : targetRole === 'consultant' ? '/dashboard/consultant'
+            fallbackRole === 'agent' ? '/dashboard/agent'
+            : fallbackRole === 'account-manager' ? '/dashboard/account-manager'
+            : fallbackRole === 'consultant' ? '/dashboard/consultant'
             : '/dashboard';
-        // Full navigation avoids racing the dashboard session check with the
-        // just-cleared onboarding draft.
         window.location.assign(target);
     };
 

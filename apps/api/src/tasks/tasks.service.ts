@@ -213,7 +213,19 @@ export class TasksService {
     let where: any = baseWhere;
 
     if (requesterId && requesterRole && AFFILIATE_ROLES.includes(requesterRole)) {
-      await this.assertQualifiedAffiliate(requesterId);
+      try {
+        await this.assertQualifiedAffiliate(requesterId);
+      } catch {
+        // Affiliate is not yet fully qualified; return clean empty list instead of a fatal 403
+        return {
+          items: [],
+          meta: {
+            total: 0,
+            page: 1,
+            lastPage: 1,
+          },
+        };
+      }
       const me = await this.usersService.findOne(requesterId);
       const mine = [{ ...baseWhere, assignedAgentId: requesterId }];
       if (me?.email) mine.push({ ...baseWhere, assigneeEmail: me.email.toLowerCase() });

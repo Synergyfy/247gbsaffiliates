@@ -33,10 +33,23 @@ export class WalletController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get my local wallet balance', description: 'Authenticated user. Returns local wallet details.' })
-  @ApiResponse({ status: 200, description: 'Wallet details', schema: { example: { id: 'uuid', balance: 100.00, currency: 'USD' } } })
-  getMyWallet(@Request() req) {
-    return this.walletService.findOneByUserId(req.user.userId);
+  @ApiOperation({ summary: 'Get my wallet balance', description: 'Authenticated user. Returns Central MCOM wallet details with fallback to local.' })
+  @ApiResponse({ status: 200, description: 'Wallet details' })
+  async getMyWallet(@Request() req) {
+    try {
+      const mcom = await this.mcomWalletService.getForUser(req.user.userId, 1, 1);
+      return {
+        id: mcom.wallet.id,
+        balance: mcom.wallet.balance,
+        availableBalance: mcom.wallet.availableBalance,
+        currency: mcom.wallet.currency || 'MCOM',
+        status: mcom.wallet.status,
+        holds: mcom.holds,
+        lastTransactionAt: mcom.wallet.lastTransactionAt,
+      };
+    } catch {
+      return this.walletService.findOneByUserId(req.user.userId);
+    }
   }
 
   @Post('deposit')
@@ -48,10 +61,22 @@ export class WalletController {
   }
 
   @Get('transactions')
-  @ApiOperation({ summary: 'Get transaction history', description: 'Authenticated user. Returns list of transactions.' })
-  @ApiResponse({ status: 200, description: 'Transaction history', schema: { example: [{ id: 'uuid', type: 'deposit', amount: 50.00, status: 'completed' }] } })
-  getTransactions(@Request() req) {
-    return this.walletService.getTransactions(req.user.userId);
+  @ApiOperation({ summary: 'Get transaction history', description: 'Authenticated user. Returns Central Hub ledger or local fallback.' })
+  async getTransactions(
+    @Request() req,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    try {
+      const mcom = await this.mcomWalletService.getForUser(
+        req.user.userId,
+        Math.max(1, Number(page) || 1),
+        Math.min(50, Math.max(1, Number(limit) || 20)),
+      );
+      return mcom.transactions;
+    } catch {
+      return this.walletService.getTransactions(req.user.userId);
+    }
   }
 }
 

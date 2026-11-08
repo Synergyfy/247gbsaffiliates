@@ -4,6 +4,8 @@ import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import apiClient from '@/lib/apiClient';
+import { stabilizeErrorRetry } from '@/lib/requestErrors';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 
 type Prospect = {
   id: string;
@@ -118,7 +120,7 @@ export function BusinessAcquisitionWorkspace({
     notes: '',
   });
 
-  const prospectsQuery = useQuery({
+  const prospectsQuery = stabilizeErrorRetry(useQuery({
     queryKey: ['business-acquisition', statusFilter, search],
     queryFn: async () => {
       const response = await apiClient.get('/business-acquisition/prospects', {
@@ -130,15 +132,15 @@ export function BusinessAcquisitionWorkspace({
         settings: Settings;
       };
     },
-  });
+  }));
 
-  const acquiredQuery = useQuery({
+  const acquiredQuery = stabilizeErrorRetry(useQuery({
     queryKey: ['business-acquisition', 'central'],
     queryFn: async () => {
       const response = await apiClient.get('/business-acquisition/acquired');
       return response.data?.data as { total: number; businesses: CentralBusiness[]; message?: string };
     },
-  });
+  }));
 
   const summary = useMemo<Summary>(
     () =>
@@ -324,7 +326,7 @@ export function BusinessAcquisitionWorkspace({
             </div>
           </div>
           <form
-            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
             onSubmit={(event) => {
               event.preventDefault();
               if (!form.businessName.trim()) {
@@ -459,14 +461,19 @@ export function BusinessAcquisitionWorkspace({
           </div>
         </div>
 
-        {prospectsQuery.isLoading ? (
+        {prospectsQuery.isLoading && !prospectsQuery.isError ? (
           <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-slate-500">
             <span className="size-5 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />
             Loading prospects…
           </div>
         ) : prospectsQuery.isError ? (
-          <div className="p-6 text-sm text-red-700">
-            Could not load your business prospects. Please refresh the page.
+          <div className="p-4">
+            <RequestErrorState
+              area="Business prospects"
+              label="Business prospects"
+              error={prospectsQuery.error}
+              onRetry={() => void prospectsQuery.refetch()}
+            />
           </div>
         ) : items.length === 0 ? (
           <div className="p-10 text-center">
@@ -587,12 +594,25 @@ export function BusinessAcquisitionWorkspace({
             Businesses permanently attributed to you in Central Hub Solution.
           </p>
         </div>
-        {acquiredQuery.isLoading ? (
+        {acquiredQuery.isLoading && !acquiredQuery.isError ? (
           <div className="p-5 text-xs text-slate-500">Loading CHS businesses…</div>
+        ) : acquiredQuery.isError ? (
+          <div className="p-4">
+            <RequestErrorState
+              area="CHS businesses"
+              label="CHS businesses"
+              error={acquiredQuery.error}
+              onRetry={() => void acquiredQuery.refetch()}
+            />
+          </div>
         ) : (acquiredQuery.data?.businesses?.length ?? 0) === 0 ? (
-          <div className="p-5 text-xs text-slate-500">
-            {acquiredQuery.data?.message ||
-              'No CHS businesses attributed to you yet. Create an invitation to start.'}
+          <div className="p-10 text-center">
+            <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">storefront</span>
+            <p className="mt-2 text-sm font-semibold text-slate-700">No CHS businesses attributed yet</p>
+            <p className="mx-auto mt-1 max-w-md text-xs text-slate-500">
+              {acquiredQuery.data?.message ||
+                'No CHS businesses attributed to you yet. Talk to a local business and create an invitation to link their registration back to you.'}
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">

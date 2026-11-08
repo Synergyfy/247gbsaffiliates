@@ -21,7 +21,7 @@ const navigation = [
     {
         title: 'Advancement',
         items: [
-            { name: 'Learning Hub', href: '/learning', icon: 'school' },
+            { name: 'Learning Hub', href: '/dashboard/agent/learning', icon: 'school' },
             { name: 'Assessment & Qualification', href: '/dashboard/agent/assessment', icon: 'quiz' },
         ],
     },
@@ -169,8 +169,10 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
                 <main className={pathname === '/dashboard/agent/messages'
                     ? 'h-[calc(100dvh-120px)] min-h-0 overflow-hidden p-0 lg:h-[calc(100dvh-68px)]'
                     : pathname.startsWith('/dashboard/agent/assessment/')
-                    ? 'min-h-[calc(100vh-56px)] px-3 py-1 pb-20 sm:px-6 sm:py-5 lg:min-h-[calc(100vh-68px)] lg:px-8 lg:pb-8'
-                    : 'min-h-[calc(100vh-56px)] px-3 py-3 pb-24 sm:px-6 sm:py-7 lg:min-h-[calc(100vh-68px)] lg:px-8 lg:pb-8'}>
+                    ? 'min-h-[calc(100vh-56px)] overflow-x-clip px-3 py-1 pb-20 sm:px-6 sm:py-5 lg:min-h-[calc(100vh-68px)] lg:px-8 lg:pb-8'
+                    : pathname.startsWith('/dashboard/agent/tasks')
+                    ? 'min-h-[calc(100vh-56px)] overflow-x-clip px-3 py-2.5 pb-20 sm:px-5 sm:py-4 lg:min-h-[calc(100vh-68px)] lg:px-7 lg:pb-6'
+                    : 'min-h-[calc(100vh-56px)] overflow-x-clip px-3 py-3 pb-24 sm:px-6 sm:py-7 lg:min-h-[calc(100vh-68px)] lg:px-8 lg:pb-8'}>
                     {children}
                 </main>
             </div>

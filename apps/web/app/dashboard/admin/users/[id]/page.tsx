@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useAdminAffiliate } from '@/hooks/useAdminUsers';
 import apiClient from '@/lib/apiClient';
 import { getVisibleSubmissionEntries } from '@/lib/profile-submission';
+import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 
 const display = (value: unknown) => {
     if (value == null || value === '') return 'Not provided';
@@ -15,7 +16,7 @@ const display = (value: unknown) => {
 
 export default function AdminAffiliateProfilePage() {
     const params = useParams<{ id: string }>();
-    const { data: affiliate, isLoading, isError, refetch } = useAdminAffiliate(params.id);
+    const { data: affiliate, isLoading, isError, error, refetch } = useAdminAffiliate(params.id);
 
     const openIdentityDocument = async () => {
         if (!affiliate?.profile?.verificationDocumentMimeType) return;
@@ -28,8 +29,8 @@ export default function AdminAffiliateProfilePage() {
         window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     };
 
-    if (isLoading) return <div className="flex min-h-48 items-center justify-center"><span className="size-8 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div>;
-    if (isError || !affiliate) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">Affiliate profile could not be loaded. <button onClick={() => void refetch()} className="font-bold underline">Retry</button></div>;
+    if (isLoading && !isError) return <div className="flex min-h-48 items-center justify-center"><span className="size-8 animate-spin rounded-full border-4 border-primary/20 border-b-primary" /></div>;
+    if (isError || !affiliate) return <div className="mx-auto max-w-5xl space-y-4"><Link href="/dashboard/admin/users" className="text-sm font-semibold text-primary hover:underline">← Back to affiliates</Link><RequestErrorState area="Admin affiliate profile" label="Affiliate profile" error={error} onRetry={() => void refetch()} supportHref="/dashboard/admin" compact={false} /></div>;
 
     const attempts = affiliate.assessmentAttempts || [];
     const profile = affiliate.profile || {};
