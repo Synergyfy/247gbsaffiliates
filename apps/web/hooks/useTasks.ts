@@ -199,8 +199,8 @@ export const useTasks = (filters: TaskFilters = {}) => {
   });
 
   const declineTaskMutation = useMutation({
-    mutationFn: async (taskId: string) => {
-      const response = await apiClient.post(`/tasks/${taskId}/decline`);
+    mutationFn: async ({ taskId, reason }: { taskId: string; reason: string }) => {
+      const response = await apiClient.post(`/tasks/${taskId}/decline`, { reason });
       return unwrapTask(response.data);
     },
     onSuccess: invalidateTaskQueries,
@@ -239,16 +239,24 @@ export const useTasks = (filters: TaskFilters = {}) => {
 
   const assignTaskMutation = useMutation({
     mutationFn: async ({ taskId, agentId }: { taskId: string; agentId: string }) => {
-      const response = await apiClient.post(`/tasks/${taskId}/assign`, { agentId });
-      return unwrapTask(response.data);
+      try {
+        const response = await apiClient.post(`/tasks/${taskId}/assign`, { agentId });
+        return unwrapTask(response.data);
+      } catch (error) {
+        throw normalizeTaskError(error);
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
   const createTaskMutation = useMutation({
     mutationFn: async (data: Partial<Task>) => {
-      const response = await apiClient.post('/tasks', data);
-      return unwrapTask(response.data);
+      try {
+        const response = await apiClient.post('/tasks', data);
+        return unwrapTask(response.data);
+      } catch (error) {
+        throw normalizeTaskError(error);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -358,7 +366,8 @@ export interface ManagedProject {
 
 export interface DirectoryAffiliate {
   id: string;
-  centralUserId?: string;
+  mcomUserId?: string | null;
+  centralUserId?: string | null;
   name: string;
   email: string;
   role: string;
@@ -371,6 +380,11 @@ export interface DirectoryAffiliate {
   isOnboarded?: boolean;
   isQuizPassed?: boolean;
   verificationStatus?: string | null;
+  assessmentScore?: number | null;
+  completedTasksCount?: number;
+  activeTasksCount?: number;
+  onTimeRate?: number | null;
+  averageResponseTimeHours?: number | null;
 }
 
 const unwrapManagedList = <T,>(payload: unknown, label: string): T[] => {
@@ -409,6 +423,23 @@ const unwrapManagedRecord = <T,>(payload: unknown): T => {
   }
   throw new Error('The Account Manager service returned an unsupported response.');
 };
+
+/**
+ * Qualified agents and consultants the signed-in Account Manager can actually
+ * delegate to. Unlike the public directory, every item has a live Central Hub
+ * (`mcomUserId`) link and a current workload count.
+ */
+export const useDelegatableAgents = (enabled = true) =>
+  useQuery({
+    queryKey: ['delegatable-agents'],
+    enabled,
+    queryFn: async () => {
+      const response = await apiClient.get('/account-manager/agents', {
+        params: { scope: 'delegatable' },
+      });
+      return unwrapManagedList<DirectoryAffiliate>(response.data, 'delegatable agents');
+    },
+  });
 
 /** Public directory of real, eligible 247GBS affiliates. */
 export const useAffiliateDirectory = (filters: { limit?: number; search?: string; role?: string } = {}, enabled = true) =>
@@ -705,6 +736,8 @@ export const useManagedProjects = (
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['managed-projects'] }),
   });
+
+
 
   return {
     ...stabilizeErrorRetry(query),

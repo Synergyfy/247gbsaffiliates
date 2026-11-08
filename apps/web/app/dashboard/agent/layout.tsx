@@ -104,9 +104,7 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
         <div className="min-h-screen bg-[#f7f8fc] font-display text-slate-950 lg:flex">
             <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
                 <div className="border-b border-slate-100 px-5 py-5">
-                    <Link href="/dashboard/agent" aria-label="247GBS Affiliate dashboard" className="inline-flex">
-                        <BrandLogo size="md" label="247GBS Affiliate" labelClassName="text-sm" />
-                    </Link>
+                    <BrandLogo size="md" label="247GBS Affiliate" labelClassName="text-sm" />
                 </div>
                 <nav aria-label="Affiliate navigation" className="flex-1 overflow-y-auto px-3 py-5">
                     {navigationGroups()}

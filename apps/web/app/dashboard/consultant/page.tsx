@@ -10,8 +10,9 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { OverviewStage, QueryMessage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
 import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 import { stabilizeErrorRetry } from '@/lib/requestErrors';
+import ReferralPanel from '@/components/dashboard/ReferralPanel';
 
-type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string };
+type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string; referralCode?: string | null; referralLink?: string | null };
 type Attempt = { band?: string; percentage?: number } | null;
 const unwrap = <T,>(payload: unknown): T => {
     if (payload && typeof payload === 'object' && 'data' in payload) {
@@ -138,6 +139,11 @@ export default function ConsultantDashboard() {
                 />
                 <SummaryCard title="Learning" value={resourcesQuery.isLoading || progressQuery.isLoading ? '…' : resourcesQuery.isError || progressQuery.isError ? '—' : `${completedResources}/${resources.length}`} detail={resourcesQuery.isError || progressQuery.isError ? 'Learning data failed to load.' : resources.length ? 'Published resources completed for your account role.' : 'No learning resources are currently available for this role.'} href="/dashboard/consultant/learning" action="Open Learning Hub" state={resourcesQuery.isError || progressQuery.isError ? 'Unavailable' : undefined} />
             </section>
+
+            <ReferralPanel
+                referralCode={profile?.referralCode ?? user?.referralCode}
+                referralLink={profile?.referralLink ?? user?.referralLink}
+            />
         </RoleOverview>
     );
 }

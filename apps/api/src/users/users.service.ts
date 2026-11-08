@@ -5,6 +5,8 @@ import axios from 'axios';
 import { User, UserRole, UserStatus, VerificationStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
+import { Task, TaskStatus } from '../tasks/entities/task.entity';
+import { QuizAttempt } from '../assessment/entities/quiz_attempt.entity';
 import * as bcrypt from 'bcrypt';
 
 interface GeoPoint {
@@ -21,14 +23,6 @@ export interface PostalLookupResult {
   latitude?: number | null;
   longitude?: number | null;
   displayName?: string;
-}
-
-export interface GeoDetails {
-  point: GeoPoint | null;
-  adminDistrict?: string;
-  region?: string;
-  postTown?: string;
-  formattedLocation?: string;
 }
 
 interface PostcodesIoResult {
@@ -62,8 +56,8 @@ interface NominatimMatch {
 }
 
 const GEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_DIRECTORY_RADIUS_MILES = 5;
-const MAX_DIRECTORY_RADIUS_MILES = 5;
+const DEFAULT_DIRECTORY_RADIUS_MILES = 50;
+const MAX_DIRECTORY_RADIUS_MILES = 500;
 const MAX_DIRECTORY_CANDIDATES = 500;
 
 @Injectable()
@@ -71,12 +65,16 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   private readonly geoCache = new Map<
     string,
-    { at: number; data: GeoDetails }
+    { at: number; point: GeoPoint | null }
   >();
 
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(Task)
+    private tasksRepository: Repository<Task>,
+    @InjectRepository(QuizAttempt)
+    private quizAttemptRepository: Repository<QuizAttempt>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -151,27 +149,25 @@ export class UsersService {
   async findPublicDirectory(filters: {
     postcode?: string;
     role?: string;
+    roles?: string;
     search?: string;
     limit?: number;
     radiusMiles?: number;
   }) {
     const limit = Math.min(100, Math.max(1, Number(filters.limit) || 50));
-    const rawRadius = filters.radiusMiles !== undefined ? Number(filters.radiusMiles) : undefined;
-    const radiusMiles = rawRadius !== undefined
-      ? Math.max(0, Math.min(MAX_DIRECTORY_RADIUS_MILES, rawRadius))
-      : DEFAULT_DIRECTORY_RADIUS_MILES;
-    const isExactOnly = radiusMiles === 0;
-    const role = (filters.role || '').toLowerCase().replace('-', '_');
-    const search = (filters.search || '').trim().toLowerCase();
-
-    const searchPostcode = this.normalizePostcode(filters.postcode);
+    const radiusMiles = Math.min(
+      MAX_DIRECTORY_RADIUS_MILES,
+      Math.max(1, Number(filters.radiusMiles) || DEFAULT_DIRECTORY_RADIUS_MILES),
+    );
     const searchCompact = this.compactPostcode(filters.postcode);
+    const search = (filters.search || '').trim().toLowerCase();
+    const allowedRoles = this.parseDirectoryRoles(filters.role, filters.roles);
 
     let territory: { city?: string; region?: string; postcode?: string } | null = null;
     let origin: GeoPoint | null = null;
-    if (searchCompact) {
+    if (filters.postcode?.trim()) {
       try {
-        const resolved = await this.lookupPostalCode(filters.postcode!);
+        const resolved = await this.lookupPostalCode(filters.postcode);
         if (resolved?.found) {
           territory = {
             city: resolved.city,
@@ -184,7 +180,7 @@ export class UsersService {
         }
       } catch (err) {
         this.logger.warn(
-          `Postal lookup unavailable for "${filters.postcode}", matching by postcode pattern: ${
+          `Postal lookup unavailable for "${filters.postcode}", returning directory without distance filter: ${
             err instanceof Error ? err.message : String(err)
           }`,
         );
@@ -193,14 +189,10 @@ export class UsersService {
 
     const qb = this.usersRepository
       .createQueryBuilder('user')
-      .where('user.status = :active', { active: UserStatus.ACTIVE })
-      .andWhere('user.verificationStatus = :verified', { verified: VerificationStatus.VERIFIED })
-      .andWhere('user.isOnboarded = :onboarded', { onboarded: true });
+      .where('user.status = :active', { active: UserStatus.ACTIVE });
 
-    if (role && role !== 'all') {
-      if (role === 'account_manager') qb.andWhere('user.role = :role', { role: UserRole.ACCOUNT_MANAGER });
-      else if (role === 'consultant') qb.andWhere('user.role = :role', { role: UserRole.CONSULTANT });
-      else if (role === 'agent') qb.andWhere('user.role = :role', { role: UserRole.AGENT });
+    if (allowedRoles.length) {
+      qb.andWhere('user.role IN (:...allowedRoles)', { allowedRoles });
     } else {
       qb.andWhere('user.role IN (:...roles)', {
         roles: [UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT],
@@ -214,6 +206,9 @@ export class UsersService {
       );
     }
 
+    qb.andWhere('user.verificationStatus = :verified', { verified: VerificationStatus.VERIFIED })
+      .andWhere('user.isOnboarded = :onboarded', { onboarded: true });
+
     const rawUsers = await qb
       .orderBy('user.isOnboarded', 'DESC')
       .addOrderBy('user.createdAt', 'DESC')
@@ -226,7 +221,12 @@ export class UsersService {
         (user.isQuizPassed && Array.isArray(user.skills) && user.skills.length > 0),
     );
 
-    const geoByPostcode = await this.bulkGeocodePostcodes(users.map((user) => user.postcode));
+    const geoByPostcode = origin
+      ? await this.bulkGeocodePostcodes(users.map((user) => user.postcode))
+      : new Map<string, GeoPoint>();
+    const metricsByUser = await this.loadDirectoryMetrics(
+      users.map((user) => user.id),
+    );
 
     const items = users.map((user) => {
       const userCompact = this.compactPostcode(user.postcode);
@@ -240,25 +240,17 @@ export class UsersService {
           (userCompact.startsWith(searchCompact) || searchCompact.startsWith(userCompact)),
       );
 
-      const geo = user.postcode ? geoByPostcode.get(userCompact) : null;
-      const point = origin && geo?.point ? geo.point : null;
-      const km = isExactMatch ? 0 : origin && point ? this.haversineKm(origin, point) : null;
-      const miles = isExactMatch ? 0 : km != null ? km * 0.621371 : null;
-
-      // Always use full geographic hierarchy (e.g. "Westminster, Greater London" or "Islington, Greater London")
-      const resolvedRegion =
-        geo?.formattedLocation ||
-        (user.region && user.city && user.region.toLowerCase() !== user.city.toLowerCase()
-          ? user.region
-          : geo?.adminDistrict
-            ? `${geo.adminDistrict}, Greater London`
-            : user.region || 'Greater London');
-      const resolvedCity = geo?.postTown || user.city || 'London';
+      const point = origin && user.postcode
+        ? geoByPostcode.get(userCompact) ?? null
+        : null;
+      const km = origin && point ? this.haversineKm(origin, point) : null;
+      const miles = km != null ? km * 0.621371 : null;
+      const metrics = metricsByUser.get(user.id);
 
       return {
         id: user.id,
-        centralUserId: user.mcomUserId ?? undefined,
-        email: user.email,
+        mcomUserId: user.mcomUserId ?? null,
+        centralUserId: user.mcomUserId ?? null,
         firstName: user.firstName,
         lastName: user.lastName,
         name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0],
@@ -271,8 +263,8 @@ export class UsersService {
         timezone: user.timezone,
         role: user.role,
         postcode: user.postcode,
-        city: resolvedCity,
-        region: resolvedRegion,
+        city: user.city,
+        region: user.region,
         country: user.country,
         isOnboarded: user.isOnboarded,
         isQuizPassed: user.isQuizPassed,
@@ -281,55 +273,200 @@ export class UsersService {
         createdAt: user.createdAt,
         isExactMatch,
         isOutcodeMatch,
-        distanceKm: isExactMatch ? 0 : km != null ? Math.round(km * 10) / 10 : null,
-        distanceMiles: isExactMatch ? 0 : miles != null ? Math.round(miles * 10) / 10 : null,
-        distanceLabel: isExactMatch
-          ? 'Exact postcode match'
-          : isOutcodeMatch
-            ? 'Same postcode area'
-            : miles != null
-              ? `${Math.max(0.1, Math.round(miles * 10) / 10)} mi away`
-              : origin
-                ? 'Distance unavailable'
-                : null,
+        // Live database metrics for the public affiliate profile modal.
+        assessmentScore: metrics?.assessmentScore ?? null,
+        latestAssessmentBand: metrics?.latestAssessmentBand ?? null,
+        completedTasksCount: metrics?.completedTasksCount ?? 0,
+        activeTasksCount: metrics?.activeTasksCount ?? 0,
+        onTimeRate: metrics?.onTimeRate ?? null,
+        averageResponseTimeHours: metrics?.averageResponseTimeHours ?? null,
+        distanceKm: km != null ? Math.round(km * 10) / 10 : null,
+        distanceMiles: miles != null ? Math.round(miles * 10) / 10 : null,
+        distanceLabel: miles != null
+          ? `${Math.max(0.1, Math.round(miles * 10) / 10)} mi away`
+          : origin
+            ? 'Distance unavailable'
+            : null,
       };
     });
 
-    let matching = items;
-    if (searchCompact) {
-      // 1. Strict priority: exact postcode match or outward code match (as much as the postcode spans)
-      const exactOrOutcodeMatches = items.filter(
-        (item) => item.isExactMatch || item.isOutcodeMatch,
-      );
+    // Radius is measured from each affiliate's own postcode. Members whose
+    // postcode cannot be geocoded have no verifiable distance and are
+    // excluded from a radius search, so the result count always matches the
+    // advertised radius. If the bulk geocoder fails outright (affiliates have
+    // postcodes but none resolved), keep the unfiltered list instead of
+    // pretending every member is out of range.
+    const geocodingFailed =
+      Boolean(origin) &&
+      users.some((user) => Boolean(user.postcode?.trim())) &&
+      geoByPostcode.size === 0;
 
-      if (exactOrOutcodeMatches.length > 0) {
-        // When matches in this postcode or outward area exist, strictly return only them
-        matching = exactOrOutcodeMatches;
-      } else if (origin) {
-        // Fallback only if no exact/outcode matches: search within 5 miles or less
-        const effectiveRadius = Math.min(radiusMiles, DEFAULT_DIRECTORY_RADIUS_MILES);
-        matching = items.filter(
-          (item) => item.distanceMiles != null && item.distanceMiles <= effectiveRadius,
-        );
-      } else {
-        matching = [];
-      }
-    }
-
-    matching.sort((a, b) => {
-      if (a.isExactMatch && !b.isExactMatch) return -1;
-      if (!a.isExactMatch && b.isExactMatch) return 1;
-      if (a.isOutcodeMatch && !b.isOutcodeMatch) return -1;
-      if (!a.isOutcodeMatch && b.isOutcodeMatch) return 1;
-      return (a.distanceMiles ?? 9999) - (b.distanceMiles ?? 9999);
-    });
+    const matching =
+      origin && !geocodingFailed
+        ? items
+            .filter(
+              (item) =>
+                item.distanceMiles != null && item.distanceMiles <= radiusMiles,
+            )
+            .sort((a, b) => {
+              if (a.isExactMatch && !b.isExactMatch) return -1;
+              if (!a.isExactMatch && b.isExactMatch) return 1;
+              if (a.isOutcodeMatch && !b.isOutcodeMatch) return -1;
+              if (!a.isOutcodeMatch && b.isOutcodeMatch) return 1;
+              return (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity);
+            })
+        : items;
 
     return {
       items: matching.slice(0, limit),
       total: matching.length,
       territory,
-      distanceFrom: territory?.postcode ?? (searchPostcode || null),
+      distanceFrom: territory?.postcode ?? null,
     };
+  }
+
+  private parseDirectoryRoles(role?: string, roles?: string): UserRole[] {
+    const values = `${role ?? ''},${roles ?? ''}`
+      .split(',')
+      .map((value) => value.trim().toLowerCase().replace(/[-\s]+/g, '_'))
+      .filter(Boolean);
+    if (!values.length || values.includes('all')) return [];
+
+    const aliases: Record<string, UserRole> = {
+      agent: UserRole.AGENT,
+      agents: UserRole.AGENT,
+      account_manager: UserRole.ACCOUNT_MANAGER,
+      account_managers: UserRole.ACCOUNT_MANAGER,
+      manager: UserRole.ACCOUNT_MANAGER,
+      managers: UserRole.ACCOUNT_MANAGER,
+      consultant: UserRole.CONSULTANT,
+      consultants: UserRole.CONSULTANT,
+    };
+
+    return Array.from(
+      new Set(
+        values
+          .map((value) => aliases[value])
+          .filter((value): value is UserRole => Boolean(value)),
+      ),
+    );
+  }
+
+  /**
+   * Live public-profile metrics: latest passed assessment and real task
+   * performance (completed count, on-time rate, average acceptance time).
+   */
+  private async loadDirectoryMetrics(userIds: string[]) {
+    const metrics = new Map<
+      string,
+      {
+        assessmentScore: number | null;
+        latestAssessmentBand: string | null;
+        completedTasksCount: number;
+        activeTasksCount: number;
+        onTimeRate: number | null;
+        averageResponseTimeHours: number | null;
+      }
+    >();
+    if (!userIds.length) return metrics;
+
+    const activeStatuses = [
+      TaskStatus.ASSIGNED,
+      TaskStatus.ACCEPTED,
+      TaskStatus.SUBMITTED,
+      TaskStatus.PENDING_BUSINESS_APPROVAL,
+      TaskStatus.REVISION_REQUESTED,
+      TaskStatus.APPROVED,
+    ];
+
+    const [attempts, taskRows] = await Promise.all([
+      this.quizAttemptRepository.find({
+        where: { userId: In(userIds) },
+        order: { createdAt: 'DESC' },
+        select: ['id', 'userId', 'percentage', 'band', 'createdAt'],
+      }),
+      this.tasksRepository
+        .createQueryBuilder('task')
+        .select('task.assignedAgentId', 'agentId')
+        .addSelect(
+          'COUNT(*) FILTER (WHERE task.status = :completedStatus)',
+          'completedTasks',
+        )
+        .addSelect(
+          'COUNT(*) FILTER (WHERE task.status IN (:...activeStatuses))',
+          'activeTasks',
+        )
+        .addSelect(
+          'COUNT(*) FILTER (WHERE task.status = :completedStatus AND task.dueDate IS NOT NULL)',
+          'completedWithDueDate',
+        )
+        .addSelect(
+          'COUNT(*) FILTER (WHERE task.status = :completedStatus AND task.dueDate IS NOT NULL AND task.completedAt <= task.dueDate)',
+          'completedOnTime',
+        )
+        .addSelect(
+          'AVG(EXTRACT(EPOCH FROM (task.acceptedAt - task.createdAt))) FILTER (WHERE task.acceptedAt IS NOT NULL)',
+          'averageResponseSeconds',
+        )
+        .where('task.assignedAgentId IN (:...userIds)', { userIds })
+        .setParameters({
+          completedStatus: TaskStatus.COMPLETED,
+          activeStatuses,
+        })
+        .groupBy('task.assignedAgentId')
+        .getRawMany<{
+          agentId: string;
+          completedTasks: string;
+          activeTasks: string;
+          completedWithDueDate: string;
+          completedOnTime: string;
+          averageResponseSeconds: string | null;
+        }>(),
+    ]);
+
+    const latestAttempt = new Map<string, QuizAttempt>();
+    const latestPassedAttempt = new Map<string, QuizAttempt>();
+    for (const attempt of attempts) {
+      if (!latestAttempt.has(attempt.userId)) {
+        latestAttempt.set(attempt.userId, attempt);
+      }
+      if (
+        !latestPassedAttempt.has(attempt.userId) &&
+        String(attempt.band || '').toLowerCase() !== 'fail'
+      ) {
+        latestPassedAttempt.set(attempt.userId, attempt);
+      }
+    }
+
+    const taskStats = new Map(
+      taskRows.map((row) => [row.agentId, row] as const),
+    );
+
+    for (const userId of userIds) {
+      const row = taskStats.get(userId);
+      const latest = latestAttempt.get(userId);
+      const passed = latestPassedAttempt.get(userId);
+      const withDue = Number(row?.completedWithDueDate ?? 0);
+      const onTime = Number(row?.completedOnTime ?? 0);
+      const averageSeconds = row?.averageResponseSeconds != null
+        ? Number(row.averageResponseSeconds)
+        : null;
+
+      metrics.set(userId, {
+        assessmentScore: passed?.percentage ?? latest?.percentage ?? null,
+        latestAssessmentBand: latest?.band ?? null,
+        completedTasksCount: Number(row?.completedTasks ?? 0),
+        activeTasksCount: Number(row?.activeTasks ?? 0),
+        onTimeRate:
+          withDue > 0 ? Math.round((onTime / withDue) * 1000) / 10 : null,
+        averageResponseTimeHours:
+          averageSeconds != null && Number.isFinite(averageSeconds)
+            ? Math.round((averageSeconds / 3600) * 10) / 10
+            : null,
+      });
+    }
+
+    return metrics;
   }
 
   private normalizePostcode(postcode?: string | null): string {
@@ -359,8 +496,8 @@ export class UsersService {
    */
   private async bulkGeocodePostcodes(
     postcodes: Array<string | null | undefined>,
-  ): Promise<Map<string, GeoDetails>> {
-    const found = new Map<string, GeoDetails>();
+  ): Promise<Map<string, GeoPoint>> {
+    const found = new Map<string, GeoPoint>();
     const unique = Array.from(
       new Set(postcodes.map((postcode) => this.compactPostcode(postcode)).filter(Boolean)),
     );
@@ -370,7 +507,7 @@ export class UsersService {
     for (const compact of unique) {
       const cached = this.geoCache.get(compact);
       if (cached && Date.now() - cached.at < GEO_CACHE_TTL_MS) {
-        if (cached.data) found.set(compact, cached.data);
+        if (cached.point) found.set(compact, cached.point);
       } else {
         missing.push(compact);
       }
@@ -392,36 +529,8 @@ export class UsersService {
           const lng = row?.result?.longitude;
           const point =
             typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null;
-
-          const district = row?.result?.admin_district || '';
-          const broadRegion = row?.result?.region === 'London'
-            ? 'Greater London'
-            : (row?.result?.region || row?.result?.admin_county || '');
-          const town = row?.result?.post_town || '';
-
-          let formattedLocation = '';
-          if (district && broadRegion) {
-            formattedLocation = district.toLowerCase() === broadRegion.toLowerCase()
-              ? district
-              : `${district}, ${broadRegion}`;
-          } else if (district) {
-            formattedLocation = district;
-          } else if (town && broadRegion) {
-            formattedLocation = `${town}, ${broadRegion}`;
-          } else {
-            formattedLocation = town || broadRegion || '';
-          }
-
-          const data: GeoDetails = {
-            point,
-            adminDistrict: district,
-            region: broadRegion,
-            postTown: town,
-            formattedLocation,
-          };
-
-          this.geoCache.set(compact, { at: Date.now(), data });
-          found.set(compact, data);
+          this.geoCache.set(compact, { at: Date.now(), point });
+          if (point) found.set(compact, point);
         }
       } catch (error) {
         this.logger.warn(
@@ -470,37 +579,6 @@ export class UsersService {
       );
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
-        // Fallback for partial / outward postcodes (e.g. EC1A, SW1A)
-        try {
-          const outcodeRes = await axios.get<{
-            status: number;
-            result: {
-              outcode: string;
-              latitude: number;
-              longitude: number;
-              admin_district?: string[];
-              parish?: string[];
-              country?: string[];
-            };
-          }>(`https://api.postcodes.io/outcodes/${encodeURIComponent(clean)}`, { timeout: 8000 });
-          const outResult = outcodeRes.data?.result;
-          if (outResult) {
-            const city = outResult.admin_district?.[0] || '';
-            const region = outResult.admin_district?.[1] || outResult.admin_district?.[0] || '';
-            return {
-              found: true,
-              postalCode: outResult.outcode || postcode,
-              city,
-              region,
-              country: 'United Kingdom',
-              latitude: outResult.latitude ?? null,
-              longitude: outResult.longitude ?? null,
-              displayName: [outResult.outcode, city, 'United Kingdom'].filter(Boolean).join(', '),
-            };
-          }
-        } catch {
-          // Fall through to 404
-        }
         throw new BadRequestException('We could not find that UK postcode.');
       }
       throw error;
@@ -511,30 +589,23 @@ export class UsersService {
       throw new Error('postcodes.io returned no result payload');
     }
 
-    const district = result.admin_district || '';
-    const broadRegion = result.region === 'London'
-      ? 'Greater London'
-      : (result.region || result.admin_county || '');
-    const town = result.post_town || district || broadRegion || 'United Kingdom';
-
-    let region = '';
-    if (district && broadRegion) {
-      region = district.toLowerCase() === broadRegion.toLowerCase()
-        ? district
-        : `${district}, ${broadRegion}`;
-    } else {
-      region = district || broadRegion;
-    }
+    const city =
+      result.post_town ||
+      result.admin_district ||
+      result.region ||
+      result.admin_county ||
+      '';
+    const region = result.region || result.admin_county || '';
 
     return {
-      found: Boolean(town || region),
+      found: Boolean(city || region),
       postalCode: result.postcode || postcode,
-      city: town,
+      city,
       region,
       country: 'United Kingdom',
       latitude: result.latitude ?? null,
       longitude: result.longitude ?? null,
-      displayName: [result.postcode, region, 'United Kingdom'].filter(Boolean).join(', '),
+      displayName: [result.postcode, city, 'United Kingdom'].filter(Boolean).join(', '),
     };
   }
 
@@ -616,6 +687,91 @@ export class UsersService {
     return user;
   }
 
+  /**
+   * Authenticated profile response with a role-specific qualification
+   * checklist. Qualification is derived from persisted verification,
+   * onboarding, assessment and skills state so every role (not just agents)
+   * gets an explicit readiness signal.
+   */
+  async getProfile(id: string) {
+    const user = await this.reconcileOnboarding(id);
+    return this.toProfileResponse(user);
+  }
+
+  private toProfileResponse(user: User) {
+    const {
+      password: _password,
+      mcomAccessToken: _mcomAccessToken,
+      mcomRefreshToken: _mcomRefreshToken,
+      currentHashedRefreshToken: _currentHashedRefreshToken,
+      ...profile
+    } = user;
+
+    const isAgent = user.role === UserRole.AGENT;
+    const verified = user.verificationStatus === VerificationStatus.VERIFIED;
+    const hasProfileSubmission = Boolean(
+      user.verificationSubmission && user.verificationDocumentMimeType,
+    );
+    const hasSkills = Boolean(user.skills?.length);
+    const requirements = [
+      {
+        key: 'verification',
+        label: 'Identity verified by an administrator',
+        completed: verified,
+      },
+      {
+        key: 'profile',
+        label: 'Profile and identity document submitted',
+        completed: hasProfileSubmission,
+      },
+      {
+        key: 'assessment',
+        label: 'Assessment passed',
+        completed: Boolean(user.isQuizPassed),
+      },
+      ...(isAgent
+        ? [
+            {
+              key: 'skills',
+              label: 'At least one approved skill',
+              completed: hasSkills,
+            },
+          ]
+        : []),
+      {
+        key: 'onboarding',
+        label: 'Onboarding completed',
+        completed: Boolean(user.isOnboarded),
+      },
+    ];
+
+    const isQualified =
+      user.role === UserRole.ADMIN
+        ? true
+        : verified &&
+          Boolean(user.isOnboarded) &&
+          Boolean(user.isQuizPassed) &&
+          (!isAgent || hasSkills);
+
+    return {
+      ...profile,
+      name:
+        [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+        user.email,
+      isQualified,
+      qualificationStatus: isQualified ? 'qualified' : 'incomplete',
+      qualification: {
+        role: user.role,
+        isQualified,
+        status: isQualified ? 'qualified' : 'incomplete',
+        requirements,
+        missing: requirements
+          .filter((requirement) => !requirement.completed)
+          .map((requirement) => requirement.label),
+      },
+    };
+  }
+
   private async checkAndSetOnboarding(userId: string) {
     await this.reconcileOnboarding(userId);
   }
@@ -657,12 +813,10 @@ export class UsersService {
    * skill. Returns only non-sensitive profile fields.
    */
   async listAffiliateDirectory(): Promise<Array<Partial<User>>> {
-    const rows = await this.usersRepository.find({
+    return this.usersRepository.find({
       where: {
         role: In([UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT]),
         status: UserStatus.ACTIVE,
-        verificationStatus: VerificationStatus.VERIFIED,
-        isOnboarded: true,
       },
       select: [
         'id',
@@ -678,11 +832,5 @@ export class UsersService {
       ],
       order: { createdAt: 'DESC' },
     });
-
-    return rows.filter(
-      (user) =>
-        user.role !== UserRole.AGENT ||
-        (user.isQuizPassed && Array.isArray(user.skills) && user.skills.length > 0),
-    );
   }
 }

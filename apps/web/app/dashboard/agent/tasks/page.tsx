@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import TaskCountdown from '@/components/tasks/TaskCountdown';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { useAuthStore } from '@/store/useAuthStore';
 import { FormEvent, Suspense, useMemo, useState } from 'react';
@@ -88,11 +89,15 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
                         >
                             {task.status.replaceAll('_', ' ')}
                         </span>
-                        {task.chargeApprovalRequired && (
+                        {task.paymentStatus === 'ON_HOLD' ? (
+                            <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold text-amber-700">
+                                · Awaiting funds
+                            </span>
+                        ) : task.chargeApprovalRequired ? (
                             <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold text-amber-700">
                                 · Awaiting charge approval
                             </span>
-                        )}
+                        ) : null}
                     </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
@@ -133,14 +138,17 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
                     </div>
                 </div>
 
-                <span
-                    aria-hidden="true"
-                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors group-hover:bg-slate-100 group-hover:text-slate-700"
-                >
-                    <span className="material-symbols-outlined !text-base leading-none">
-                        {collapsed ? 'expand_more' : 'expand_less'}
+                <div className="flex shrink-0 items-center gap-2">
+                    <TaskCountdown dueDate={task.dueDate} status={task.status} />
+                    <span
+                        aria-hidden="true"
+                        className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors group-hover:bg-slate-100 group-hover:text-slate-700"
+                    >
+                        <span className="material-symbols-outlined !text-base leading-none">
+                            {collapsed ? 'expand_more' : 'expand_less'}
+                        </span>
                     </span>
-                </span>
+                </div>
             </button>
 
             {!collapsed && (
@@ -149,11 +157,16 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
                         {cleanPreviewText(task.description)}
                     </p>
 
-                    {(isCentralTask || task.platforms?.length || task.category || task.requiredSkills?.length) ? (
+                    {(isCentralTask || task.platforms?.length || task.category || task.requiredSkills?.length || task.paymentStatus === 'ON_HOLD') ? (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
                             {isCentralTask && (
                                 <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">
                                     Central Hub
+                                </span>
+                            )}
+                            {task.paymentStatus === 'ON_HOLD' && (
+                                <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                    Awaiting funds
                                 </span>
                             )}
                             {task.category && (
@@ -228,8 +241,6 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
     );
 }
 
-type StatusBucket = 'all' | 'action_needed' | 'active' | 'completed';
-
 function AgentTasksContent() {
     const { user } = useAuthStore();
     const router = useRouter();
@@ -237,7 +248,7 @@ function AgentTasksContent() {
     const basePath = pathname.split('/').slice(0, 3).join('/');
     const searchParams = useSearchParams();
     const search = searchParams.get('search') || '';
-    const [statusBucket, setStatusBucket] = useState<StatusBucket>('all');
+    const [statusBucket, setStatusBucket] = useState<'all' | 'action_needed' | 'in_review' | 'done'>('all');
     const [sortBy, setSortBy] = useState<'newest' | 'due_soon' | 'oldest'>('newest');
 
     const { tasks, isLoading, isError, error, refetch } = useTasks({
@@ -247,48 +258,62 @@ function AgentTasksContent() {
         limit: 50,
     });
 
+    // Compute task counts across buckets
     const counts = useMemo(() => {
         const list = tasks ?? [];
+        let actionNeeded = 0;
+        let inReview = 0;
+        let done = 0;
+        for (const t of list) {
+            if (['assigned', 'accepted', 'revision_requested'].includes(t.status)) {
+                actionNeeded += 1;
+            } else if (['submitted', 'pending_business_approval'].includes(t.status)) {
+                inReview += 1;
+            } else if (['approved', 'completed', 'declined', 'cancelled'].includes(t.status)) {
+                done += 1;
+            }
+        }
         return {
             all: list.length,
-            action_needed: list.filter((t) => t.status === 'assigned' || t.status === 'revision_requested').length,
-            active: list.filter((t) => ['accepted', 'submitted', 'pending_business_approval'].includes(t.status)).length,
-            completed: list.filter((t) => ['approved', 'completed'].includes(t.status)).length,
+            action_needed: actionNeeded,
+            in_review: inReview,
+            done,
         };
     }, [tasks]);
 
+    // Filter by active status bucket
     const filteredTasks = useMemo(() => {
-        const list = (tasks ?? []).filter((task) => {
-            if (statusBucket === 'action_needed') {
-                return task.status === 'assigned' || task.status === 'revision_requested';
-            }
-            if (statusBucket === 'active') {
-                return ['accepted', 'submitted', 'pending_business_approval'].includes(task.status);
-            }
-            if (statusBucket === 'completed') {
-                return ['approved', 'completed'].includes(task.status);
-            }
-            return true;
-        });
+        let list = tasks ?? [];
+        if (statusBucket === 'action_needed') {
+            list = list.filter((t) => ['assigned', 'accepted', 'revision_requested'].includes(t.status));
+        } else if (statusBucket === 'in_review') {
+            list = list.filter((t) => ['submitted', 'pending_business_approval'].includes(t.status));
+        } else if (statusBucket === 'done') {
+            list = list.filter((t) => ['approved', 'completed', 'declined', 'cancelled'].includes(t.status));
+        }
 
-        list.sort((a, b) => {
+        return [...list].sort((a, b) => {
             if (sortBy === 'due_soon') {
-                const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
-                const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
-                if (aDue !== bDue) return aDue - bDue;
+                const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+                const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+                return dateA - dateB;
             }
-            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return sortBy === 'oldest' ? aTime - bTime : bTime - aTime;
+            if (sortBy === 'oldest') {
+                const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return dateA - dateB;
+            }
+            // newest
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return dateB - dateA;
         });
-
-        return list;
     }, [tasks, statusBucket, sortBy]);
 
-    if (!user?.id || (isLoading && !isError)) {
+    if (!user?.id || isLoading) {
         return (
             <div className="flex min-h-[40vh] items-center justify-center px-4">
-                <div className="flex items-center gap-2.5 text-xs font-medium text-slate-500" role="status">
+                <div className="flex items-center gap-3 text-sm font-medium text-slate-500" role="status">
                     <span className="size-4 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />
                     Loading assigned tasks…
                 </div>
@@ -296,62 +321,53 @@ function AgentTasksContent() {
         );
     }
 
+    const filterPills = [
+        { id: 'all' as const, label: 'All tasks', count: counts.all, icon: 'list_alt' },
+        { id: 'action_needed' as const, label: 'Action needed', count: counts.action_needed, icon: 'assignment_late' },
+        { id: 'in_review' as const, label: 'In review', count: counts.in_review, icon: 'hourglass_top' },
+        { id: 'done' as const, label: 'Completed', count: counts.done, icon: 'check_circle' },
+    ];
+
     return (
-        <div className="mx-auto w-full max-w-[1600px] space-y-2.5">
-            <header className="flex flex-wrap items-center justify-between gap-2">
+        <div className="mx-auto w-full max-w-[1600px] space-y-3 pb-8">
+            {/* Header row with stats */}
+            <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 shadow-2xs">
                 <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                        <h1 className="text-lg font-bold tracking-tight text-slate-950 sm:text-xl">Assigned Tasks</h1>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-slate-700">
-                            {counts.all}
-                        </span>
-                    </div>
+                    <h1 className="text-base font-bold text-slate-950 sm:text-lg">Assigned Tasks</h1>
                     <p className="text-xs text-slate-500">
-                        Accept delegated briefs, track deadlines, and submit deliverables for review.
+                        Tasks assigned to you by Central Hub businesses and Account Managers.
                     </p>
                 </div>
                 {basePath.endsWith('/agent') && (
                     <Link
                         href={`${basePath}/my-missions`}
-                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50/70 px-2.5 text-[11px] font-bold text-blue-700 transition-colors hover:bg-blue-100"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
                     >
-                        <span className="material-symbols-outlined !text-sm leading-none">rocket_launch</span>
-                        <span>View my missions</span>
+                        <span>View missions</span>
+                        <span className="material-symbols-outlined !text-sm leading-none">arrow_forward</span>
                     </Link>
                 )}
             </header>
 
-            {/* Compact Status Pill Rail */}
-            <div
-                role="group"
-                aria-label="Filter tasks by status"
-                className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar sm:grid sm:grid-cols-4 sm:gap-2"
-            >
-                {[
-                    { id: 'all' as const, label: 'All Tasks', count: counts.all, icon: 'assignment', tone: 'blue' },
-                    { id: 'action_needed' as const, label: 'Action Needed', count: counts.action_needed, icon: 'notification_important', tone: 'amber' },
-                    { id: 'active' as const, label: 'In Progress', count: counts.active, icon: 'pending_actions', tone: 'indigo' },
-                    { id: 'completed' as const, label: 'Completed', count: counts.completed, icon: 'task_alt', tone: 'emerald' },
-                ].map((pill) => {
+            {/* Status Pills */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {filterPills.map((pill) => {
                     const active = statusBucket === pill.id;
                     return (
                         <button
                             key={pill.id}
                             type="button"
                             onClick={() => setStatusBucket(pill.id)}
-                            aria-pressed={active}
-                            className={`flex min-h-9 shrink-0 items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-all ${
+                            className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
                                 active
-                                    ? 'border-blue-600 bg-blue-50/80 font-bold text-slate-950 shadow-2xs ring-1 ring-blue-600/15'
-                                    : 'border-slate-200 bg-white font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50/70'
+                                    ? 'border-blue-500/70 bg-blue-50/60 text-blue-900 shadow-2xs'
+                                    : 'border-slate-200/90 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/50'
                             }`}
                         >
-                            <span className="flex items-center gap-1.5 truncate">
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
                                 <span
-                                    className={`material-symbols-outlined shrink-0 !text-base leading-none transition-colors ${
-                                        active
-                                            ? "text-blue-600 [font-variation-settings:'FILL'_1]"
-                                            : 'text-slate-400'
+                                    className={`material-symbols-outlined !text-base leading-none ${
+                                        active ? 'text-blue-600' : 'text-slate-400'
                                     }`}
                                 >
                                     {pill.icon}

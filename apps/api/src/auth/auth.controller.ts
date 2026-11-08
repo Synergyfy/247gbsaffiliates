@@ -46,8 +46,9 @@ export class AuthController {
     if (req.user?.userId) {
       // Reconcile verification + assessment + skills that may have completed in
       // a different order, so a fully eligible affiliate is not forced back
-      // through onboarding (or handed a stale `isOnboarded=false`).
-      return this.usersService.reconcileOnboarding(req.user.userId);
+      // through onboarding (or handed a stale `isOnboarded=false`). The response
+      // is sanitised and includes a role-specific qualification checklist.
+      return this.usersService.getProfile(req.user.userId);
     }
     return req.user;
   }

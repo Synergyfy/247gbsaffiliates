@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import apiClient from '@/lib/apiClient';
 import { stabilizeErrorRetry } from '@/lib/requestErrors';
 import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { AcquisitionActivityFeed } from './AcquisitionActivityFeed';
 
 type Prospect = {
   id: string;
@@ -26,6 +27,10 @@ type Prospect = {
   acquisitionStatus: string;
   claimEvidence?: string | null;
   verifiedAt?: string | null;
+  convertedAt?: string | null;
+  conversionType?: string | null;
+  conversionProvider?: string | null;
+  conversionAmount?: string | number | null;
   createdAt: string;
 };
 
@@ -36,6 +41,7 @@ type Summary = {
   invitationsSent: number;
   registered: number;
   onboardingCompleted: number;
+  converted: number;
   verified: number;
   pendingVerification: number;
   inactive: number;
@@ -151,6 +157,7 @@ export function BusinessAcquisitionWorkspace({
         invitationsSent: 0,
         registered: 0,
         onboardingCompleted: 0,
+        converted: 0,
         verified: 0,
         pendingVerification: 0,
         inactive: 0,
@@ -288,7 +295,7 @@ export function BusinessAcquisitionWorkspace({
         </button>
       </header>
 
-      <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <StatCard
           label="Outreach target"
           value={settings?.targetCount ?? 20}
@@ -298,6 +305,13 @@ export function BusinessAcquisitionWorkspace({
         />
         <StatCard label="Approached" value={summary.approached} hint="Businesses spoken to" icon="groups" />
         <StatCard label="Registered on CHS" value={summary.registered} hint="Accounts created" icon="how_to_reg" />
+        <StatCard
+          label="Paid conversions"
+          value={summary.converted}
+          hint="Membership, pass or trial"
+          icon="payments"
+          tone="green"
+        />
         <StatCard
           label="Verified onboardings"
           value={summary.verified}
@@ -313,6 +327,10 @@ export function BusinessAcquisitionWorkspace({
           tone="amber"
         />
       </section>
+
+      <div className="mb-6">
+        <AcquisitionActivityFeed limit={10} />
+      </div>
 
       {showForm && (
         <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
@@ -539,6 +557,15 @@ export function BusinessAcquisitionWorkspace({
                       >
                         {ACQUISITION_LABEL[prospect.acquisitionStatus] || label(prospect.acquisitionStatus)}
                       </span>
+                      {prospect.convertedAt && (
+                        <span className="ml-1 inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          Paid
+                          {prospect.conversionAmount != null &&
+                          Number(prospect.conversionAmount) > 0
+                            ? ` £${Number(prospect.conversionAmount).toFixed(2)}`
+                            : ''}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-[11px] text-slate-600">
                       {prospect.invitationSentAt ? (

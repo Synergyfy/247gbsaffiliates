@@ -9,7 +9,7 @@ import {
   ManagedServiceRequest,
   ManagedTask,
   Task,
-  useAffiliateDirectory,
+  useDelegatableAgents,
   useManagedProjects,
   useManagedRequests,
   useManagedTask,
@@ -266,7 +266,8 @@ function AffiliateAssigneePicker({
   const selectedAffiliate = useMemo(
     () =>
       affiliates.find(
-        (affiliate) => (affiliate.centralUserId || affiliate.id) === selectedAssigneeId,
+        (affiliate) =>
+          (affiliate.mcomUserId || affiliate.centralUserId || affiliate.id) === selectedAssigneeId,
       ) ?? null,
     [affiliates, selectedAssigneeId],
   );
@@ -407,7 +408,7 @@ function AffiliateAssigneePicker({
                 </div>
               ) : (
                 filteredAffiliates.map((affiliate) => {
-                  const assigneeId = affiliate.centralUserId || affiliate.id;
+                  const assigneeId = affiliate.mcomUserId || affiliate.centralUserId || affiliate.id;
                   const isSelected = assigneeId === selectedAssigneeId;
                   const roleLabel = (affiliate.role || 'agent').replace('_', ' ').toUpperCase();
                   const matchingSkillCount = (affiliate.skills ?? []).filter((s) =>
@@ -443,6 +444,11 @@ function AffiliateAssigneePicker({
                           {matchingSkillCount > 0 ? (
                             <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
                               {matchingSkillCount} skill match
+                            </span>
+                          ) : null}
+                          {affiliate.activeTasksCount != null ? (
+                            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700">
+                              {affiliate.activeTasksCount} active
                             </span>
                           ) : null}
                         </div>
@@ -1050,6 +1056,8 @@ function ProjectRow({
       );
     }
   };
+
+
 
   return (
     <article className="group rounded-xl border border-slate-200/90 bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all hover:border-slate-300 hover:shadow-sm sm:p-3.5">
@@ -2351,7 +2359,7 @@ export default function AccountManagerReviewQueue() {
     isLoading: isLoadingAffiliates,
     isError: isErrorAffiliates,
     refetch: refetchAffiliates,
-  } = useAffiliateDirectory({ limit: 100 });
+  } = useDelegatableAgents();
 
   const {
     tasks: directTasks,

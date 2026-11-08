@@ -27,6 +27,8 @@ interface HandshakeJwtPayload {
   role?: string;
   membership?: { level?: string | null; status?: string | null };
   permissions?: Record<string, boolean>;
+  referralCode?: string | null;
+  referralLink?: string | null;
 }
 
 @Injectable()
@@ -294,6 +296,14 @@ export class McomService {
           mcomMembershipLevel: input.membership.level ?? null,
           mcomMembershipStatus: input.membership.status ?? null,
         }),
+        // Sync the Central referral programme fields on every SSO refresh so
+        // older local rows are backfilled automatically.
+        ...(input.referralCode !== undefined && {
+          referralCode: input.referralCode ?? null,
+        }),
+        ...(input.referralLink !== undefined && {
+          referralLink: input.referralLink ?? null,
+        }),
         mcomCanAccessVcard: Boolean(canAccess),
       } as never);
       return this.usersService.findOne(existing.id);
@@ -318,6 +328,8 @@ export class McomService {
       country: input.country ?? null,
       mcomMembershipLevel: input.membership?.level ?? null,
       mcomMembershipStatus: input.membership?.status ?? null,
+      referralCode: input.referralCode ?? null,
+      referralLink: input.referralLink ?? null,
       mcomCanAccessVcard: Boolean(canAccess),
     } as never);
 

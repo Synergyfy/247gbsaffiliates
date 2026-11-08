@@ -7,6 +7,7 @@ import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 import { stabilizeErrorRetry } from '@/lib/requestErrors';
+import ReferralPanel from '@/components/dashboard/ReferralPanel';
 
 type ProfileSubmission = {
     bio?: string | null;
@@ -34,6 +35,8 @@ type Profile = {
     subCategoryId?: string | null;
     hourlyRate?: string | number | null;
     currency?: string | null;
+    referralCode?: string | null;
+    referralLink?: string | null;
 };
 
 type Sector = { id: string; name: string; categories?: Category[] };
@@ -272,6 +275,11 @@ export default function AgentProfilePage() {
                             </li>)}
                         </ul>
                     </section>
+
+                    <ReferralPanel
+                        referralCode={profile?.referralCode ?? user?.referralCode}
+                        referralLink={profile?.referralLink ?? user?.referralLink}
+                    />
 
                     <section className="bg-[#202b42] p-4 text-white sm:p-5">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-blue-200">Next step</p>

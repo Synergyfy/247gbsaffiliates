@@ -21,6 +21,7 @@ export class UsersController {
   async directory(
     @Query('postcode') postcode?: string,
     @Query('role') role?: string,
+    @Query('roles') roles?: string,
     @Query('search') search?: string,
     @Query('limit') limit?: string,
     @Query('radius') radius?: string,
@@ -28,6 +29,7 @@ export class UsersController {
     return this.usersService.findPublicDirectory({
       postcode,
       role,
+      roles,
       search,
       limit: Number(limit) || undefined,
       radiusMiles: radius !== undefined && radius !== '' ? Number(radius) : undefined,

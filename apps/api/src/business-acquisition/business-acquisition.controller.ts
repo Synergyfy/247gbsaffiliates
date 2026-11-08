@@ -2,13 +2,17 @@ import {
   Body,
   Controller,
   Get,
+  Header,
+  MessageEvent,
   Param,
   Patch,
   Post,
   Query,
   Request,
+  Sse,
   UseGuards,
 } from '@nestjs/common';
+import { Observable } from 'rxjs';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -36,6 +40,32 @@ export class BusinessAcquisitionController {
     return {
       success: true,
       data: await this.acquisition.getSummaryForUser(req.user.userId),
+    };
+  }
+
+  /**
+   * Server-Sent Events stream. Auth uses the HttpOnly cookie, so the browser's
+   * EventSource connects with `withCredentials` and no token in the URL.
+   */
+  @Sse('events/stream')
+  @Roles(UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT, UserRole.ADMIN)
+  @Header('Cache-Control', 'no-cache, no-transform')
+  @Header('X-Accel-Buffering', 'no')
+  @ApiOperation({ summary: 'Live business acquisition events (SSE)' })
+  stream(@Request() req): Observable<MessageEvent> {
+    return this.acquisition.streamEvents(req.user) as Observable<MessageEvent>;
+  }
+
+  @Get('events')
+  @Roles(UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT)
+  @ApiOperation({ summary: 'Recent business acquisition events for the signed-in affiliate' })
+  async events(@Request() req, @Query('limit') limit?: string) {
+    return {
+      success: true,
+      data: await this.acquisition.listEvents(
+        req.user.userId,
+        limit ? Number(limit) : undefined,
+      ),
     };
   }
 
@@ -128,6 +158,16 @@ export class BusinessAcquisitionController {
   }
 
   // ── Admin oversight ─────────────────────────────────────────────────
+
+  @Get('admin/events')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Recent acquisition events across the affiliate network (admin)' })
+  async adminEvents(@Query('limit') limit?: string) {
+    return {
+      success: true,
+      data: await this.acquisition.adminListEvents(limit ? Number(limit) : undefined),
+    };
+  }
 
   @Get('admin/prospects')
   @Roles(UserRole.ADMIN)

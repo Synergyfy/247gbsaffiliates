@@ -10,8 +10,9 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { OverviewStage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
 import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 import { stabilizeErrorRetry } from '@/lib/requestErrors';
+import ReferralPanel from '@/components/dashboard/ReferralPanel';
 
-type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string; verificationSubmission?: unknown };
+type Profile = { id: string; name?: string; email?: string; role?: string; isOnboarded?: boolean; isQuizPassed?: boolean; isQualified?: boolean; verificationStatus?: string; verificationSubmission?: unknown; referralCode?: string | null; referralLink?: string | null };
 type Attempt = { band?: string; percentage?: number } | null;
 const unwrap = <T,>(payload: unknown): T => {
     if (payload && typeof payload === 'object' && 'data' in payload) {
@@ -189,6 +190,11 @@ export default function AccountManagerDashboard() {
                     state={walletQuery.isError ? 'Unavailable' : undefined}
                 />
             </section>
+
+            <ReferralPanel
+                referralCode={profile?.referralCode ?? user?.referralCode}
+                referralLink={profile?.referralLink ?? user?.referralLink}
+            />
         </RoleOverview>
     );
 }

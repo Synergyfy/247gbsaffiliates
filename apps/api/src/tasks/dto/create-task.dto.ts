@@ -39,8 +39,27 @@ export class CreateTaskDto {
   @IsOptional()
   requiredSkills?: string[];
 
+  @ApiProperty({
+    example: 'uuid-agent',
+    required: false,
+    description: 'Optional affiliate (agent, account manager or consultant) to assign immediately.',
+  })
+  @IsString()
+  @IsOptional()
+  assignedAgentId?: string;
+
   @ApiProperty({ example: '2024-12-31T23:59:59Z' })
   @IsDateString()
   @IsOptional()
   dueDate?: string;
+
+  @ApiProperty({
+    example: 'clx123project',
+    required: false,
+    description:
+      'Central Hub project to create this task under. When set by an Account Manager, the task is created in Central Hub and linked to that project instead of staying local-only.',
+  })
+  @IsString()
+  @IsOptional()
+  centralProjectId?: string;
 }

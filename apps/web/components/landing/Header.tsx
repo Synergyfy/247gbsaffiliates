@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getAffiliateRegisterUrl } from "@/lib/centralHub";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import ProgramsMenu from "@/components/landing/ProgramsMenu";
 
 export default function LandingHeader() {
     const [scrolled, setScrolled] = useState(false);
@@ -37,10 +38,13 @@ export default function LandingHeader() {
 
     const navLinks = [
         { name: "Find Affiliates", href: "/find-agent" },
-        { name: "For Account Managers", href: "/for-account-manager" },
+        { name: "How it Works", href: "/#how-it-works" },
+    ];
+
+    const programLinks = [
         { name: "For Agents", href: "/for-agent" },
         { name: "For Consultants", href: "/for-consultant" },
-        { name: "How it Works", href: "/#how-it-works" },
+        { name: "For Account Managers", href: "/for-account-manager" },
     ];
 
     return (
@@ -72,16 +76,20 @@ export default function LandingHeader() {
                     </Link>
 
                     {/* Desktop Navigation */}
-                    <div className="hidden lg:flex flex-1 justify-center gap-10">
-                        {navLinks.map((link) => (
-                            <Link
-                                key={link.name}
-                                href={link.href}
-                                className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors"
-                            >
-                                {link.name}
-                            </Link>
-                        ))}
+                    <div className="hidden lg:flex flex-1 items-center justify-center gap-10">
+                        <Link
+                            href={navLinks[0].href}
+                            className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors"
+                        >
+                            {navLinks[0].name}
+                        </Link>
+                        <ProgramsMenu />
+                        <Link
+                            href={navLinks[1].href}
+                            className="text-text-main/80 text-sm font-semibold hover:text-primary transition-colors"
+                        >
+                            {navLinks[1].name}
+                        </Link>
                     </div>
 
                     {/* Desktop Actions */}
@@ -130,7 +138,13 @@ export default function LandingHeader() {
 
                 <div className="flex-1 overflow-y-auto py-8 px-6 flex flex-col gap-6">
                     <nav className="flex flex-col gap-4">
-                        {navLinks.map((link) => (
+                        <Link
+                            href={navLinks[0].href}
+                            className="text-lg font-bold text-text-main hover:text-primary transition-colors py-2 border-b border-slate-50"
+                        >
+                            {navLinks[0].name}
+                        </Link>
+                        {programLinks.map((link) => (
                             <Link
                                 key={link.name}
                                 href={link.href}
@@ -139,6 +153,12 @@ export default function LandingHeader() {
                                 {link.name}
                             </Link>
                         ))}
+                        <Link
+                            href={navLinks[1].href}
+                            className="text-lg font-bold text-text-main hover:text-primary transition-colors py-2 border-b border-slate-50"
+                        >
+                            {navLinks[1].name}
+                        </Link>
                     </nav>
 
                     <div className="mt-8 flex flex-col gap-4">

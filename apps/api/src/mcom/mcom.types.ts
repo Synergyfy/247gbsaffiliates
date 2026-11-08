@@ -61,6 +61,10 @@ export interface McomCentralUser {
   country?: string | null;
   membershipLevel?: string;
   membershipStatus?: string;
+  /** The affiliate's own Central referral code (null for admins). */
+  referralCode?: string | null;
+  /** Fully-qualified `?ref=` registration link from Central. */
+  referralLink?: string | null;
   businessProfile?: McomBusinessProfile | null;
   permissions?: Record<string, boolean>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,6 +97,8 @@ export interface JitProvisionInput {
   country?: string | null;
   membership?: { level?: string | null; status?: string | null };
   permissions?: Record<string, boolean>;
+  referralCode?: string | null;
+  referralLink?: string | null;
 }
 
 export interface McomSsoConfig {

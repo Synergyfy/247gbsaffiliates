@@ -5,6 +5,7 @@ import {
   IsEmail,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -167,4 +168,29 @@ export class CentralAcquisitionEventDto {
   @IsOptional()
   @IsString()
   claimId?: string | null;
+
+  /** Conversion payload (paid membership / access pass / trial). */
+  @IsOptional()
+  @IsString()
+  conversionType?: string | null;
+
+  @IsOptional()
+  @IsString()
+  planName?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  amount?: number | null;
+
+  @IsOptional()
+  @IsString()
+  currency?: string | null;
+
+  @IsOptional()
+  @IsString()
+  provider?: string | null;
+
+  @IsOptional()
+  @IsString()
+  paymentReference?: string | null;
 }

@@ -21,6 +21,19 @@ export class AccountManagerController {
     return this.accountManagerService.getRevenueDashboard(req.user.userId);
   }
 
+  @Get('agents')
+  @ApiOperation({
+    summary: 'Agents for this account manager',
+    description:
+      'Default scope returns the roster already working on this manager’s work. Use ?scope=delegatable to list qualified agents and consultants with a live Central Hub link, skills and current workload.',
+  })
+  async getManagedAgents(@Request() req, @Query('scope') scope?: string) {
+    if (scope === 'delegatable') {
+      return this.accountManagerService.getDelegatableAgents(req.user.userId);
+    }
+    return this.accountManagerService.getManagedAgents(req.user.userId);
+  }
+
   @Get('businesses')
   @ApiOperation({ summary: 'List businesses assigned to the signed-in account manager' })
   @ApiResponse({ status: 200, description: 'Assigned businesses from Central Hub' })
@@ -125,4 +138,6 @@ export class AccountManagerController {
   ) {
     return this.accountManagerService.closeManagedProject(req.user.userId, id, body);
   }
+
+
 }

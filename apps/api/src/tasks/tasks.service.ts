@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
@@ -11,6 +18,7 @@ import { FindTasksQueryDto } from './dto/find-tasks.dto';
 import { SubmitTaskDto } from './dto/task-collaboration.dto';
 import { UsersService } from '../users/users.service';
 import { User, UserRole, UserStatus, VerificationStatus } from '../users/entities/user.entity';
+import { AccountManagerService } from '../account-manager/account-manager.service';
 
 const AFFILIATE_ROLES = [UserRole.AGENT, UserRole.ACCOUNT_MANAGER, UserRole.CONSULTANT];
 
@@ -25,6 +33,7 @@ export class TasksService {
     private usersService: UsersService,
     private httpService: HttpService,
     private configService: ConfigService,
+    private accountManagerService: AccountManagerService,
   ) {
     this.centralUrl = this.configService.get<string>('MCOM_CENTRAL_URL') || 'http://localhost:3010/api/v1';
   }
@@ -34,11 +43,158 @@ export class TasksService {
     if (creator.role !== UserRole.ADMIN) {
       await this.assertQualifiedAffiliate(userId);
     }
+
+    let assignee: User | null = null;
+    if (createTaskDto.assignedAgentId) {
+      assignee = await this.usersService.findOne(createTaskDto.assignedAgentId);
+      if (assignee.role === UserRole.ADMIN) {
+        throw new ForbiddenException('Cannot assign tasks to another Admin');
+      }
+      await this.assertQualifiedAffiliate(assignee.id);
+    }
+
+    // Client work must live in Central Hub. Creating it under the managed
+    // project first keeps the business, project, escrow and AM review trail in
+    // one place; the local row below is only the affiliate-side mirror.
+    if (createTaskDto.centralProjectId) {
+      return this.createClientProjectTask(userId, createTaskDto, assignee);
+    }
+
+    const { centralProjectId: _centralProjectId, ...localFields } = createTaskDto;
     const task = this.tasksRepo.create({
-      ...createTaskDto,
+      ...localFields,
       clientId: userId,
+      ...(createTaskDto.assignedAgentId
+        ? { status: TaskStatus.ASSIGNED }
+        : {}),
     });
     return this.tasksRepo.save(task);
+  }
+
+  /**
+   * Create a task inside a Central Hub project and store the local mirror with
+   * the Central task id. The incoming sync finds that id and updates the same
+   * row instead of creating a duplicate.
+   */
+  private async createClientProjectTask(
+    userId: string,
+    createTaskDto: CreateTaskDto,
+    assignee: User | null,
+  ) {
+    const { centralProjectId, ...localFields } = createTaskDto;
+    if (!centralProjectId) {
+      throw new BadRequestException('A Central Hub project is required for client work');
+    }
+
+    const payload: Record<string, unknown> = {
+      title: localFields.title,
+      description: localFields.description,
+      ...(assignee ? { assigneeUserId: assignee.id } : {}),
+      ...(localFields.dueDate
+        ? { dueAt: new Date(localFields.dueDate).toISOString() }
+        : {}),
+      ...(localFields.requiredSkills?.length
+        ? { requiredSkills: localFields.requiredSkills }
+        : {}),
+    };
+
+    const response = await this.accountManagerService.createManagedProjectTask(
+      userId,
+      centralProjectId,
+      payload,
+    );
+    const centralTask = ((response as { data?: any })?.data ?? response) as any;
+    if (!centralTask?.id) {
+      throw new BadRequestException('Central Hub did not return the created task.');
+    }
+
+    const existing = await this.tasksRepo.findOne({
+      where: { externalTaskId: centralTask.id },
+    });
+
+    // Central may keep an over-quota task unassigned until a price is agreed.
+    // Do not mirror an assignee locally when Central did not accept one.
+    const assignedLocally = Boolean(
+      centralTask.assigneeId ?? centralTask.assignee?.id,
+    );
+    const localAssignee = assignedLocally ? assignee : null;
+
+    const centralDeliverables = Array.isArray(centralTask.deliverables)
+      ? centralTask.deliverables
+      : typeof centralTask.deliverables === 'string'
+        ? centralTask.deliverables
+            .split(/\r?\n|,/)
+            .map((item: string) => item.trim())
+            .filter(Boolean)
+        : [];
+
+    const patch = {
+      ...localFields,
+      clientId: userId,
+      externalTaskId: centralTask.id,
+      originSystem: OriginSystem.MCOM_CENTRAL,
+      originRequesterId: centralTask.businessId,
+      centralBusinessId: centralTask.businessId,
+      centralBusinessName: centralTask.business?.businessName ?? undefined,
+      taskType: 'CENTRAL_DELEGATION',
+      projectId: centralTask.projectId ?? centralProjectId,
+      projectName: centralTask.project?.title ?? undefined,
+      category:
+        String(centralTask.category || '').toLowerCase() === 'internal'
+          ? TaskCategory.INTERNAL
+          : TaskCategory.EXTERNAL,
+      platforms: centralTask.platforms ?? [],
+      requiredSkills:
+        centralTask.requiredSkills ?? localFields.requiredSkills ?? [],
+      deliverables: centralDeliverables.length ? centralDeliverables : undefined,
+      materials: centralTask.materials ?? undefined,
+      dueDate: centralTask.dueAt
+        ? new Date(centralTask.dueAt)
+        : localFields.dueDate
+          ? new Date(localFields.dueDate)
+          : undefined,
+      assigneeEmail:
+        centralTask.assignee?.email?.toLowerCase() ??
+        localAssignee?.email?.toLowerCase(),
+      assignedAgentId: localAssignee?.id,
+      assignedAgent: localAssignee ?? undefined,
+      status: this.mapCentralTaskStatus(
+        centralTask.status,
+        Boolean(localAssignee),
+      ),
+      compensationModel: centralTask.compensationModel ?? undefined,
+      compensationAmount: centralTask.compensationAmount ?? undefined,
+      compensationCurrency: centralTask.compensationCurrency ?? undefined,
+      paymentStatus: centralTask.paymentStatus ?? undefined,
+      lastCentralSyncAt: new Date(),
+    } as Partial<Task>;
+
+    if (existing) {
+      return this.tasksRepo.save(this.tasksRepo.merge(existing, patch));
+    }
+    return this.tasksRepo.save(this.tasksRepo.create(patch as never) as unknown as Task);
+  }
+
+  private mapCentralTaskStatus(
+    status: string | undefined,
+    hasAssignee: boolean,
+  ): TaskStatus {
+    const map: Record<string, TaskStatus> = {
+      PENDING_ASSIGNMENT: TaskStatus.OPEN,
+      ASSIGNED: TaskStatus.ASSIGNED,
+      ACCEPTED: TaskStatus.ACCEPTED,
+      IN_PROGRESS: TaskStatus.ACCEPTED,
+      SUBMITTED: TaskStatus.SUBMITTED,
+      PENDING_BUSINESS_APPROVAL: TaskStatus.PENDING_BUSINESS_APPROVAL,
+      REVISION_REQUESTED: TaskStatus.REVISION_REQUESTED,
+      COMPLETED: TaskStatus.COMPLETED,
+      DECLINED: TaskStatus.DECLINED,
+      CANCELLED: TaskStatus.CANCELLED,
+    };
+    return (
+      map[String(status || '').toUpperCase()] ??
+      (hasAssignee ? TaskStatus.ASSIGNED : TaskStatus.OPEN)
+    );
   }
 
   /**
@@ -138,6 +294,7 @@ export class TasksService {
       businessChargeAmount: dto.businessChargeAmount ?? undefined,
       businessChargeCurrency: dto.businessChargeCurrency ?? 'GBP',
       chargeApprovalRequired: dto.chargeApprovalRequired ?? false,
+      paymentStatus: dto.paymentStatus ?? undefined,
       ...(dto.chargeApprovalRequired === false
         ? { chargeApprovedAt: new Date() }
         : {}),
@@ -160,6 +317,7 @@ export class TasksService {
         patch.reviewNotes = null;
         patch.reviewHistory = [];
         patch.revisionCount = 0;
+        patch.declineReason = null;
         patch.submittedAt = null;
         patch.completedAt = null;
         return this.tasksRepo.save(this.tasksRepo.merge(existing, patch));
@@ -213,19 +371,7 @@ export class TasksService {
     let where: any = baseWhere;
 
     if (requesterId && requesterRole && AFFILIATE_ROLES.includes(requesterRole)) {
-      try {
-        await this.assertQualifiedAffiliate(requesterId);
-      } catch {
-        // Affiliate is not yet fully qualified; return clean empty list instead of a fatal 403
-        return {
-          items: [],
-          meta: {
-            total: 0,
-            page: 1,
-            lastPage: 1,
-          },
-        };
-      }
+      await this.assertQualifiedAffiliate(requesterId);
       const me = await this.usersService.findOne(requesterId);
       const mine = [{ ...baseWhere, assignedAgentId: requesterId }];
       if (me?.email) mine.push({ ...baseWhere, assigneeEmail: me.email.toLowerCase() });
@@ -289,6 +435,13 @@ export class TasksService {
 
   async assign(id: string, agentId: string) {
     const task = await this.findOne(id);
+    if (task.externalTaskId) {
+      throw new ConflictException({
+        code: 'CENTRAL_TASK_ASSIGNMENT_REQUIRED',
+        message:
+          'This task is managed in Central Hub. Reassign it from the Account Manager workspace so Central keeps the assignee, project and review trail in sync.',
+      });
+    }
     if (task.status !== TaskStatus.OPEN && task.status !== TaskStatus.DECLINED) {
       throw new BadRequestException('Task is not open for assignment');
     }
@@ -309,7 +462,12 @@ export class TasksService {
     return savedTask;
   }
 
-  async respondToTask(id: string, userId: string, response: 'accept' | 'decline') {
+  async respondToTask(
+    id: string,
+    userId: string,
+    response: 'accept' | 'decline',
+    options: { reason?: string } = {},
+  ) {
     const task = await this.findOne(id);
     const me = await this.assertQualifiedAffiliate(userId);
 
@@ -331,6 +489,11 @@ export class TasksService {
     }
 
     if (response === 'accept') {
+      if (task.paymentStatus === 'ON_HOLD') {
+        throw new BadRequestException(
+          'The business has not locked the funds for this task yet. You can see the task, but work cannot start until payment is secured.',
+        );
+      }
       if (task.chargeApprovalRequired) {
         throw new BadRequestException(
           'The business must approve the charge for this task before work begins.',
@@ -349,8 +512,16 @@ export class TasksService {
       }
       task.status = TaskStatus.ACCEPTED;
       task.acceptedAt = new Date();
+      task.declineReason = null;
     } else {
+      const reason = (options.reason ?? '').trim();
+      if (reason.length < 5) {
+        throw new BadRequestException(
+          'Provide a reason for declining this task so the business and an administrator can reassign it.',
+        );
+      }
       task.status = TaskStatus.DECLINED;
+      task.declineReason = reason;
     }
 
     const savedTask = await this.tasksRepo.save(task);
@@ -665,6 +836,7 @@ export class TasksService {
             affiliateTaskId: task.id,
             submissionData: task.submissionData ?? null,
             reviewAcknowledged: extra.reviewAcknowledged ?? false,
+            declineReason: task.declineReason ?? null,
           },
           {
             headers: {

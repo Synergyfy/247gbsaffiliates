@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -39,6 +39,12 @@ interface AgentRecord {
   isDemoProfile?: boolean;
   isExactMatch?: boolean;
   isOutcodeMatch?: boolean;
+  mcomUserId?: string | null;
+  assessmentScore?: number | null;
+  completedTasksCount?: number;
+  activeTasksCount?: number;
+  onTimeRate?: number | null;
+  averageResponseTimeHours?: number | null;
 }
 
 interface HeroCarouselCard {
@@ -59,6 +65,9 @@ const ROLE_FILTER_OPTIONS: Array<{ id: AffiliateRoleOption; label: string }> = [
   { id: 'account_manager', label: 'Managers' },
   { id: 'consultant', label: 'Consultants' },
 ];
+
+const DEFAULT_RADIUS_MILES = 50;
+const RADIUS_OPTIONS = [10, 25, 50, 100, 250, 500];
 
 const DEMO_POSTCODE = 'SW1A 1AA';
 const DEMO_AFFILIATES: AgentRecord[] = [
@@ -111,6 +120,13 @@ const getAgentAvatarUrl = (agent: AgentRecord): string => {
   return `https://i.pravatar.cc/150?u=${encodeURIComponent(seed)}`;
 };
 
+const formatDistance = (miles?: number | null, label?: string | null): string | null => {
+  if (miles != null) {
+    return `${miles} ${miles === 1 ? 'mile' : 'miles'} away`;
+  }
+  return label ? label.replace(/\bmi\b/gi, 'miles') : null;
+};
+
 const isPostalLookupUnavailable = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
   const requestError = error as {
@@ -133,6 +149,12 @@ export default function FindAgentPage() {
   const [selectedRoles, setSelectedRoles] = useState<AffiliateRoleOption[]>([]);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const roleDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Distance filtering — measured from each affiliate's postcode against the
+  // searched postcode. 50 miles by default, matching the API default.
+  const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
+  const [radiusDropdownOpen, setRadiusDropdownOpen] = useState(false);
+  const radiusDropdownRef = useRef<HTMLDivElement>(null);
 
   const isAllRolesSelected =
     selectedRoles.length === 0 || selectedRoles.length === ROLE_FILTER_OPTIONS.length;
@@ -159,6 +181,17 @@ export default function FindAgentPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!radiusDropdownOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (radiusDropdownRef.current && !radiusDropdownRef.current.contains(event.target as Node)) {
+        setRadiusDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [radiusDropdownOpen]);
 
   const roleFilterSummary = useMemo(() => {
     if (isAllRolesSelected) return 'All Roles';
@@ -245,7 +278,8 @@ export default function FindAgentPage() {
   const resultsSectionRef = useRef<HTMLDivElement>(null);
   const heroSearchInputRef = useRef<HTMLInputElement>(null);
 
-  // Live directory results — queries real database affiliates matching the postcode.
+  // Live directory results — queries real database affiliates matching the postcode
+  // within the selected radius, nearest first.
   const {
     data: directoryResult,
     isFetching: isSearching,
@@ -253,14 +287,19 @@ export default function FindAgentPage() {
     error: directoryError,
     refetch: refetchDirectory,
   } = useQuery<{ items: AgentRecord[]; distanceFrom?: string | null; source: 'live' | 'demo' }>({
-    queryKey: ['public-directory', submittedPostcode],
+    queryKey: ['public-directory', submittedPostcode, radiusMiles],
     enabled: Boolean(submittedPostcode),
+    placeholderData: keepPreviousData,
     queryFn: async () => {
+      const normalizedPostcode = submittedPostcode.toUpperCase().replace(/\s+/g, ' ').trim();
+      const isDemoPostcode = normalizedPostcode.replace(/\s/g, '') === DEMO_POSTCODE.replace(/\s/g, '');
+
       try {
         const response = await apiClient.get('/users/directory', {
           params: {
             postcode: submittedPostcode,
             limit: 100,
+            radius: radiusMiles,
           },
         });
 
@@ -274,8 +313,6 @@ export default function FindAgentPage() {
           };
         }
 
-        const normalizedPostcode = submittedPostcode.toUpperCase().replace(/\s+/g, ' ').trim();
-        const isDemoPostcode = normalizedPostcode.replace(/\s/g, '') === DEMO_POSTCODE.replace(/\s/g, '');
         if (isDemoPostcode) {
           return {
             items: DEMO_AFFILIATES,
@@ -287,11 +324,28 @@ export default function FindAgentPage() {
 
         return { items: [], total: 0, distanceFrom: submittedPostcode, source: 'live' as const };
       } catch (error) {
-        const normalizedPostcode = submittedPostcode.toUpperCase().replace(/\s+/g, ' ').trim();
-        const isDemoPostcode = normalizedPostcode.replace(/\s/g, '') === DEMO_POSTCODE.replace(/\s/g, '');
-        if (!isDemoPostcode || !isPostalLookupUnavailable(error)) throw error;
+        // Lookup outage: show the unfiltered directory rather than nothing, or
+        // demo profiles for the demo postcode.
+        if (isDemoPostcode && isPostalLookupUnavailable(error)) {
+          return { items: DEMO_AFFILIATES, total: DEMO_AFFILIATES.length, distanceFrom: DEMO_POSTCODE, source: 'demo' as const };
+        }
 
-        return { items: DEMO_AFFILIATES, total: DEMO_AFFILIATES.length, distanceFrom: DEMO_POSTCODE, source: 'demo' as const };
+        try {
+          const fallback = await apiClient.get('/users/directory', { params: { limit: 100 } });
+          const items: AgentRecord[] = fallback.data?.items ?? [];
+          if (items.length > 0) {
+            return {
+              items,
+              total: items.length,
+              distanceFrom: submittedPostcode,
+              source: 'live' as const,
+            };
+          }
+        } catch {
+          // Fall through to the original error below.
+        }
+
+        throw error;
       }
     },
   });
@@ -336,10 +390,20 @@ export default function FindAgentPage() {
     for (let i = 0; i < seedStr.length; i += 1) {
       hash = (hash * 31 + seedStr.charCodeAt(i)) % 1000;
     }
-    const assessmentScore = 91 + (hash % 9); // 91% - 99%
-    const slaReliability = (98.2 + (hash % 18) / 10).toFixed(1); // 98.2% - 99.9%
-    const completedDeliverables = 14 + (hash % 48);
-    const responseTime = hash % 2 === 0 ? '< 1 hr' : '< 2 hrs';
+    const assessmentScore = agent.assessmentScore ?? 91 + (hash % 9); // live metric, otherwise 91% - 99%
+    const slaReliability =
+      agent.onTimeRate != null
+        ? Number(agent.onTimeRate).toFixed(1)
+        : (98.2 + (hash % 18) / 10).toFixed(1); // live on-time rate, otherwise 98.2% - 99.9%
+    const completedDeliverables = agent.completedTasksCount ?? 14 + (hash % 48);
+    const responseTime =
+      agent.averageResponseTimeHours != null
+        ? agent.averageResponseTimeHours < 1
+          ? '< 1 hr'
+          : `< ${Math.max(1, Math.ceil(agent.averageResponseTimeHours))} hrs`
+        : hash % 2 === 0
+          ? '< 1 hr'
+          : '< 2 hrs';
     const normalizedRole = (agent.role || 'agent').toLowerCase().replace('-', '_');
     const defaultSkills =
       normalizedRole === 'account_manager'
@@ -623,7 +687,7 @@ export default function FindAgentPage() {
                   ? 'Demo profiles shown because the live postcode lookup is unavailable.'
                   : displayedAgents.some((a) => a.isExactMatch || a.isOutcodeMatch)
                     ? `Verified members matching postcode “${submittedPostcode}”.`
-                    : `Verified members within 5 miles, nearest first.`}
+                    : `Verified members within ${radiusMiles} miles, nearest first.`}
               </p>
             </div>
 
@@ -748,6 +812,72 @@ export default function FindAgentPage() {
                 )}
               </div>
 
+              {/* Radius filter dropdown */}
+              <div ref={radiusDropdownRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setRadiusDropdownOpen((prev) => !prev)}
+                  aria-expanded={radiusDropdownOpen}
+                  aria-haspopup="listbox"
+                  aria-label={`Search radius: ${radiusMiles} miles`}
+                  className="inline-flex items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 sm:px-3"
+                >
+                  <span
+                    className="material-symbols-outlined shrink-0 leading-none text-blue-600"
+                    style={{ fontSize: '14px' }}
+                  >
+                    distance
+                  </span>
+                  <span className="hidden font-medium text-slate-500 sm:inline">Within</span>
+                  <span className="whitespace-nowrap font-bold text-slate-900">{radiusMiles} miles</span>
+                  <span
+                    className="material-symbols-outlined shrink-0 leading-none text-slate-400"
+                    style={{ fontSize: '15px' }}
+                  >
+                    {radiusDropdownOpen ? 'expand_less' : 'expand_more'}
+                  </span>
+                </button>
+
+                {radiusDropdownOpen && (
+                  <div
+                    role="listbox"
+                    aria-label="Search radius"
+                    className="absolute right-0 top-full z-30 mt-1 w-40 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg"
+                  >
+                    {RADIUS_OPTIONS.map((option) => {
+                      const isActive = radiusMiles === option;
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          role="option"
+                          aria-selected={isActive}
+                          onClick={() => {
+                            setRadiusMiles(option);
+                            setRadiusDropdownOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs font-semibold transition-colors ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span>{option} miles</span>
+                          {isActive && (
+                            <span
+                              className="material-symbols-outlined shrink-0 leading-none"
+                              style={{ fontSize: '15px' }}
+                            >
+                              check
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {selectedRoles.length > 0 && (
                 <button
                   type="button"
@@ -766,7 +896,7 @@ export default function FindAgentPage() {
             </div>
           </div>
 
-          {isSearching ? (
+          {isSearching && !directoryResult ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="size-8 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin mb-3" />
               <h3 className="text-sm font-bold font-display text-slate-900 mb-1">Resolving Jurisdiction & Affiliates</h3>
@@ -794,7 +924,7 @@ export default function FindAgentPage() {
               </div>
               <h3 className="text-base font-bold font-display text-slate-900 mb-1">No Verified Affiliates Nearby</h3>
               <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                No verified affiliates of this type were found matching or near <strong className="text-slate-800">{submittedPostcode}</strong>. Try a different role above or a nearby postcode.
+                No verified affiliates of this type were found within {radiusMiles} miles of <strong className="text-slate-800">{submittedPostcode}</strong>. Try a different role, a larger radius, or a nearby postcode.
               </p>
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
                 <button
@@ -804,6 +934,18 @@ export default function FindAgentPage() {
                 >
                   Clear Role Filter
                 </button>
+                {radiusMiles < RADIUS_OPTIONS[RADIUS_OPTIONS.length - 1] && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextRadius = RADIUS_OPTIONS.find((option) => option > radiusMiles);
+                      if (nextRadius) setRadiusMiles(nextRadius);
+                    }}
+                    className="px-4 py-1.5 rounded-md bg-blue-50 hover:bg-blue-100 text-xs font-semibold font-display text-blue-700 transition-all"
+                  >
+                    Widen Radius to {RADIUS_OPTIONS.find((option) => option > radiusMiles)} Miles
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => { setPostcode(''); setSubmittedPostcode(''); }}
@@ -824,12 +966,7 @@ export default function FindAgentPage() {
                   agent.city && agent.region && !agent.region.toLowerCase().includes(agent.city.toLowerCase())
                     ? `${agent.region}, ${agent.city}`
                     : agent.region || agent.city || agent.country || 'United Kingdom';
-                const distanceShort =
-                  agent.distanceMiles != null
-                    ? `${agent.distanceMiles} mi`
-                    : agent.distanceLabel
-                      ? agent.distanceLabel.replace(/\s*away$/i, '')
-                      : null;
+                const distanceShort = formatDistance(agent.distanceMiles, agent.distanceLabel);
 
                 return (
                   <article
@@ -1069,12 +1206,7 @@ export default function FindAgentPage() {
           [selectedAgent.city, selectedAgent.region].filter(Boolean).join(', ') ||
           selectedAgent.country ||
           'United Kingdom';
-        const distanceShort =
-          selectedAgent.distanceMiles != null
-            ? `${selectedAgent.distanceMiles} mi`
-            : selectedAgent.distanceLabel
-              ? selectedAgent.distanceLabel.replace(/\s*away$/i, '')
-              : null;
+        const distanceShort = formatDistance(selectedAgent.distanceMiles, selectedAgent.distanceLabel);
 
         return (
           <div

@@ -21,6 +21,8 @@ const mockTask: {
   reviewedAt?: Date | null;
   completedAt?: Date | null;
   assigneeEmail?: string | null;
+  paymentStatus?: string | null;
+  chargeApprovalRequired?: boolean;
 } = {
   id: 'uuid-task-1',
   title: 'Affiliate Task',
@@ -66,6 +68,7 @@ const mockUsersService = {
 
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { AccountManagerService } from '../account-manager/account-manager.service';
 import { of } from 'rxjs';
 
 const mockHttpService = {
@@ -75,6 +78,22 @@ const mockHttpService = {
 
 const mockConfigService = {
   get: jest.fn().mockReturnValue('http://localhost:3010/api/v1'),
+};
+
+const mockAccountManagerService = {
+  createManagedProjectTask: jest.fn().mockResolvedValue({
+    success: true,
+    data: {
+      id: 'central-task-1',
+      businessId: 'central-business-1',
+      projectId: 'central-project-1',
+      status: 'PENDING_ASSIGNMENT',
+      title: 'Design Flyer',
+      description: 'Create the campaign flyer.',
+      business: { id: 'central-business-1', businessName: 'Acme Ltd' },
+      project: { id: 'central-project-1', title: 'Abuja Campaign' },
+    },
+  }),
 };
 
 describe('TasksService (AffiliateBackend)', () => {
@@ -91,11 +110,14 @@ describe('TasksService (AffiliateBackend)', () => {
     mockTask.submittedAt = null;
     mockTask.reviewedAt = null;
     mockTask.completedAt = null;
+    mockTask.paymentStatus = null;
+    mockTask.chargeApprovalRequired = false;
     mockRepo.findAndCount.mockClear();
     mockRepo.findOne.mockClear();
     mockRepo.save.mockClear();
     mockRepo.create.mockClear();
     mockUsersService.findOne.mockClear();
+    mockAccountManagerService.createManagedProjectTask.mockClear();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TasksService,
@@ -103,6 +125,7 @@ describe('TasksService (AffiliateBackend)', () => {
         { provide: UsersService, useValue: mockUsersService },
         { provide: HttpService, useValue: mockHttpService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: AccountManagerService, useValue: mockAccountManagerService },
       ],
     }).compile();
 
@@ -111,6 +134,36 @@ describe('TasksService (AffiliateBackend)', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('prevents local assignment of a Central-linked task', async () => {
+    mockTask.externalTaskId = 'central-task-1';
+
+    await expect(service.assign('uuid-task-1', 'uuid-agent-1')).rejects.toMatchObject({
+      response: { code: 'CENTRAL_TASK_ASSIGNMENT_REQUIRED' },
+    });
+  });
+
+  it('creates client project tasks in Central Hub and stores the linked mirror', async () => {
+    const result = (await service.create('uuid-admin-1', {
+      title: 'Design Flyer',
+      description: 'Create the campaign flyer.',
+      budget: 100,
+      centralProjectId: 'central-project-1',
+    } as any)) as Task;
+
+    expect(mockAccountManagerService.createManagedProjectTask).toHaveBeenCalledWith(
+      'uuid-admin-1',
+      'central-project-1',
+      expect.objectContaining({
+        title: 'Design Flyer',
+        description: 'Create the campaign flyer.',
+      }),
+    );
+    expect(result.externalTaskId).toBe('central-task-1');
+    expect(result.centralBusinessId).toBe('central-business-1');
+    expect(result.projectId).toBe('central-project-1');
+    expect(result.originSystem).toBe('MCOM_CENTRAL');
   });
 
   it('should create task from central', async () => {
@@ -188,6 +241,15 @@ describe('TasksService (AffiliateBackend)', () => {
     
     const result = await service.respondToTask('uuid-task-1', 'uuid-agent-1', 'accept');
     expect(result.status).toBe(TaskStatus.ACCEPTED);
+  });
+
+  it('blocks accepting while Central has not locked the business funds', async () => {
+    mockTask.status = TaskStatus.ASSIGNED;
+    mockTask.assignedAgentId = 'uuid-agent-1';
+    mockTask.paymentStatus = 'ON_HOLD';
+
+    await expect(service.respondToTask('uuid-task-1', 'uuid-agent-1', 'accept'))
+      .rejects.toThrow(BadRequestException);
   });
 
   it('should not allow an unverified affiliate to accept an assigned task', async () => {
@@ -281,7 +343,19 @@ describe('TasksService (AffiliateBackend)', () => {
     mockTask.status = TaskStatus.ASSIGNED;
     mockTask.assignedAgentId = 'uuid-agent-1';
 
-    const result = await service.respondToTask('uuid-task-1', 'uuid-agent-1', 'decline');
+    const result = await service.respondToTask('uuid-task-1', 'uuid-agent-1', 'decline', {
+      reason: 'No capacity before the deadline.',
+    });
     expect(result.status).toBe(TaskStatus.DECLINED);
+    expect(result.declineReason).toBe('No capacity before the deadline.');
+  });
+
+  it('refuses a decline without a reason', async () => {
+    mockTask.status = TaskStatus.ASSIGNED;
+    mockTask.assignedAgentId = 'uuid-agent-1';
+
+    await expect(
+      service.respondToTask('uuid-task-1', 'uuid-agent-1', 'decline', { reason: '  ' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
