@@ -163,7 +163,7 @@ export class TasksService {
         Boolean(localAssignee),
       ),
       compensationModel: centralTask.compensationModel ?? undefined,
-      compensationAmount: centralTask.compensationAmount ?? undefined,
+      compensationPence: centralTask.compensationPence ?? undefined,
       compensationCurrency: centralTask.compensationCurrency ?? undefined,
       paymentStatus: centralTask.paymentStatus ?? undefined,
       lastCentralSyncAt: new Date(),
@@ -288,10 +288,10 @@ export class TasksService {
       materials: dto.materials ?? undefined,
       prerequisiteExternalTaskId: dto.prerequisiteExternalTaskId ?? undefined,
       compensationModel: dto.compensationModel ?? undefined,
-      compensationAmount: dto.compensationAmount ?? undefined,
+      compensationPence: dto.compensationPence ?? undefined,
       compensationCurrency: dto.compensationCurrency ?? 'GBP',
       billableToBusiness: dto.billableToBusiness ?? false,
-      businessChargeAmount: dto.businessChargeAmount ?? undefined,
+      businessChargePence: dto.businessChargePence ?? undefined,
       businessChargeCurrency: dto.businessChargeCurrency ?? 'GBP',
       chargeApprovalRequired: dto.chargeApprovalRequired ?? false,
       paymentStatus: dto.paymentStatus ?? undefined,
@@ -604,7 +604,6 @@ export class TasksService {
       notes?: string;
       round?: number;
       compensationPence?: number;
-      compensationAmount?: number;
     },
   ) {
     const task = await this.tasksRepo.findOne({ where: { externalTaskId } });
@@ -626,10 +625,7 @@ export class TasksService {
     // time. Mirror the final compensation onto the affiliate's local task so
     // their dashboard shows what they were paid.
     if (input.compensationPence != null) {
-      task.compensationAmount = Number(input.compensationPence) / 100;
-      task.compensationModel = 'FIXED';
-    } else if (input.compensationAmount != null) {
-      task.compensationAmount = Number(input.compensationAmount);
+      task.compensationPence = Number(input.compensationPence);
       task.compensationModel = 'FIXED';
     }
 
@@ -744,24 +740,21 @@ export class TasksService {
       });
     }
 
-    // Agents execute marketplace work and must pass the full qualification
-    // gate. Account managers and consultants are trusted relationship roles:
-    // they can act on work delegated directly to them once onboarding is done.
-    if (user.role === UserRole.AGENT) {
-      if (
-        user.verificationStatus !== VerificationStatus.VERIFIED ||
-        !user.isOnboarded ||
-        !user.isQuizPassed ||
-        !user.skills?.length
-      ) {
-        throw this.taskAccessError(user);
-      }
-      return user;
-    }
-
-    if (!user.isOnboarded) {
+    // Every affiliate role must be verified and onboarded. Agents additionally
+    // need the assessment and at least one skill before taking work.
+    if (
+      user.verificationStatus !== VerificationStatus.VERIFIED ||
+      !user.isOnboarded
+    ) {
       throw this.taskAccessError(user);
     }
+
+    if (user.role === UserRole.AGENT) {
+      if (!user.isQuizPassed || !user.skills?.length) {
+        throw this.taskAccessError(user);
+      }
+    }
+
     return user;
   }
 

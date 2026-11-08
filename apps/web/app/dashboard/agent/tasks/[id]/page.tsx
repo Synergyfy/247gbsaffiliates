@@ -31,12 +31,12 @@ const formatDateTime = (value?: string | null) => {
         : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 };
 
-const formatMoney = (task: { budget?: number; currency?: string; compensationAmount?: number | null; compensationCurrency?: string | null }) => {
+const formatMoney = (task: { budget?: number; currency?: string; compensationPence?: number | null; compensationCurrency?: string | null }) => {
     if (task.budget != null && Number.isFinite(Number(task.budget)) && Number(task.budget) > 0) {
         return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'USD' }).format(Number(task.budget));
     }
-    if (task.compensationAmount != null && Number.isFinite(Number(task.compensationAmount)) && Number(task.compensationAmount) > 0) {
-        return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(Number(task.compensationAmount));
+    if (task.compensationPence != null && task.compensationPence > 0) {
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(task.compensationPence / 100);
     }
     return null;
 };
@@ -1068,8 +1068,8 @@ export default function AgentTaskDetailsPage() {
                                 <p className="mt-0.5 text-xs text-slate-600">
                                     {task.compensationModel === 'MEMBERSHIP_INCLUDED'
                                         ? 'Included in the CHS membership service arrangement.'
-                                        : task.compensationAmount != null && Number(task.compensationAmount) > 0
-                                          ? `${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(Number(task.compensationAmount))} payable on approved completion.`
+                                        : task.compensationPence != null && task.compensationPence > 0
+                                          ? `${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(task.compensationPence / 100)} payable on approved completion.`
                                           : money
                                             ? `${money} task budget.`
                                             : 'To be agreed with the account manager before work begins.'}

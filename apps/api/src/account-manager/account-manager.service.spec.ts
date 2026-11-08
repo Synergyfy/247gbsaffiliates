@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { AccountManagerService } from './account-manager.service';
 import { UserRole, UserStatus, VerificationStatus } from '../users/entities/user.entity';
 
@@ -129,5 +129,74 @@ describe('AccountManagerService.getDelegatableAgents', () => {
 
     expect(result.total).toBe(0);
     expect(result.message).toMatch(/No agents or consultants/i);
+  });
+});
+
+describe('AccountManagerService.resolveCentralAssigneeId', () => {
+  const localId = '11111111-1111-4111-8111-111111111111';
+  const centralId = '22222222-2222-4222-8222-222222222222';
+
+  it('translates a local UUID to its Central id', async () => {
+    const { service, usersRepo } = buildHarness();
+    usersRepo.findOne.mockResolvedValueOnce({
+      id: localId,
+      mcomUserId: centralId,
+    });
+
+    await expect(
+      (service as never as {
+        resolveCentralAssigneeId: (value: string) => Promise<string>;
+      }).resolveCentralAssigneeId(localId),
+    ).resolves.toBe(centralId);
+  });
+
+  it('rejects a local affiliate without a Central link', async () => {
+    const { service, usersRepo } = buildHarness();
+    usersRepo.findOne.mockResolvedValueOnce({
+      id: localId,
+      mcomUserId: null,
+    });
+
+    await expect(
+      (service as never as {
+        resolveCentralAssigneeId: (value: string) => Promise<string>;
+      }).resolveCentralAssigneeId(localId),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('resolves a legacy email without querying the UUID column', async () => {
+    const { service, usersRepo } = buildHarness();
+    usersRepo.findOne.mockResolvedValueOnce({
+      email: 'agent@example.com',
+      mcomUserId: centralId,
+    });
+
+    await expect(
+      (service as never as {
+        resolveCentralAssigneeId: (value: string) => Promise<string>;
+      }).resolveCentralAssigneeId('Agent@Example.com'),
+    ).resolves.toBe(centralId);
+  });
+
+  it('rejects an unknown non-UUID identifier', async () => {
+    const { service, usersRepo } = buildHarness();
+    usersRepo.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      (service as never as {
+        resolveCentralAssigneeId: (value: string) => Promise<string>;
+      }).resolveCentralAssigneeId('not-an-id'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('passes an unknown well-formed UUID through for Central to validate', async () => {
+    const { service, usersRepo } = buildHarness();
+    usersRepo.findOne.mockResolvedValue(null);
+
+    await expect(
+      (service as never as {
+        resolveCentralAssigneeId: (value: string) => Promise<string>;
+      }).resolveCentralAssigneeId(centralId),
+    ).resolves.toBe(centralId);
   });
 });

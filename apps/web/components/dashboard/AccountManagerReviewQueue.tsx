@@ -755,15 +755,17 @@ function TaskRow({
               {(effectiveTask.platforms ?? []).map((platform) => (
                 <span key={platform} className="rounded bg-blue-50 px-2 py-1 capitalize text-blue-800">{platform}</span>
               ))}
-              {effectiveTask.compensationAmount != null && Number(effectiveTask.compensationAmount) > 0 ? (
+              {effectiveTask.compensationPence != null && effectiveTask.compensationPence > 0 ? (
                 <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-800">
-                  Compensation: {effectiveTask.compensationCurrency || 'GBP'} {effectiveTask.compensationAmount}
+                  Compensation: {effectiveTask.compensationCurrency || 'GBP'}{' '}
+                  {(effectiveTask.compensationPence / 100).toFixed(2)}
                   {effectiveTask.paymentStatus ? ` (${label(effectiveTask.paymentStatus)})` : ''}
                 </span>
               ) : null}
-              {effectiveTask.businessChargeAmount != null && Number(effectiveTask.businessChargeAmount) > 0 ? (
+              {effectiveTask.businessChargePence != null && effectiveTask.businessChargePence > 0 ? (
                 <span className="rounded bg-sky-50 px-2 py-1 text-sky-800">
-                  Business charge: {effectiveTask.businessChargeCurrency || effectiveTask.compensationCurrency || 'GBP'} {effectiveTask.businessChargeAmount}
+                  Business charge: {effectiveTask.businessChargeCurrency || effectiveTask.compensationCurrency || 'GBP'}{' '}
+                  {(effectiveTask.businessChargePence / 100).toFixed(2)}
                   {effectiveTask.chargeApprovedAt ? ' (approved)' : effectiveTask.chargeApprovalRequired ? ' (awaiting approval)' : ''}
                 </span>
               ) : null}
@@ -1598,6 +1600,10 @@ function ProjectRow({
                       Assign to Agent or Consultant
                       <FieldHint text="Assign an eligible affiliate now, or leave unassigned to delegate later" />
                     </h4>
+                    <p className="text-[11px] leading-4 text-slate-500">
+                      Account Managers are not listed here because they coordinate the work.
+                      Execution is assigned to an Agent or Consultant.
+                    </p>
 
                     <AffiliateAssigneePicker
                       affiliates={affiliates}
@@ -1740,7 +1746,7 @@ function RequestRow({
     try {
       await quote({
         requestId: request.id,
-        estimatedCost: amount,
+        estimatedCostPence: Math.round(amount * 100),
         currency: request.currency || 'GBP',
       });
       setFeedback('Quote sent to the client for approval.');
@@ -1774,6 +1780,11 @@ function RequestRow({
                     Yet to convert
                   </span>
                 )}
+                {request.status === 'QUOTED' ? (
+                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-800">
+                    Quoted
+                  </span>
+                ) : null}
                 {isHighPriority ? (
                   <span className="text-[10px] font-bold text-rose-700">High priority</span>
                 ) : null}
@@ -1840,6 +1851,17 @@ function RequestRow({
                   {request.clarificationNote}
                 </div>
               )}
+
+              {request.estimatedCostPence != null ? (
+                <div className="mt-1.5 rounded-lg border border-sky-200 bg-sky-50/80 p-2 text-xs text-sky-900">
+                  <strong className="font-semibold">Quote sent:</strong>{' '}
+                  {new Intl.NumberFormat(undefined, {
+                    style: 'currency',
+                    currency: request.currency || 'GBP',
+                  }).format(request.estimatedCostPence / 100)}
+                  {request.status === 'QUOTED' ? ' — awaiting business approval' : ''}
+                </div>
+              ) : null}
 
               <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 sm:flex sm:flex-wrap sm:justify-end">
                 {request.project ? (

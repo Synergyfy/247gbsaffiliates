@@ -22,9 +22,6 @@ export interface User {
   isOnboarded?: boolean;
   isQuizPassed?: boolean;
   mcomUserId?: string | null;
-  mcomMembershipLevel?: string | null;
-  mcomMembershipTier?: string | null;
-  mcomMembershipStatus?: string | null;
   mcomCanAccessVcard?: boolean;
   /** Referral programme details synced from Central Hub. */
   referralCode?: string | null;

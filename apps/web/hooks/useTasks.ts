@@ -51,10 +51,10 @@ export interface Task {
   materials?: string | null;
   prerequisiteExternalTaskId?: string | null;
   compensationModel?: string | null;
-  compensationAmount?: number | null;
+  compensationPence?: number | null;
   compensationCurrency?: string | null;
   billableToBusiness?: boolean;
-  businessChargeAmount?: number | null;
+  businessChargePence?: number | null;
   businessChargeCurrency?: string | null;
   chargeApprovalRequired?: boolean;
   chargeApprovedAt?: string | null;
@@ -503,8 +503,8 @@ export interface CreateManagedProjectTaskInput {
   assigneeUserId?: string;
   requiresBusinessApproval?: boolean;
   compensationModel?: string;
-  compensationAmount?: number;
-  businessChargeAmount?: number;
+  compensationPence?: number;
+  businessChargePence?: number;
   billableToBusiness?: boolean;
   prerequisiteTaskId?: string;
 }
@@ -517,7 +517,7 @@ export interface ManagedServiceRequest {
   urgency?: string;
   status: string;
   clarificationNote?: string | null;
-  estimatedCost?: number | null;
+  estimatedCostPence?: number | null;
   currency?: string;
   business?: { id: string; businessName?: string | null; email?: string | null } | null;
   project?: { id: string; title: string; status: string } | null;
@@ -547,18 +547,18 @@ export const useManagedRequests = (filters: { status?: string; search?: string; 
   const quote = useMutation({
     mutationFn: async ({
       requestId,
-      estimatedCost,
+      estimatedCostPence,
       currency,
       notes,
     }: {
       requestId: string;
-      estimatedCost: number;
+      estimatedCostPence: number;
       currency?: string;
       notes?: string;
     }) => {
       const response = await apiClient.post(
         `/account-manager/managed-requests/${requestId}/quote`,
-        { estimatedCost, currency, notes },
+        { estimatedCostPence, currency, notes },
       );
       return response.data;
     },

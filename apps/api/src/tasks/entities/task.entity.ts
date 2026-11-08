@@ -91,8 +91,9 @@ export class Task {
   @Column({ nullable: true })
   compensationModel: string;
 
-  @Column('decimal', { precision: 12, scale: 2, nullable: true })
-  compensationAmount: number;
+  // Fiat amounts are integer pence in the API/database; the UI formats pounds.
+  @Column({ type: 'integer', nullable: true })
+  compensationPence: number | null;
 
   @Column({ default: 'GBP' })
   compensationCurrency: string;
@@ -100,8 +101,8 @@ export class Task {
   @Column({ default: false })
   billableToBusiness: boolean;
 
-  @Column('decimal', { precision: 12, scale: 2, nullable: true })
-  businessChargeAmount: number;
+  @Column({ type: 'integer', nullable: true })
+  businessChargePence: number | null;
 
   @Column({ default: 'GBP' })
   businessChargeCurrency: string;

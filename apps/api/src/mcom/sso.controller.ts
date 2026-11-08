@@ -170,16 +170,6 @@ export class SsoController {
         city: centralUser.city ?? null,
         region: centralUser.region ?? null,
         country: centralUser.country ?? null,
-        membership: {
-          level:
-            centralUser.membershipLevel ??
-            centralUser.businessProfile?.membershipLevel ??
-            null,
-          status:
-            centralUser.membershipStatus ??
-            centralUser.businessProfile?.membershipStatus ??
-            null,
-        },
         permissions: centralUser.permissions,
         referralCode: centralUser.referralCode ?? null,
         referralLink: centralUser.referralLink ?? null,
@@ -267,10 +257,6 @@ export class SsoController {
         city: centralUser.city ?? null,
         region: centralUser.region ?? null,
         country: centralUser.country ?? null,
-        membership: {
-          level: centralUser.membershipLevel ?? null,
-          status: centralUser.membershipStatus ?? null,
-        },
         permissions: centralUser.permissions,
         referralCode: centralUser.referralCode ?? null,
         referralLink: centralUser.referralLink ?? null,
@@ -282,7 +268,7 @@ export class SsoController {
     return { success: true };
   }
 
-  // ── Access status (membership metadata for display only) ──
+  // ── Access status ──
 
   @Public()
   @Get('status')
@@ -293,12 +279,7 @@ export class SsoController {
   ): Promise<{
     connected: boolean;
     mcomUserId: string | null;
-    membership: {
-      level: string | null;
-      tier: string | null;
-      status: string | null;
-      canAccessAffiliate: boolean;
-    };
+    canAccessAffiliate: boolean;
   }> {
     if (!userId) throw new UnauthorizedException('userId is required');
     let user = await this.usersService.findOne(userId);
@@ -320,10 +301,6 @@ export class SsoController {
             city: centralUser.city ?? null,
             region: centralUser.region ?? null,
             country: centralUser.country ?? null,
-            membership: {
-              level: centralUser.membershipLevel ?? null,
-              status: centralUser.membershipStatus ?? null,
-            },
             permissions: centralUser.permissions,
             referralCode: centralUser.referralCode ?? null,
             referralLink: centralUser.referralLink ?? null,
@@ -351,12 +328,7 @@ export class SsoController {
     return {
       connected: Boolean(user.mcomUserId),
       mcomUserId: user.mcomUserId ?? null,
-      membership: {
-        level: user.mcomMembershipLevel ?? null,
-        tier: user.mcomMembershipTier ?? null,
-        status: user.mcomMembershipStatus ?? null,
-        canAccessAffiliate: user.mcomCanAccessVcard ?? false,
-      },
+      canAccessAffiliate: user.mcomCanAccessVcard ?? false,
     };
   }
 
@@ -366,13 +338,11 @@ export class SsoController {
   @Get('config')
   @ApiOperation({ summary: 'Get Central Hub SSO public config' })
   getConfig(): {
-    membershipUrl: string | undefined;
     walletEnabled: boolean;
     configured: boolean;
   } {
     const { solutionsUrl, clientId } = this.mcomService.ssoConfig;
     return {
-      membershipUrl: this.config.get<string>('MCOM_MEMBERSHIP_URL'),
       walletEnabled:
         this.config.get<string>('MCOM_WALLET_ENABLED') === 'true',
       configured: Boolean(solutionsUrl && clientId),
