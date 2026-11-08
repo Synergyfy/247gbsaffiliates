@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   ConflictException,
   HttpException,
   Injectable,
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { isUUID } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Brackets, IsNull, Not } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
@@ -186,22 +188,54 @@ export class AccountManagerService {
    * and Central remains the final validator.
    */
   private async resolveCentralAssigneeId(identifier: string) {
-    const byLocalId = await this.usersRepo.findOne({ where: { id: identifier } });
-    if (byLocalId) {
-      if (!byLocalId.mcomUserId) {
-        throw new ConflictException({
-          code: 'AFFILIATE_CENTRAL_ACCOUNT_NOT_LINKED',
-          message:
-            'That affiliate has not connected their Central Hub account yet, so work cannot be delegated to them.',
-        });
-      }
-      return byLocalId.mcomUserId;
+    const value = identifier?.trim();
+    if (!value) {
+      throw new BadRequestException({
+        code: 'INVALID_ASSIGNEE_ID',
+        message: 'An assignee is required.',
+      });
     }
 
-    const byCentralId = await this.usersRepo.findOne({
-      where: { mcomUserId: identifier },
+    // The local users.id column is UUID. Querying it with an email or any
+    // other string makes Postgres reject the statement (22P02), so only treat
+    // the value as a local id when it is actually a UUID.
+    if (isUUID(value)) {
+      const byLocalId = await this.usersRepo.findOne({ where: { id: value } });
+      if (byLocalId) {
+        return this.requireCentralLink(byLocalId.mcomUserId);
+      }
+    }
+
+    // Accept a Central user id directly, or (for legacy callers) an email.
+    const byCentralOrEmail = await this.usersRepo.findOne({
+      where: isUUID(value)
+        ? { mcomUserId: value }
+        : [{ mcomUserId: value }, { email: value.toLowerCase() }],
     });
-    return byCentralId?.mcomUserId ?? identifier;
+    if (byCentralOrEmail) {
+      return this.requireCentralLink(byCentralOrEmail.mcomUserId);
+    }
+
+    if (!isUUID(value)) {
+      throw new BadRequestException({
+        code: 'INVALID_ASSIGNEE_ID',
+        message: 'Assignee must be a 247GBS user, a Central Hub user id, or an email.',
+      });
+    }
+
+    // Unknown but well-formed UUID: Central remains the final validator.
+    return value;
+  }
+
+  private requireCentralLink(mcomUserId: string | null): string {
+    if (!mcomUserId) {
+      throw new ConflictException({
+        code: 'AFFILIATE_CENTRAL_ACCOUNT_NOT_LINKED',
+        message:
+          'That affiliate has not connected their Central Hub account yet, so work cannot be delegated to them.',
+      });
+    }
+    return mcomUserId;
   }
 
   /** All tasks across the businesses this manager coordinates. */
@@ -266,7 +300,7 @@ export class AccountManagerService {
   quoteManagedRequest(
     accountManagerId: string,
     requestId: string,
-    body: { estimatedCost: number; currency?: string; notes?: string },
+    body: { estimatedCostPence: number; currency?: string; notes?: string },
   ) {
     return this.centralPost(accountManagerId, `/requests/${encodeURIComponent(requestId)}/quote`, body);
   }
@@ -647,8 +681,13 @@ export class AccountManagerService {
           Boolean(agent.skills?.length)
         );
       }
-      // Consultants are trusted relationship roles: onboarding is enough.
-      return agent.role === UserRole.CONSULTANT && agent.isOnboarded;
+      // Consultants must also be verified before they can receive delegated
+      // work. Quiz + skills remain Agent-only requirements.
+      return (
+        agent.role === UserRole.CONSULTANT &&
+        agent.verificationStatus === VerificationStatus.VERIFIED &&
+        agent.isOnboarded
+      );
     });
 
     if (!eligible.length) {

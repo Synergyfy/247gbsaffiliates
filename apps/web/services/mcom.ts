@@ -1,7 +1,6 @@
 import apiClient from '@/lib/apiClient';
 
 export interface McomSsoConfig {
-  membershipUrl?: string;
   walletEnabled: boolean;
   configured: boolean;
 }
@@ -9,12 +8,7 @@ export interface McomSsoConfig {
 export interface McomSsoStatus {
   connected: boolean;
   mcomUserId: string | null;
-  membership: {
-    level: string | null;
-    tier: string | null;
-    status: string | null;
-    canAccessAffiliate: boolean;
-  };
+  canAccessAffiliate: boolean;
 }
 
 export const mcomService = {

@@ -38,9 +38,6 @@ export interface McomAppPlan {
 export interface McomBusinessProfile {
   id?: string;
   businessName?: string;
-  membershipLevel?: string;
-  membershipStatus?: string;
-  membershipPlanName?: string;
   appPlan?: McomAppPlan | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
@@ -59,8 +56,6 @@ export interface McomCentralUser {
   city?: string | null;
   region?: string | null;
   country?: string | null;
-  membershipLevel?: string;
-  membershipStatus?: string;
   /** The affiliate's own Central referral code (null for admins). */
   referralCode?: string | null;
   /** Fully-qualified `?ref=` registration link from Central. */
@@ -95,7 +90,6 @@ export interface JitProvisionInput {
   city?: string | null;
   region?: string | null;
   country?: string | null;
-  membership?: { level?: string | null; status?: string | null };
   permissions?: Record<string, boolean>;
   referralCode?: string | null;
   referralLink?: string | null;

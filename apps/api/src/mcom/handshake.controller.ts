@@ -82,7 +82,6 @@ export class HandshakeController {
         email: payload.email.toLowerCase(),
         name: name || payload.email,
         role: normalizedRole,
-        membership: payload.membership,
         permissions: payload.permissions,
         referralCode: payload.referralCode ?? null,
         referralLink: payload.referralLink ?? null,

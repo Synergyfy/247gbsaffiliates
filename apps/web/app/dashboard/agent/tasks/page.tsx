@@ -50,11 +50,11 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
                   style: 'currency',
                   currency: task.currency || 'USD',
               }).format(Number(task.budget))
-            : task.compensationAmount != null && Number(task.compensationAmount) > 0
+            : task.compensationPence != null && task.compensationPence > 0
               ? new Intl.NumberFormat(undefined, {
                     style: 'currency',
                     currency: task.compensationCurrency || 'GBP',
-                }).format(Number(task.compensationAmount))
+                }).format(task.compensationPence / 100)
               : null;
 
     const contextName = task.centralBusinessName || task.projectName || (isCentralTask ? 'Central Hub' : 'Direct task');

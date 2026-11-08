@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OriginSystem } from '../entities/task.entity';
 
@@ -101,10 +101,10 @@ export class CreateTaskFromCentralDto {
   @IsOptional()
   compensationModel?: string;
 
-  @ApiPropertyOptional()
-  @IsNumber()
+  @ApiPropertyOptional({ description: 'Affiliate compensation in pence.' })
+  @IsInt()
   @IsOptional()
-  compensationAmount?: number;
+  compensationPence?: number;
 
   @ApiPropertyOptional()
   @IsString()
@@ -116,10 +116,10 @@ export class CreateTaskFromCentralDto {
   @IsOptional()
   billableToBusiness?: boolean;
 
-  @ApiPropertyOptional()
-  @IsNumber()
+  @ApiPropertyOptional({ description: 'Business charge in pence.' })
+  @IsInt()
   @IsOptional()
-  businessChargeAmount?: number;
+  businessChargePence?: number;
 
   @ApiPropertyOptional()
   @IsString()

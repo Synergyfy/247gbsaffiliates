@@ -13,11 +13,9 @@ interface CentralWebhookEvent {
   timestamp?: string;
   user_id?: string;
   mcomUserId?: string;
-  membership?: { level?: string; tier?: string; status?: string };
   data?: {
     user_id?: string;
     mcomUserId?: string;
-    membership?: { level?: string; tier?: string; status?: string };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   };
@@ -93,7 +91,6 @@ export class WebhookController {
     const data = event.data ?? {};
     const mcomUserId =
       data.mcomUserId || data.user_id || event.user_id || event.mcomUserId || '';
-    const membership = data.membership || event.membership || {};
 
     this.logger.log(`Webhook received: ${eventType} for user ${mcomUserId}`);
 
@@ -114,33 +111,23 @@ export class WebhookController {
         return;
       }
 
-      // No plan gating on 247gbs affiliate: webhooks only sync
-      // membership metadata for display. Access is never revoked here.
+      // Affiliates do not have platform memberships. Membership/package
+      // events are acknowledged but never stored or used to gate access.
       switch (eventType) {
         case 'package.created':
         case 'package.renewed':
         case 'membership.updated':
         case 'user.updated':
-          await this.usersService.update(user.id, {
-            ...(membership.status && {
-              mcomMembershipStatus: membership.status,
-            }),
-            ...(membership.level && {
-              mcomMembershipLevel: membership.level,
-            }),
-            ...(membership.tier && {
-              mcomMembershipTier: membership.tier,
-            }),
-          } as never);
+          this.logger.log(
+            `Central event ${eventType} acknowledged for ${user.email}; no affiliate membership state is stored.`,
+          );
           break;
 
         case 'package.cancelled':
         case 'package.expired':
-          // Sync status metadata only — do NOT revoke affiliate access.
-          await this.usersService.update(user.id, {
-            mcomMembershipStatus:
-              eventType === 'package.expired' ? 'expired' : 'cancelled',
-          } as never);
+          this.logger.log(
+            `Central ${eventType} for ${user.email}; affiliate access is not revoked.`,
+          );
           break;
 
         case 'payment.failed':

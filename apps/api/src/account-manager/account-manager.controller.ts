@@ -98,7 +98,7 @@ export class AccountManagerController {
   async quoteManagedRequest(
     @Request() req,
     @Param('id') id: string,
-    @Body() body: { estimatedCost: number; currency?: string; notes?: string },
+    @Body() body: { estimatedCostPence: number; currency?: string; notes?: string },
   ) {
     return this.accountManagerService.quoteManagedRequest(req.user.userId, id, body);
   }

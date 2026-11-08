@@ -141,15 +141,6 @@ export class User {
   @Column({ name: 'referral_link', type: 'text', nullable: true })
   referralLink: string | null;
 
-  @Column({ name: 'mcom_membership_level', type: 'varchar', nullable: true })
-  mcomMembershipLevel: string | null;
-
-  @Column({ name: 'mcom_membership_tier', type: 'varchar', nullable: true })
-  mcomMembershipTier: string | null;
-
-  @Column({ name: 'mcom_membership_status', type: 'varchar', nullable: true })
-  mcomMembershipStatus: string | null;
-
   @Column({ name: 'mcom_can_access_vcard', type: 'boolean', default: false })
   mcomCanAccessVcard: boolean;
 

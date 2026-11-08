@@ -4,7 +4,6 @@ import {
   IsBoolean,
   IsEnum,
   IsInt,
-  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -119,9 +118,4 @@ export class ReviewCallbackDto {
   @IsInt()
   @IsOptional()
   compensationPence?: number;
-
-  @ApiPropertyOptional({ example: 20, description: 'Affiliate compensation in GBP.' })
-  @IsNumber()
-  @IsOptional()
-  compensationAmount?: number;
 }
