@@ -99,8 +99,8 @@ export class AssessmentController {
   @Get('latest-attempt')
   @ApiOperation({ summary: 'Get the current user’s latest assessment result' })
   @ApiResponse({ status: 200, description: 'Latest result, or null when no assessment has been submitted' })
-  getLatestAttempt(@Request() req: { user?: { userId?: string } }) {
-    return this.assessmentService.getLatestAttempt(req.user?.userId);
+  getLatestAttempt(@Request() req: { user: { userId: string } }) {
+    return this.assessmentService.getLatestAttempt(req.user.userId);
   }
 
   @Post('submit')

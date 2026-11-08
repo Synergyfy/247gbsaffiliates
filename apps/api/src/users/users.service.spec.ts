@@ -135,10 +135,6 @@ describe('UsersService public directory radius filter', () => {
     email: `${id}@example.test`,
     role,
     status: UserStatus.ACTIVE,
-    verificationStatus: VerificationStatus.VERIFIED,
-    isOnboarded: true,
-    isQuizPassed: true,
-    skills: ['Operations'],
     postcode,
   });
 

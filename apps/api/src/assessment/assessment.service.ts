@@ -345,8 +345,7 @@ export class AssessmentService implements OnModuleInit {
       return { score, maxScore, percentage, band };
     }
 
-  async getLatestAttempt(userId?: string) {
-    if (!userId) return null;
+  async getLatestAttempt(userId: string) {
     const attempt = await this.attemptRepo.findOne({
       where: { userId },
       order: { createdAt: 'DESC' },
