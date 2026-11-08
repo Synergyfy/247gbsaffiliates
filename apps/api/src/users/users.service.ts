@@ -159,7 +159,6 @@ export class UsersService {
       MAX_DIRECTORY_RADIUS_MILES,
       Math.max(1, Number(filters.radiusMiles) || DEFAULT_DIRECTORY_RADIUS_MILES),
     );
-    const searchCompact = this.compactPostcode(filters.postcode);
     const search = (filters.search || '').trim().toLowerCase();
     const allowedRoles = this.parseDirectoryRoles(filters.role, filters.roles);
 
@@ -206,20 +205,11 @@ export class UsersService {
       );
     }
 
-    qb.andWhere('user.verificationStatus = :verified', { verified: VerificationStatus.VERIFIED })
-      .andWhere('user.isOnboarded = :onboarded', { onboarded: true });
-
-    const rawUsers = await qb
+    const users = await qb
       .orderBy('user.isOnboarded', 'DESC')
       .addOrderBy('user.createdAt', 'DESC')
       .take(origin ? MAX_DIRECTORY_CANDIDATES : limit)
       .getMany();
-
-    const users = rawUsers.filter(
-      (user) =>
-        user.role !== UserRole.AGENT ||
-        (user.isQuizPassed && Array.isArray(user.skills) && user.skills.length > 0),
-    );
 
     const geoByPostcode = origin
       ? await this.bulkGeocodePostcodes(users.map((user) => user.postcode))
@@ -229,19 +219,8 @@ export class UsersService {
     );
 
     const items = users.map((user) => {
-      const userCompact = this.compactPostcode(user.postcode);
-      const isExactMatch = Boolean(
-        searchCompact && userCompact && userCompact === searchCompact,
-      );
-      const isOutcodeMatch = Boolean(
-        !isExactMatch &&
-          searchCompact &&
-          userCompact &&
-          (userCompact.startsWith(searchCompact) || searchCompact.startsWith(userCompact)),
-      );
-
       const point = origin && user.postcode
-        ? geoByPostcode.get(userCompact) ?? null
+        ? geoByPostcode.get(this.compactPostcode(user.postcode)) ?? null
         : null;
       const km = origin && point ? this.haversineKm(origin, point) : null;
       const miles = km != null ? km * 0.621371 : null;
@@ -271,8 +250,6 @@ export class UsersService {
         verificationStatus: user.verificationStatus,
         isPaidVisible: user.isPaidVisible,
         createdAt: user.createdAt,
-        isExactMatch,
-        isOutcodeMatch,
         // Live database metrics for the public affiliate profile modal.
         assessmentScore: metrics?.assessmentScore ?? null,
         latestAssessmentBand: metrics?.latestAssessmentBand ?? null,
@@ -308,13 +285,10 @@ export class UsersService {
               (item) =>
                 item.distanceMiles != null && item.distanceMiles <= radiusMiles,
             )
-            .sort((a, b) => {
-              if (a.isExactMatch && !b.isExactMatch) return -1;
-              if (!a.isExactMatch && b.isExactMatch) return 1;
-              if (a.isOutcodeMatch && !b.isOutcodeMatch) return -1;
-              if (!a.isOutcodeMatch && b.isOutcodeMatch) return 1;
-              return (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity);
-            })
+            .sort(
+              (a, b) =>
+                (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity),
+            )
         : items;
 
     return {
