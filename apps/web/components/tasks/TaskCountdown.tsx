@@ -67,12 +67,12 @@ export default function TaskCountdown({
     const { days, hours, minutes, seconds } = splitRemaining(remaining);
 
     const tone = overdue
-        ? 'border-red-200 bg-red-50 text-red-700'
+        ? 'text-rose-600 font-bold'
         : remaining <= DAY
-            ? 'border-red-200 bg-red-50 text-red-700'
+            ? 'text-red-600 font-bold'
             : remaining <= 3 * DAY
-                ? 'border-amber-200 bg-amber-50 text-amber-800'
-                : 'border-slate-200 bg-slate-50 text-slate-600';
+                ? 'text-amber-600 font-semibold'
+                : 'text-blue-600 font-semibold';
 
     const label = overdue
         ? `Overdue by ${days > 0 ? `${days}d ` : ''}${hours}h ${minutes}m`
@@ -82,12 +82,12 @@ export default function TaskCountdown({
 
     return (
         <span
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-bold leading-none ${tone} ${className}`}
+            className={`inline-flex items-center gap-1 text-[11px] leading-none ${tone} ${className}`}
             title={`Deadline: ${new Date(deadlineMs).toLocaleString()}`}
             aria-label={overdue ? `Task overdue. ${label}` : `Time remaining: ${label}`}
         >
-            <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
-                timer
+            <span className="material-symbols-outlined !text-[13px] leading-none" aria-hidden="true">
+                {overdue ? 'warning' : 'timer'}
             </span>
             <span className="tabular-nums whitespace-nowrap">
                 {overdue ? label : `Due in ${label}`}
