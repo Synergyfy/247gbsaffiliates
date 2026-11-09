@@ -135,20 +135,23 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
                                 </span>
                             </>
                         ) : null}
+                        {task.dueDate && (
+                            <>
+                                <span className="text-slate-300">·</span>
+                                <TaskCountdown dueDate={task.dueDate} status={task.status} />
+                            </>
+                        )}
                     </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
-                    <TaskCountdown dueDate={task.dueDate} status={task.status} />
-                    <span
-                        aria-hidden="true"
-                        className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors group-hover:bg-slate-100 group-hover:text-slate-700"
-                    >
-                        <span className="material-symbols-outlined !text-base leading-none">
-                            {collapsed ? 'expand_more' : 'expand_less'}
-                        </span>
+                <span
+                    aria-hidden="true"
+                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors group-hover:bg-slate-100 group-hover:text-slate-700"
+                >
+                    <span className="material-symbols-outlined !text-base leading-none">
+                        {collapsed ? 'expand_more' : 'expand_less'}
                     </span>
-                </div>
+                </span>
             </button>
 
             {!collapsed && (
@@ -350,7 +353,7 @@ function AgentTasksContent() {
             </header>
 
             {/* Status Pills */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto px-0.5 py-0.5 touch-pan-x no-scrollbar sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0">
                 {filterPills.map((pill) => {
                     const active = statusBucket === pill.id;
                     return (
@@ -358,7 +361,7 @@ function AgentTasksContent() {
                             key={pill.id}
                             type="button"
                             onClick={() => setStatusBucket(pill.id)}
-                            className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                            className={`flex min-w-[145px] shrink-0 snap-start items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all sm:min-w-0 sm:shrink ${
                                 active
                                     ? 'border-blue-500/70 bg-blue-50/60 text-blue-900 shadow-2xs'
                                     : 'border-slate-200/90 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/50'
