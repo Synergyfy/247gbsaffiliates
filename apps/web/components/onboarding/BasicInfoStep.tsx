@@ -124,8 +124,12 @@ const BasicInfoStep: React.FC = () => {
         }
         return rawRegion || displayCity || 'Regional Area';
     })();
-    const rawCountry = (basicInfo.country || user?.country || 'England').trim();
-    const displayCountry = rawCountry === 'United Kingdom' ? 'England' : (rawCountry || 'England');
+    const displayBorough = (() => {
+        if (displayCity.toLowerCase() === 'london') {
+            return rawRegion && rawRegion.toLowerCase() !== 'greater london' ? rawRegion : 'Central London';
+        }
+        return `${displayCity} District`;
+    })();
 
     return (
         <div className="mx-auto w-full max-w-xl px-2 sm:px-0">
@@ -158,14 +162,14 @@ const BasicInfoStep: React.FC = () => {
                         </span>
                     </div>
 
-                    {/* Compact 4-column metrics grid: Region/Area -> City -> Country -> Postcode */}
+                    {/* Compact 4-column metrics grid: Borough/District -> City -> Region -> Postcode */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <div className="rounded-lg border border-slate-200/70 bg-white p-2 shadow-2xs">
                             <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                Region / Area
+                                Borough / District
                             </span>
-                            <span className="mt-0.5 block text-xs font-bold text-slate-900 truncate" title={displayRegion}>
-                                {displayRegion}
+                            <span className="mt-0.5 block text-xs font-bold text-slate-900 truncate" title={displayBorough}>
+                                {displayBorough}
                             </span>
                         </div>
 
@@ -180,10 +184,10 @@ const BasicInfoStep: React.FC = () => {
 
                         <div className="rounded-lg border border-slate-200/70 bg-white p-2 shadow-2xs">
                             <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                Country
+                                Region / Area
                             </span>
-                            <span className="mt-0.5 block text-xs font-bold text-slate-900 truncate" title={displayCountry}>
-                                {displayCountry}
+                            <span className="mt-0.5 block text-xs font-bold text-slate-900 truncate" title={displayRegion}>
+                                {displayRegion}
                             </span>
                         </div>
 

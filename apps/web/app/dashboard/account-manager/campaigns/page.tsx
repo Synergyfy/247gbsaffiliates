@@ -68,15 +68,27 @@ export default function CampaignsPage() {
                 <article className="border border-slate-200 bg-white p-3"><p className="text-xs font-medium text-slate-500">Campaign budget total</p>{isLoading ? <p className="mt-1.5 text-base font-bold text-slate-950">Loading…</p> : isError ? <p className="mt-1.5 text-base font-bold text-slate-950">Unavailable</p> : Object.keys(budgetTotals).length ? <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">{Object.entries(budgetTotals).map(([currency, total]) => <span key={currency} className="text-base font-bold text-slate-950">{formatBudget(total, currency)}</span>)}</div> : <p className="mt-1.5 text-base font-bold text-slate-950">—</p>}<p className="mt-1 text-[11px] text-slate-500">Totals kept separate by currency</p></article>
             </section>
 
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-4 sm:px-5">
-                    <div><h2 className="text-sm font-semibold text-slate-950">Campaign work</h2><p className="mt-0.5 text-xs text-slate-500">Status and assignment from each campaign task record</p></div>
-                    {!isLoading && !isError && <span className="text-xs text-slate-500">{campaigns.length} record{campaigns.length === 1 ? '' : 's'}</span>}
+            <section className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                    <div>
+                        <h2 className="text-sm font-bold text-slate-950">Campaign work</h2>
+                        <p className="mt-0.5 text-xs text-slate-500">Status and assignment from each campaign task record</p>
+                    </div>
+                    {!isLoading && !isError && (
+                        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 border border-slate-200">
+                            {campaigns.length} record{campaigns.length === 1 ? '' : 's'}
+                        </span>
+                    )}
                 </div>
+
                 {isLoading && !isError ? (
-                    <div className="space-y-3 p-4 sm:p-5" aria-label="Loading campaigns"><div className="h-16 animate-pulse rounded-lg bg-slate-100" /><div className="h-16 animate-pulse rounded-lg bg-slate-100" /><div className="h-16 animate-pulse rounded-lg bg-slate-100" /></div>
+                    <div className="space-y-3" aria-label="Loading campaigns">
+                        <div className="h-24 animate-pulse rounded-xl border border-slate-200 bg-white" />
+                        <div className="h-24 animate-pulse rounded-xl border border-slate-200 bg-white" />
+                        <div className="h-24 animate-pulse rounded-xl border border-slate-200 bg-white" />
+                    </div>
                 ) : isError ? (
-                    <div className="p-4 sm:p-5">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                         <RequestErrorState
                             area="Campaigns"
                             label="Campaigns"
@@ -86,19 +98,71 @@ export default function CampaignsPage() {
                         />
                     </div>
                 ) : campaigns.length === 0 ? (
-                    <div className="px-4 py-5"><h3 className="text-sm font-semibold text-slate-800">No campaigns yet</h3><p className="mt-1 text-xs text-slate-500">Create a campaign to add its task record to this list.</p><button type="button" onClick={() => setIsModalOpen(true)} className="mt-3 inline-flex min-h-9 items-center rounded-lg bg-blue-700 px-3 text-xs font-semibold text-white hover:bg-blue-800">Create campaign</button></div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
+                        <span className="material-symbols-outlined text-3xl text-slate-300">campaign</span>
+                        <h3 className="mt-2 text-sm font-semibold text-slate-800">No campaigns yet</h3>
+                        <p className="mt-1 text-xs text-slate-500">Create a campaign to add its task record to this list.</p>
+                        <button
+                            type="button"
+                            onClick={() => setIsModalOpen(true)}
+                            className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-blue-700 px-3.5 text-xs font-semibold text-white hover:bg-blue-800"
+                        >
+                            <span className="material-symbols-outlined text-base">add</span>
+                            Create campaign
+                        </button>
+                    </div>
                 ) : (
-                    <ul className="divide-y divide-slate-100">
+                    <div className="space-y-3">
                         {campaigns.map((campaign) => (
-                            <li key={campaign.id}>
-                                <Link href={`/dashboard/account-manager/tasks/${campaign.id}`} className="grid grid-cols-1 gap-3 px-4 py-4 transition-colors hover:bg-slate-50 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:px-5">
-                                    <span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-950">{campaign.title}</span><span className="mt-1 block line-clamp-2 text-xs leading-relaxed text-slate-600">{campaign.description || 'No description provided.'}</span><span className="mt-1 block text-xs text-slate-500">{campaign.assignedAgent ? `Assigned to ${[campaign.assignedAgent.firstName, campaign.assignedAgent.lastName].filter(Boolean).join(' ') || campaign.assignedAgent.email}` : 'No agent listed'}</span></span>
-                                    <span className="flex items-center gap-2 text-xs text-slate-600"><span className="text-slate-400">Status</span><span className="capitalize">{campaign.status.replaceAll('_', ' ')}</span></span>
-                                    <span className="flex items-center justify-between gap-4 text-xs sm:justify-end"><span className="font-semibold text-slate-900">{formatBudget(Number(campaign.budget || 0), campaignCurrency(campaign))}</span><span className="material-symbols-outlined text-base text-blue-700">arrow_forward</span></span>
-                                </Link>
-                            </li>
+                            <article
+                                key={campaign.id}
+                                className="group rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all hover:border-blue-400 hover:shadow-xs sm:p-5"
+                            >
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="text-sm font-bold tracking-tight text-slate-950 group-hover:text-blue-700 transition-colors">
+                                                {campaign.title}
+                                            </h3>
+                                            <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                                                {campaign.status.replaceAll('_', ' ')}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-slate-600">
+                                            {campaign.description || 'No description provided.'}
+                                        </p>
+                                        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                            <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                                                <span className="material-symbols-outlined !text-sm text-slate-400">person</span>
+                                                {campaign.assignedAgent ? [campaign.assignedAgent.firstName, campaign.assignedAgent.lastName].filter(Boolean).join(' ') || campaign.assignedAgent.email : 'No agent listed'}
+                                            </span>
+                                            {campaign.dueDate && (
+                                                <>
+                                                    <span className="text-slate-300">·</span>
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <span className="material-symbols-outlined !text-sm text-slate-400">calendar_today</span>
+                                                        Due {new Date(campaign.dueDate).toLocaleDateString()}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex shrink-0 items-center justify-between gap-4 border-t border-slate-100 pt-2 sm:border-t-0 sm:pt-0 sm:flex-col sm:items-end sm:justify-start sm:gap-2">
+                                        <span className="text-base font-bold tracking-tight text-emerald-700">
+                                            {formatBudget(Number(campaign.budget || 0), campaignCurrency(campaign))}
+                                        </span>
+                                        <Link
+                                            href={`/dashboard/account-manager/tasks/${campaign.id}`}
+                                            className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-800 hover:underline"
+                                        >
+                                            <span>View campaign</span>
+                                            <span className="material-symbols-outlined !text-base transition-transform group-hover:translate-x-0.5">arrow_forward</span>
+                                        </Link>
+                                    </div>
+                                </div>
+                            </article>
                         ))}
-                    </ul>
+                    </div>
                 )}
             </section>
 

@@ -149,6 +149,20 @@ Before implementing the items below, please note the agreed architectural bounda
 
 ---
 
+### 3.4 Escrow & Quote Approval Financial Lifecycle
+- **Services:** CHS `AffiliateTaskService.approveServiceRequestPrice`, `AffiliateSettlementService`
+- **Issue Identified:** When a Business approves an Account Manager's service quote (`POST /business/affiliate/requests/:id/price-approve`), the backend currently only marks `status: APPROVED` without deducting funds or establishing an escrow hold. Later, when the Account Manager assigns tasks to agents, there are no locked funds in escrow, leaving tasks in `paymentStatus: ON_HOLD` ("Awaiting funds") and failing final payout settlement.
+- **Required Backend Architecture:**
+  1. **At Quote Approval (`approveServiceRequestPrice`):**
+     - Verify business MCOM wallet balance.
+     - Immediately **debit the quoted amount from the business wallet** and lock it into an `EscrowHold` (`status: HELD`).
+  2. **At Task Delegation (`ensureForTask`):**
+     - Draw assigned task bounties (e.g. €200) directly from this pre-funded project escrow pool.
+  3. **At Business Deliverable Approval (`reviewTaskAsBusiness`):**
+     - Automatically release the corresponding held escrow and disburse `TRANSFER_IN` credits directly to the executing affiliate's MCOM wallet available balance.
+
+---
+
 ## 4. Priority 3: Verification Lifecycle & Access Enforcement
 
 ### 4.1 Affiliate Verification Review State (`PENDING` vs `VERIFIED`)

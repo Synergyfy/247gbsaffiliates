@@ -399,19 +399,6 @@ export const SkillSelectionStep: React.FC = () => {
                 </button>
 
                 <div className="flex items-center gap-2 sm:gap-4 flex-1 sm:flex-none justify-end">
-                    {!isPaidVisibilityRequested && normalizedRole !== 'consultant' && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setAssessmentSkipped(true);
-                                router.push('/dashboard');
-                            }}
-                            className="text-slate-400 hover:text-text-main text-xs font-bold uppercase tracking-wider px-2 py-1 shrink-0"
-                        >
-                            Skip
-                        </button>
-                    )}
-
                     <button
                         type="button"
                         onClick={handleNext}
