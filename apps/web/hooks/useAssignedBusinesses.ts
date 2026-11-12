@@ -5,6 +5,7 @@ import { stabilizeErrorRetry } from '@/lib/requestErrors';
 export interface AssignedBusiness {
   id: string;
   businessName: string;
+  logoUrl?: string | null;
   businessType?: string | null;
   email?: string | null;
   phone?: string | null;

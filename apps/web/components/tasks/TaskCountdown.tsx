@@ -67,12 +67,12 @@ export default function TaskCountdown({
     const { days, hours, minutes, seconds } = splitRemaining(remaining);
 
     const tone = overdue
-        ? 'text-red-600 font-semibold'
+        ? 'text-rose-600 font-bold'
         : remaining <= DAY
-            ? 'text-red-600 font-semibold'
+            ? 'text-red-600 font-bold'
             : remaining <= 3 * DAY
-                ? 'text-amber-600 font-medium'
-                : 'text-blue-600 font-medium';
+                ? 'text-amber-600 font-semibold'
+                : 'text-blue-600 font-semibold';
 
     const label = overdue
         ? `Overdue by ${days > 0 ? `${days}d ` : ''}${hours}h ${minutes}m`
@@ -86,8 +86,8 @@ export default function TaskCountdown({
             title={`Deadline: ${new Date(deadlineMs).toLocaleString()}`}
             aria-label={overdue ? `Task overdue. ${label}` : `Time remaining: ${label}`}
         >
-            <span className="material-symbols-outlined text-[13px] leading-none" aria-hidden="true">
-                timer
+            <span className="material-symbols-outlined !text-[13px] leading-none" aria-hidden="true">
+                {overdue ? 'warning' : 'timer'}
             </span>
             <span className="tabular-nums whitespace-nowrap">
                 {overdue ? label : `Due in ${label}`}
