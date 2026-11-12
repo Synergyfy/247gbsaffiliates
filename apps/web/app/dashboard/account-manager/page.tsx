@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { AssignedBusiness, useAssignedBusinesses } from '@/hooks/useAssignedBusinesses';
@@ -28,10 +29,45 @@ const formatDate = (value?: string | null) => {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 };
-const businessLocation = (business: AssignedBusiness) =>
-    [business.city?.name, business.city?.region, business.postcode].filter(Boolean).join(', ') ||
-    business.address ||
-    'Location not provided';
+const businessLocation = (business: AssignedBusiness) => {
+    const parts: string[] = [];
+    if (business.city?.name) parts.push(business.city.name);
+    if (business.city?.region && business.city.region.toLowerCase() !== business.city?.name?.toLowerCase()) {
+        parts.push(business.city.region);
+    }
+    if (business.postcode) parts.push(business.postcode);
+    return parts.join(', ') || business.address || 'Location not provided';
+};
+
+const getMembershipBadge = (level?: string | null, planName?: string | null) => {
+    const name = (planName || level || 'Standard').toLowerCase();
+    if (name.includes('gold')) {
+        return {
+            label: planName || 'Gold',
+            className: 'border-amber-300 bg-amber-50 text-amber-950',
+            icon: 'workspace_premium',
+        };
+    }
+    if (name.includes('silver')) {
+        return {
+            label: planName || 'Silver',
+            className: 'border-slate-300 bg-slate-100 text-slate-800',
+            icon: 'military_tech',
+        };
+    }
+    if (name.includes('bronze')) {
+        return {
+            label: planName || 'Bronze',
+            className: 'border-orange-300/90 bg-orange-50 text-orange-950',
+            icon: 'stars',
+        };
+    }
+    return {
+        label: planName || level || 'Standard',
+        className: 'border-blue-200 bg-blue-50 text-blue-900',
+        icon: 'verified',
+    };
+};
 
 export default function AccountManagerDashboard() {
     const { user } = useAuthStore();
@@ -106,20 +142,36 @@ export default function AccountManagerDashboard() {
             </section>
 
             <div className="space-y-6">
-                <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="px-6 py-5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                            <h2 className="font-bold text-text-main">Assigned businesses</h2>
-                            <p className="text-xs text-text-secondary">Businesses matched to you by Central Hub.</p>
+                <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6 sm:py-4.5">
+                        <div className="flex items-center gap-2.5">
+                            <div className="flex size-9 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                                <span className="material-symbols-outlined !text-lg leading-none">storefront</span>
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h2 className="text-base font-bold text-slate-900">Assigned businesses</h2>
+                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                                        {businesses.length}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500">Businesses matched to you by Central Hub.</p>
+                            </div>
                         </div>
                         {assignedBusinesses?.manager && (
-                            <span className="text-[11px] font-semibold text-slate-500">
-                                {assignedBusinesses.manager.name} · {assignedBusinesses.manager.email}
-                            </span>
+                            <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
+                                <span className="material-symbols-outlined !text-sm text-slate-400">person</span>
+                                <span className="font-semibold text-slate-800">{assignedBusinesses.manager.name}</span>
+                                <span className="text-slate-400">·</span>
+                                <span className="text-slate-500">{assignedBusinesses.manager.email}</span>
+                            </div>
                         )}
                     </div>
                     {isLoadingBusinesses && !businessesUnavailable ? (
-                        <div className="px-6 py-10 text-center text-sm text-slate-500">Loading assigned businesses…</div>
+                        <div className="px-6 py-12 text-center text-sm font-medium text-slate-500">
+                            <span className="inline-block size-4 animate-spin rounded-full border-2 border-blue-200 border-b-blue-600 mr-2 align-middle" />
+                            Loading assigned businesses…
+                        </div>
                     ) : businessesUnavailable ? (
                         <div className="p-4 sm:p-5">
                             <RequestErrorState
@@ -137,47 +189,108 @@ export default function AccountManagerDashboard() {
                             <p className="mt-1 text-xs text-slate-500">Central Hub assigns businesses to you based on territory and membership.</p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-200">
-                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Business</th>
-                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Location</th>
-                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Membership</th>
-                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Acquired by</th>
-                                        <th className="px-6 py-3 text-[10px] font-black text-text-secondary uppercase tracking-widest">Assigned</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {businesses.map((business: AssignedBusiness) => (
-                                        <tr key={business.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <p className="font-bold text-text-main text-sm">{business.businessName}</p>
-                                                <p className="text-[11px] text-slate-500">{business.email || business.businessType || 'Business'}</p>
-                                            </td>
-                                            <td className="px-6 py-4 text-xs text-slate-600">{businessLocation(business)}</td>
-                                            <td className="px-6 py-4">
-                                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                                                    {business.membershipPlanName || business.membershipLevel || 'Standard'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-xs text-slate-600">
-                                                {business.acquiredByAffiliateName ? (
-                                                    <span className="font-semibold text-slate-800">
-                                                        {business.acquiredByAffiliateName}
-                                                        <span className="ml-1 font-normal capitalize text-slate-400">
-                                                            ({(business.acquiredByAffiliateRole || 'affiliate').replaceAll('_', ' ')})
+                        <div className="divide-y divide-slate-100">
+                            {businesses.map((business: AssignedBusiness) => {
+                                const location = businessLocation(business);
+                                const badge = getMembershipBadge(business.membershipLevel, business.membershipPlanName);
+                                const initials = business.businessName
+                                    ? business.businessName.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+                                    : 'BZ';
+                                return (
+                                    <div
+                                        key={business.id}
+                                        className="group flex flex-col gap-3.5 p-4 transition-colors hover:bg-slate-50/60 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4.5"
+                                    >
+                                        {/* Left: Avatar + Business details */}
+                                        <div className="flex items-start gap-3.5 min-w-0">
+                                            {business.logoUrl ? (
+                                                <img
+                                                    src={business.logoUrl}
+                                                    alt={business.businessName}
+                                                    className="size-11 shrink-0 rounded-xl border border-slate-200/90 object-cover shadow-2xs"
+                                                    onError={(e) => {
+                                                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                                        const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                                        if (fallback) fallback.style.display = 'flex';
+                                                    }}
+                                                />
+                                            ) : null}
+                                            <div
+                                                className={`flex size-11 shrink-0 items-center justify-center rounded-xl border border-blue-100/80 bg-blue-50/70 font-black text-sm tracking-wide text-blue-700 shadow-2xs ${
+                                                    business.logoUrl ? 'hidden' : ''
+                                                }`}
+                                            >
+                                                {initials}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h3 className="truncate text-sm font-bold text-slate-900 sm:text-base">
+                                                        {business.businessName}
+                                                    </h3>
+                                                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badge.className}`}>
+                                                        <span className="material-symbols-outlined !text-[12px] leading-none">
+                                                            {badge.icon}
                                                         </span>
+                                                        {badge.label}
                                                     </span>
-                                                ) : (
-                                                    <span className="text-slate-400">Direct signup</span>
+                                                </div>
+                                                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                                    {business.email && (
+                                                        <span className="inline-flex items-center gap-1">
+                                                            <span className="material-symbols-outlined !text-xs leading-none text-slate-400">mail</span>
+                                                            <span className="truncate max-w-[200px] sm:max-w-none">{business.email}</span>
+                                                        </span>
+                                                    )}
+                                                    {location !== 'Location not provided' && (
+                                                        <span className="inline-flex items-center gap-1">
+                                                            <span className="material-symbols-outlined !text-xs leading-none text-slate-400">location_on</span>
+                                                            <span>{location}</span>
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Right: Meta chips + Action Button */}
+                                        <div className="flex flex-wrap items-center gap-2.5 sm:shrink-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {/* Source */}
+                                                <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1 text-[11px] text-slate-600">
+                                                    <span className="text-slate-400">Source:</span>
+                                                    {business.acquiredByAffiliateName ? (
+                                                        <span className="font-semibold text-slate-800">
+                                                            {business.acquiredByAffiliateName}
+                                                            <span className="ml-1 font-normal text-slate-400">
+                                                                ({(business.acquiredByAffiliateRole || 'affiliate').replaceAll('_', ' ')})
+                                                            </span>
+                                                        </span>
+                                                    ) : (
+                                                        <span className="font-medium text-slate-600">Direct signup</span>
+                                                    )}
+                                                </div>
+
+                                                {/* Assigned date */}
+                                                {business.accountManagerAssignedAt && (
+                                                    <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1 text-[11px] text-slate-600">
+                                                        <span className="material-symbols-outlined !text-xs leading-none text-slate-400">calendar_today</span>
+                                                        <span>Assigned {formatDate(business.accountManagerAssignedAt)}</span>
+                                                    </div>
                                                 )}
-                                            </td>
-                                            <td className="px-6 py-4 text-xs text-slate-600">{formatDate(business.accountManagerAssignedAt)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                            </div>
+
+                                            <Link
+                                                href="/dashboard/account-manager/tasks"
+                                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition-all hover:border-blue-400 hover:bg-blue-50/60 hover:text-blue-700"
+                                            >
+                                                <span>View work</span>
+                                                <span className="material-symbols-outlined !text-sm leading-none text-slate-400">
+                                                    arrow_forward
+                                                </span>
+                                            </Link>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </section>
