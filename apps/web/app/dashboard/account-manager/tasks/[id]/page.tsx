@@ -75,7 +75,12 @@ export default function AccountManagerTaskDetailPage() {
     const { data: localTask, isLoading: isLoadingLocal, isError: isErrorLocal, error: localError, refetch: refetchLocal } = useTask(taskId, Boolean(taskId && user?.id));
     const managedTaskId = localTask?.externalTaskId || taskId;
     const { data: managedTask, isLoading: isLoadingManaged, refetch: refetchManaged } = useManagedTask(managedTaskId, Boolean(managedTaskId && user?.id));
+    const { tasks: cachedTasks = [] } = useTasks({ limit: 100 });
     const { data: delegatableAgents = [] } = useDelegatableAgents(Boolean(user?.id));
+
+    // Fallback: If GET /tasks/:id returns 404 (because task is unassigned or open), use cached list record
+    const fallbackTask = cachedTasks.find((t) => t.id === taskId);
+    const task = (managedTask || localTask || fallbackTask) as DetailedTask | null;
 
     // Mutations
     const { reviewTask, isReviewing, assignTask, isAssigningTask } = useManagedTasks();
@@ -87,8 +92,7 @@ export default function AccountManagerTaskDetailPage() {
     const [actionSuccess, setActionSuccess] = useState('');
     const [actionError, setActionError] = useState('');
 
-    const isLoading = isLoadingLocal || (Boolean(localTask?.externalTaskId) && isLoadingManaged);
-    const task = (managedTask || localTask) as DetailedTask | null;
+    const isLoading = (isLoadingLocal && !task) || (Boolean(localTask?.externalTaskId) && isLoadingManaged);
 
     if (isLoading) {
         return (
@@ -99,7 +103,7 @@ export default function AccountManagerTaskDetailPage() {
         );
     }
 
-    if (isErrorLocal || !task) {
+    if (!task) {
         return (
             <div className="mx-auto max-w-5xl space-y-3 p-4">
                 <Link
@@ -192,15 +196,17 @@ export default function AccountManagerTaskDetailPage() {
             {/* Top Navigation & Breadcrumbs */}
             <nav className="flex flex-wrap items-center justify-between gap-3 pb-1 border-b border-slate-200/70">
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                    <Link href="/dashboard/account-manager/campaigns" className="hover:text-primary transition-colors">
-                        Campaigns
+                    <Link
+                        href="/dashboard/account-manager/campaigns"
+                        className="inline-flex items-center gap-1 hover:text-blue-700 transition-colors"
+                    >
+                        <span className="material-symbols-outlined !text-sm">arrow_back</span>
+                        <span>Back to Campaigns</span>
                     </Link>
                     <span>/</span>
-                    <Link href="/dashboard/account-manager/tasks" className="hover:text-primary transition-colors">
-                        Tasks
-                    </Link>
-                    <span>/</span>
-                    <span className="font-mono text-slate-700 truncate max-w-[200px]">{task.title}</span>
+                    <span className="font-medium text-slate-800 truncate max-w-[240px] sm:max-w-[400px]">
+                        {task.title}
+                    </span>
                 </div>
 
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase border ${statusMeta.bg} ${statusMeta.text} ${statusMeta.border}`}>
@@ -438,9 +444,20 @@ export default function AccountManagerTaskDetailPage() {
                                 )}
                             </div>
                         ) : (
-                            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-xs text-slate-500">
-                                <span className="material-symbols-outlined text-2xl text-slate-300 block mb-1">hourglass_top</span>
-                                No deliverables submitted yet. The assigned specialist is currently executing this campaign.
+                            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-5 text-center text-xs text-slate-500">
+                                <span className="material-symbols-outlined text-2xl text-slate-400 block mb-1.5">
+                                    {(task.assignedAgent || task.assignedAgentId || task.assignee || task.assignedAgentEmail) ? 'hourglass_top' : 'person_add'}
+                                </span>
+                                <p className="font-semibold text-slate-700">
+                                    {(task.assignedAgent || task.assignedAgentId || task.assignee || task.assignedAgentEmail)
+                                        ? 'No deliverables submitted yet'
+                                        : 'No specialist assigned yet'}
+                                </p>
+                                <p className="mt-0.5 text-[11px] text-slate-500">
+                                    {(task.assignedAgent || task.assignedAgentId || task.assignee || task.assignedAgentEmail)
+                                        ? 'The assigned specialist is currently executing this campaign.'
+                                        : 'Select and assign an affiliate agent in the panel to begin execution.'}
+                                </p>
                             </div>
                         )}
                     </section>
