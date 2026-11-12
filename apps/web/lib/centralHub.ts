@@ -20,6 +20,20 @@ export function getAffiliateRegisterUrl(): string {
   return `${baseUrl()}/register/affiliate`;
 }
 
+/**
+ * URL for business onboarding / signup, carrying an optional return redirect.
+ * e.g. https://centralhubsolution.com/getstarted/business?entry=signup&role=business&redirect=...
+ */
+export function getBusinessSignupUrl(redirectPath?: string): string {
+  const params = new URLSearchParams();
+  params.set('entry', 'signup');
+  params.set('role', 'business');
+  if (redirectPath) {
+    params.set('redirect', redirectPath);
+  }
+  return `${baseUrl()}/getstarted/business?${params.toString()}`;
+}
+
 /** Base Central Hub frontend URL (for login links, etc). */
 export function getCentralHubUrl(): string {
   return baseUrl();

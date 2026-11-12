@@ -37,6 +37,7 @@ function OnboardingFlow() {
     const router = useRouter();
     const isRetakeQuiz = searchParams.get('retake') === '1';
     const isEditingProfile = searchParams.get('edit-profile') === '1';
+    const stepParam = searchParams.get('step');
     const hydratedEditUser = useRef<string | null>(null);
     const syncedOnboardingUser = useRef<string | null>(null);
 
@@ -44,10 +45,23 @@ function OnboardingFlow() {
         (role || '').toLowerCase().replace(/_/g, '-');
 
     useEffect(() => {
-        if (!isEditingProfile || !user?.id || hydratedEditUser.current === user.id) return;
+        const hasStepOverride = Boolean(stepParam);
+        if ((!isEditingProfile && !hasStepOverride) || !user?.id || hydratedEditUser.current === user.id) return;
 
         hydratedEditUser.current = user.id;
-        setStep('basic-info');
+
+        const isAgent = normalizeRole(user?.role || onboardingRole) === 'agent' || !user?.role;
+
+        if (stepParam === 'profile-info' || stepParam === '2' || stepParam === 'verification') {
+            setStep('profile-info');
+        } else if (stepParam === 'questionnaire' || stepParam === '3') {
+            setStep(isAgent ? 'questionnaire' : 'quiz');
+        } else if (stepParam === 'basic-info' || stepParam === '1') {
+            setStep('basic-info');
+        } else if (isEditingProfile) {
+            setStep('basic-info');
+        }
+
         const submission = user?.verificationSubmission && typeof user.verificationSubmission === 'object'
             ? user.verificationSubmission
             : {};
@@ -75,14 +89,14 @@ function OnboardingFlow() {
         updateProfileInfo({
             role: user?.role || onboardingRole || 'agent',
             hourlyRate: submission.hourlyRate ?? '',
-            bio: submission.bio ?? '',
+            bio: submission.bio || user?.bio || '',
             licenseNumber: submission.licenseNumber ?? '',
             yearsExperience: submission.yearsExperience ?? '',
             company: submission.company ?? '',
             expertise: submission.expertise ?? '',
             linkedinUrl: submission.linkedinUrl ?? '',
         });
-    }, [isEditingProfile, onboardingRole, setStep, updateBasicInfo, updateProfileInfo, user]);
+    }, [isEditingProfile, stepParam, onboardingRole, setStep, updateBasicInfo, updateProfileInfo, user]);
 
     useEffect(() => {
         if (isRetakeQuiz) {
@@ -146,12 +160,19 @@ function OnboardingFlow() {
     ]);
 
     const renderStep = () => {
-        const stepToRender = isRetakeQuiz ? 'quiz' : isEditingProfile && currentStep !== 'basic-info' ? 'profile-info' : currentStep;
+        const isStepProfile = stepParam === 'profile-info' || stepParam === '2' || stepParam === 'verification';
+        const stepToRender = isRetakeQuiz
+            ? 'quiz'
+            : isStepProfile
+                ? 'profile-info'
+                : isEditingProfile && currentStep !== 'basic-info'
+                    ? 'profile-info'
+                    : currentStep;
         switch (stepToRender) {
             case 'basic-info':
                 return <BasicInfoStep />;
             case 'profile-info':
-                return <ProfileInfoStep isEditingProfile={isEditingProfile} />;
+                return <ProfileInfoStep isEditingProfile={isEditingProfile || isStepProfile} />;
             case 'questionnaire':
                 return <SkillSelectionStep />;
             case 'quiz':

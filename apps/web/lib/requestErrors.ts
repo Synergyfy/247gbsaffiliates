@@ -14,6 +14,8 @@ export function getRequestFailureKind(error: unknown): RequestFailureKind {
         code === 'ONBOARDING_REQUIRED' ||
         code === 'VERIFICATION_PENDING' ||
         code === 'AFFILIATE_QUALIFICATION_REQUIRED' ||
+        code === 'AFFILIATE_NOT_VERIFIED' ||
+        code === 'ONBOARDING_INCOMPLETE' ||
         message.includes('onboarding') ||
         message.includes('verification')
       ) {
@@ -23,10 +25,20 @@ export function getRequestFailureKind(error: unknown): RequestFailureKind {
     }
   }
   if (error && typeof error === 'object') {
-    const record = error as { status?: number; message?: string };
+    const record = error as { status?: number; code?: string; message?: string; payload?: { code?: string } };
     if (record.status === 401) return 'unauthenticated';
     if (record.status === 403) {
-      if (typeof record.message === 'string' && record.message.toLowerCase().includes('complete onboarding')) {
+      const code = record.code || record.payload?.code;
+      const message = typeof record.message === 'string' ? record.message.toLowerCase() : '';
+      if (
+        code === 'ONBOARDING_REQUIRED' ||
+        code === 'VERIFICATION_PENDING' ||
+        code === 'AFFILIATE_QUALIFICATION_REQUIRED' ||
+        code === 'AFFILIATE_NOT_VERIFIED' ||
+        code === 'ONBOARDING_INCOMPLETE' ||
+        message.includes('onboarding') ||
+        message.includes('verification')
+      ) {
         return 'onboarding_required';
       }
       return 'forbidden';

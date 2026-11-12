@@ -24,6 +24,9 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
     const isVerified = user?.verificationStatus === 'verified';
     // Only lock to "already submitted" view if the user is already verified and not actively editing
     const showAlreadySubmittedCard = isVerified && !isEditingProfile;
+    const normalizedRole = (role || user?.role || '').toLowerCase().replace(/_/g, '-');
+    const isAgent = normalizedRole === 'agent' || !normalizedRole;
+    const nextStep = isAgent ? 'questionnaire' : 'quiz';
 
     const {
         register,
@@ -55,7 +58,7 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
             // Identity document was skipped during onboarding; save profile in store and proceed
             updateProfileInfo(submission);
             toast.info('Profile saved. You can submit your identity document for verification anytime from your dashboard.');
-            setStep('questionnaire');
+            setStep(nextStep);
             return;
         }
 
@@ -78,7 +81,7 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
                 isOnboarded: false,
             });
             toast.success('Profile and identity document submitted for admin verification.');
-            setStep('questionnaire');
+            setStep(nextStep);
         } catch (error) {
             console.error('Verification submission failed:', error);
             toast.error('Could not submit your profile for verification. Please try again.');
@@ -120,8 +123,8 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-2">
-                        <button type="button" onClick={() => setStep('questionnaire')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-white transition-colors hover:bg-primary-hover">
-                            Continue to Expertise<span className="material-symbols-outlined text-base">arrow_forward</span>
+                        <button type="button" onClick={() => setStep(nextStep)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-white transition-colors hover:bg-primary-hover">
+                            Continue to {isAgent ? 'Expertise' : 'Assessment'}<span className="material-symbols-outlined text-base">arrow_forward</span>
                         </button>
                     </div>
                 </section>
@@ -218,8 +221,8 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
                         disabled={isSubmitting}
                         className="flex-1 h-10 md:h-14 px-3 md:px-8 bg-primary hover:bg-primary-hover text-white rounded-xl md:rounded-2xl font-display font-bold text-xs sm:text-sm md:text-base transition-all active:scale-[0.99] shadow-sm md:shadow-md shadow-primary/20 flex items-center justify-center gap-1.5 md:gap-2 group disabled:opacity-60"
                     >
-                        <span className="md:hidden">{isSubmitting ? 'Submitting…' : 'Questionnaire'}</span>
-                        <span className="hidden md:inline">{isSubmitting ? 'Submitting verification…' : 'Continue to Questionnaire'}</span>
+                        <span className="md:hidden">{isSubmitting ? 'Submitting…' : isAgent ? 'Questionnaire' : 'Assessment'}</span>
+                        <span className="hidden md:inline">{isSubmitting ? 'Submitting verification…' : isAgent ? 'Continue to Questionnaire' : 'Continue to Assessment'}</span>
                         <span className="material-symbols-outlined text-base md:text-lg transition-transform group-hover:translate-x-0.5">arrow_forward</span>
                     </button>
                 </div>

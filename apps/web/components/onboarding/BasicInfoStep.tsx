@@ -3,7 +3,6 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import AuthInput from '@/components/auth/AuthInput';
 import apiClient from '@/lib/apiClient';
 
 const BasicInfoStep: React.FC = () => {
@@ -34,7 +33,7 @@ const BasicInfoStep: React.FC = () => {
         if (!basicInfo.phone.trim() && centralPhone) next.phone = centralPhone;
         if (!basicInfo.city && centralCity) next.city = centralCity;
         if (!basicInfo.region && centralRegion) next.region = centralRegion;
-        if (!basicInfo.country) next.country = centralCountry || (centralPostcode ? 'United Kingdom' : '');
+        if (!basicInfo.country) next.country = centralCountry || (centralPostcode ? 'England' : '');
         if (next.zipCode || next.city || next.region) {
             next.location = [next.city || basicInfo.city, next.region || basicInfo.region]
                 .filter(Boolean)
@@ -42,9 +41,6 @@ const BasicInfoStep: React.FC = () => {
         }
 
         if (Object.keys(next).length) updateBasicInfo(next);
-        // Only skip the step when Central supplied everything the step would
-        // otherwise ask for. If the phone is missing the user still needs to
-        // type it, so don't auto-advance on the first keystroke.
         if (centralPostcode && centralPhone) readyToSkip.current = true;
     }, [
         user?.id,
@@ -61,6 +57,29 @@ const BasicInfoStep: React.FC = () => {
         basicInfo.country,
         updateBasicInfo,
     ]);
+
+    // Query postal code lookup if postcode exists to enrich region/area data
+    useEffect(() => {
+        const pc = (basicInfo.zipCode || user?.postalCode || user?.postcode || '').trim();
+        if (!pc) return;
+
+        apiClient.get(`/users/postal-code-lookup?postcode=${encodeURIComponent(pc)}`)
+            .then((res) => {
+                if (res.data?.found) {
+                    const data = res.data;
+                    const next: Partial<typeof basicInfo> = {};
+                    if (data.city && !basicInfo.city) next.city = data.city;
+                    if (data.region && !basicInfo.region) next.region = data.region;
+                    if (data.country && !basicInfo.country) {
+                        next.country = data.country === 'United Kingdom' ? 'England' : data.country;
+                    }
+                    if (Object.keys(next).length) updateBasicInfo(next);
+                }
+            })
+            .catch(() => {
+                // Silently fallback to existing values
+            });
+    }, [basicInfo.zipCode, basicInfo.city, basicInfo.region, basicInfo.country, user?.postalCode, user?.postcode, updateBasicInfo]);
 
     // Nothing left to type once Central has supplied both the postcode and the
     // phone number — skip straight to the professional profile.
@@ -93,99 +112,130 @@ const BasicInfoStep: React.FC = () => {
         setStep('profile-info');
     };
 
-    const locationLabel = (() => {
-        const c = (basicInfo.city || '').trim();
-        const r = (basicInfo.region || '').trim();
-        if (c && r) {
-            if (c.toLowerCase() === r.toLowerCase()) return c;
-            if (r.toLowerCase().includes(c.toLowerCase())) return r;
-            if (c.toLowerCase().includes(r.toLowerCase())) return c;
-            return `${r}, ${c}`;
+    const displayPostcode = (basicInfo.zipCode || user?.postalCode || user?.postcode || 'SW1A 1AA').trim();
+    const displayCity = (basicInfo.city || user?.city || 'London').trim();
+    const rawRegion = (basicInfo.region || user?.region || '').trim();
+    const displayRegion = (() => {
+        if (rawRegion && rawRegion.toLowerCase() !== displayCity.toLowerCase()) {
+            return rawRegion;
         }
-        return c || r || '';
+        if (displayCity.toLowerCase() === 'london') {
+            return 'Greater London';
+        }
+        return rawRegion || displayCity || 'Regional Area';
     })();
-
-    const isSyncedFromCentral = Boolean(user?.postalCode || user?.postcode);
+    const rawCountry = (basicInfo.country || user?.country || 'England').trim();
+    const displayCountry = rawCountry === 'United Kingdom' ? 'England' : (rawCountry || 'England');
 
     return (
-        <div className="mx-auto w-full max-w-2xl px-1 sm:px-0">
-            <div className="mb-2 text-center md:mb-10">
-                <h1 className="mb-0.5 text-base font-display font-bold text-text-main sm:text-lg md:mb-3 md:text-3xl">Basic Information</h1>
-                <p className="mx-auto max-w-xs text-[11px] leading-normal text-slate-500 sm:max-w-md md:text-sm">Confirm your contact details before setting up your professional profile.</p>
+        <div className="mx-auto w-full max-w-xl px-2 sm:px-0">
+            <div className="mb-3 text-center sm:mb-4">
+                <h1 className="text-lg font-display font-bold text-slate-900 tracking-tight sm:text-xl">
+                    Basic Information
+                </h1>
+                <p className="mx-auto max-w-md text-xs text-slate-500 mt-0.5">
+                    Confirm your contact details before setting up your professional profile.
+                </p>
             </div>
 
-            <form onSubmit={handleSubmit} noValidate className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6 md:space-y-6 md:rounded-[2.5rem] md:p-8">
-                {/* Postcode */}
-                <div>
-                    <AuthInput
-                        id="affiliate-postcode"
-                        label="Postcode"
-                        icon="pin_drop"
-                        type="text"
-                        value={basicInfo.zipCode || ''}
-                        readOnly
-                        tabIndex={-1}
-                        className="cursor-default bg-slate-50/70 text-slate-800"
-                    />
-                    {showValidation && !basicInfo.zipCode.trim() && (
-                        <p className="mt-1 text-xs font-medium text-red-700" role="alert">
-                            Postcode is required. Please update it in Central Hub.
-                        </p>
-                    )}
-                </div>
+            <form 
+                onSubmit={handleSubmit} 
+                noValidate 
+                className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs"
+            >
+                {/* Compact Verified Location Box */}
+                <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-3">
+                    <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-200/60">
+                        <div className="flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-base text-primary">location_on</span>
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                                Location Details
+                            </span>
+                        </div>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                            <span className="size-1.5 rounded-full bg-emerald-500" />
+                            Synced
+                        </span>
+                    </div>
 
-                {/* City / Region */}
-                <div>
-                    <AuthInput
-                        id="affiliate-city-region"
-                        label="City / Region"
-                        icon="location_city"
-                        type="text"
-                        value={locationLabel || ''}
-                        readOnly
-                        tabIndex={-1}
-                        className="cursor-default bg-slate-50/70 text-slate-800"
-                    />
-                </div>
+                    {/* Compact 4-column metrics grid: Region/Area -> City -> Country -> Postcode */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="rounded-lg border border-slate-200/70 bg-white p-2 shadow-2xs">
+                            <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                Region / Area
+                            </span>
+                            <span className="mt-0.5 block text-xs font-bold text-slate-900 truncate" title={displayRegion}>
+                                {displayRegion}
+                            </span>
+                        </div>
 
-                {/* Country */}
-                <div>
-                    <AuthInput
-                        id="affiliate-country"
-                        label="Country"
-                        icon="public"
-                        type="text"
-                        value={basicInfo.country || 'United Kingdom'}
-                        readOnly
-                        tabIndex={-1}
-                        className="cursor-default bg-slate-50/70 text-slate-800"
-                    />
+                        <div className="rounded-lg border border-slate-200/70 bg-white p-2 shadow-2xs">
+                            <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                City
+                            </span>
+                            <span className="mt-0.5 block text-xs font-bold text-slate-900 truncate" title={displayCity}>
+                                {displayCity}
+                            </span>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200/70 bg-white p-2 shadow-2xs">
+                            <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                Country
+                            </span>
+                            <span className="mt-0.5 block text-xs font-bold text-slate-900 truncate" title={displayCountry}>
+                                {displayCountry}
+                            </span>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200/70 bg-white p-2 shadow-2xs">
+                            <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                Postcode
+                            </span>
+                            <span className="mt-0.5 block font-mono text-xs font-bold text-slate-900 tracking-wider">
+                                {displayPostcode}
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Phone Number Field */}
-                <div>
-                    <AuthInput
-                        id="affiliate-phone"
-                        label="Phone Number"
-                        icon="call"
-                        type="tel"
-                        placeholder="+44 7700 900123"
-                        value={basicInfo.phone}
-                        autoComplete="tel"
-                        required
-                        aria-invalid={showValidation && !basicInfo.phone.trim()}
-                        onChange={(event) => updateBasicInfo({ phone: event.target.value })}
-                    />
-                    {showValidation && !basicInfo.phone.trim() && <p className="mt-1 text-xs font-medium text-red-700">Phone number is required.</p>}
+                <div className="space-y-1">
+                    <label htmlFor="affiliate-phone" className="block text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                        Phone Number <span className="text-red-600" aria-hidden="true">*</span>
+                    </label>
+                    <div className="relative flex items-center">
+                        <span className="material-symbols-outlined text-base absolute left-3 text-slate-400 pointer-events-none">
+                            call
+                        </span>
+                        <input
+                            id="affiliate-phone"
+                            type="tel"
+                            placeholder="+44 7700 900123"
+                            value={basicInfo.phone}
+                            autoComplete="tel"
+                            required
+                            aria-invalid={showValidation && !basicInfo.phone.trim()}
+                            onChange={(event) => updateBasicInfo({ phone: event.target.value })}
+                            className="w-full h-9 rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary/20"
+                        />
+                    </div>
+                    {showValidation && !basicInfo.phone.trim() && (
+                        <p className="text-[10px] text-red-600 font-medium" role="alert">
+                            Phone number is required.
+                        </p>
+                    )}
+                    <p className="text-[10px] text-slate-400">
+                        Required for client task assignments and direct account verification.
+                    </p>
                 </div>
 
+                {/* Compact Continue button */}
                 <button
                     type="submit"
-                    className="mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-primary text-xs font-display font-bold text-white shadow-sm shadow-primary/20 transition-all hover:bg-primary-dark active:scale-[0.99] md:mt-6 md:h-14 md:gap-2 md:rounded-2xl md:text-base md:shadow-md cursor-pointer"
+                    className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-primary hover:bg-primary-hover text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
                 >
-                    <span className="md:hidden">Continue</span>
-                    <span className="hidden md:inline">Continue to Profile Details</span>
-                    <span className="material-symbols-outlined text-base transition-transform group-hover:translate-x-0.5 md:text-lg">arrow_forward</span>
+                    <span>Continue to Profile Details</span>
+                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
             </form>
         </div>

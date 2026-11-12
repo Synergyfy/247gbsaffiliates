@@ -39,6 +39,14 @@ export const SkillSelectionStep: React.FC = () => {
         skill.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
     const normalizedRole = (role || '').toLowerCase().replace(/_/g, '-');
+    const isAgent = normalizedRole === 'agent' || !normalizedRole;
+
+    // Skills are only required for Agents. Account Managers and Consultants skip to Quiz.
+    useEffect(() => {
+        if (!isAgent) {
+            setStep('quiz');
+        }
+    }, [isAgent, setStep]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -344,9 +352,8 @@ export const SkillSelectionStep: React.FC = () => {
                     )}
 
                     {/* Paid Assignment Visibility with interactive tooltip info */}
-                    <div className="border border-primary/20 bg-primary/5 rounded-xl p-3 md:p-4 transition-colors relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
-                        <div className="flex items-center justify-between gap-2">
+                    <div className="border border-slate-100 rounded-xl p-3 md:p-4 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center justify-between gap-2.5">
                             <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
                                 <input
                                     type="checkbox"
@@ -354,21 +361,27 @@ export const SkillSelectionStep: React.FC = () => {
                                     checked={isPaidVisibilityRequested}
                                     onChange={(e) => setIsPaidVisibilityRequested(e.target.checked)}
                                 />
-                                <span className="text-xs md:text-sm font-bold text-text-main truncate">Apply for Paid Assignment Visibility</span>
+                                <span className="text-xs md:text-sm font-medium text-text-secondary truncate">Apply for Paid Assignment Visibility</span>
                             </label>
                             <button
                                 type="button"
-                                onClick={() => setShowPaidInfo(prev => !prev)}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setShowPaidInfo(prev => !prev);
+                                }}
                                 aria-label="More information about paid assignment visibility"
-                                className="size-6 rounded-full hover:bg-primary/10 text-primary flex items-center justify-center shrink-0 transition-colors"
+                                className="size-6 rounded-full hover:bg-slate-200/60 text-primary flex items-center justify-center shrink-0 transition-colors"
                             >
                                 <span className="material-symbols-outlined text-base">help_outline</span>
                             </button>
                         </div>
-                        {/* Tooltip description: compact & toggled on mobile, always accessible */}
-                        <div className={`${showPaidInfo ? 'block' : 'hidden md:block'} mt-2 pt-2 border-t border-primary/10 text-[11px] md:text-xs text-slate-600 leading-relaxed`}>
-                            If approved, your profile will be shown to businesses hiring paid suppliers. Approval may require a short review.
-                        </div>
+                        {/* Tooltip description: toggled when user clicks the help icon */}
+                        {showPaidInfo && (
+                            <div className="mt-2.5 pt-2.5 border-t border-slate-100 text-[11px] md:text-xs text-slate-600 leading-relaxed">
+                                If approved, your profile will be shown to businesses hiring paid suppliers. Approval may require a short review.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

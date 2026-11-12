@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useMcomWallet, type McomWalletTransaction } from '@/hooks/useMcomWallet';
 import { useAuthStore } from '@/store/useAuthStore';
 import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { getCentralHubUrl } from '@/lib/centralHub';
 
 function formatCredits(amount: number) {
   return new Intl.NumberFormat(undefined, {
@@ -210,10 +211,21 @@ export default function McomWalletPanel({
 
   return (
     <div className="mx-auto w-full max-w-[1500px] space-y-3.5 px-3 pt-2 pb-5 sm:space-y-5 sm:px-6 sm:py-5 lg:px-8 lg:py-7">
-      <header className="space-y-0.5">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">{eyebrow}</p>
-        <h1 className="text-lg font-bold tracking-tight text-slate-950 sm:text-2xl">{title}</h1>
-        <p className="max-w-2xl text-xs leading-snug text-slate-500 sm:text-sm">{subtitle}</p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-0.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">{eyebrow}</p>
+          <h1 className="text-lg font-bold tracking-tight text-slate-950 sm:text-2xl">{title}</h1>
+          <p className="max-w-2xl text-xs leading-snug text-slate-500 sm:text-sm">{subtitle}</p>
+        </div>
+        <a
+          href={`${getCentralHubUrl()}/dashboard/wallet`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:border-blue-300 hover:bg-blue-50/50 hover:text-blue-700 shrink-0"
+        >
+          <span>Manage Payouts in Central Hub</span>
+          <span className="material-symbols-outlined text-[15px]">open_in_new</span>
+        </a>
       </header>
 
       {isError ? (

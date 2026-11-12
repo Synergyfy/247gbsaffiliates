@@ -33,7 +33,10 @@ export default function ConsultantDashboard() {
     const attemptQuery = stabilizeErrorRetry(useQuery({ queryKey: ['affiliate-dashboard-latest-attempt'], queryFn: async () => unwrap<Attempt>((await apiClient.get('/assessment/latest-attempt')).data) }));
     const resourcesQuery = useLearningResources(role);
     const progressQuery = useLearningProgress(Boolean(profile?.id));
-    const tasksQuery = useTasks({ limit: 50 });
+    const verified = profile?.verificationStatus?.toLowerCase() === 'verified';
+    const isPendingVerification = profile?.verificationStatus?.toLowerCase() === 'pending' || (!verified && profile?.verificationStatus !== 'rejected');
+    const hasTaskAccess = Boolean(verified && profile?.isOnboarded);
+    const tasksQuery = useTasks({ limit: 50, enabled: hasTaskAccess });
     const walletQuery = useMcomWallet();
 
     const myTasks = profile?.id ? (tasksQuery.tasks || []).filter((task) => task.assignedAgentId === profile.id || (task.assigneeEmail && task.assigneeEmail.toLowerCase() === profile.email?.toLowerCase())) : [] as Task[];
@@ -45,7 +48,6 @@ export default function ConsultantDashboard() {
     const resources = resourcesQuery.data || [];
     const completedResources = (progressQuery.data || []).filter((item) => item.status === 'completed').length;
     const latestAttempt = attemptQuery.data;
-    const verified = profile?.verificationStatus?.toLowerCase() === 'verified';
     const displayName = profile?.name || user?.name || 'Consultant';
 
     const stages: OverviewStage[] = [
@@ -60,18 +62,32 @@ export default function ConsultantDashboard() {
     if (changesRequested.length) nextStep = { title: 'Revise and resubmit your work', detail: `${changesRequested.length} assignment${changesRequested.length === 1 ? ' has' : 's have'} feedback requesting changes.`, href: '/dashboard/consultant/tasks', action: 'Review feedback' };
     else if (awaitingReview.length) nextStep = { title: 'Your submitted work is awaiting review', detail: `${awaitingReview.length} submission${awaitingReview.length === 1 ? ' is' : 's are'} with the reviewer.`, href: '/dashboard/consultant/tasks', action: 'View submissions' };
     else if (profile?.verificationStatus === 'rejected') nextStep = { title: 'Review your verification status', detail: 'Your account has a persisted rejected status. Open your profile for the recorded status and available next step.', href: '/dashboard/consultant/profile', action: 'Review profile' };
+    else if (isPendingVerification) nextStep = { title: 'Verification under administrator review', detail: 'Your profile and quiz have been submitted. An administrator is currently reviewing your ID verification before client assignments unlock.', href: '/dashboard/consultant/verification', action: 'Check verification' };
     else if (activeTasks.length === 0 && sessions.length > 0) nextStep = { title: 'Check your consultancy sessions', detail: `You have ${sessions.length} consultancy assignment${sessions.length === 1 ? '' : 's'} in your work history.`, href: '/dashboard/consultant/sessions', action: 'View sessions' };
 
     return (
         <RoleOverview name={displayName.split(/\s+/)[0]} description="Follow your professional progress and manage consultancy work assigned to you." stages={stages} nextStep={nextStep} profileHref="/dashboard/consultant/profile">
             {profileQuery.isError && <RequestErrorState area="Consultant profile" label="Profile status" error={profileQuery.error} onRetry={() => void profileQuery.refetch()} supportHref="/dashboard/consultant/messages" />}
+            {isPendingVerification && (
+                <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-xl text-blue-700 mt-0.5">verified_user</span>
+                        <div>
+                            <h3 className="text-sm font-semibold text-slate-900">Verification in progress</h3>
+                            <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                                Your profile and quiz have been submitted. An administrator is currently reviewing your ID verification before client assignments unlock.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+            )}
             <section>
                 <div className="mb-3 flex flex-wrap items-end justify-between gap-2"><div><h2 className="text-lg font-semibold text-slate-950">Consultant work</h2><p className="mt-0.5 text-xs text-slate-600">Assigned work, sessions and delivery status from your account.</p></div></div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <SummaryCard title="Active assignments" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(activeTasks.length)} detail={tasksQuery.isError ? 'Your assignments could not be loaded.' : activeTasks.length ? 'Tasks currently assigned to your account.' : 'No active assignments are recorded.'} href="/dashboard/consultant/tasks" action="Open tasks" state={tasksQuery.isError ? 'Unavailable' : undefined} />
-                    <SummaryCard title="Awaiting review" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(awaitingReview.length)} detail={tasksQuery.isError ? 'Submission status could not be loaded.' : 'Work you submitted and is awaiting reviewer action.'} href="/dashboard/consultant/tasks" action="View submissions" state={tasksQuery.isError ? 'Unavailable' : undefined} />
-                    <SummaryCard title="Changes requested" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(changesRequested.length)} detail={tasksQuery.isError ? 'Revision status could not be loaded.' : 'Assignments returned with feedback for revision.'} href="/dashboard/consultant/tasks" action="Review feedback" state={tasksQuery.isError ? 'Unavailable' : undefined} />
-                    <SummaryCard title="Completed assignments" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(completedTasks.length)} detail={tasksQuery.isError ? 'Completion records could not be loaded.' : 'Tasks with completed or approved status.'} href="/dashboard/consultant/tasks" action="View tasks" state={tasksQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="Active assignments" value={!hasTaskAccess ? '0' : tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(activeTasks.length)} detail={!hasTaskAccess ? 'Assignments unlock once your verification is approved.' : tasksQuery.isError ? 'Your assignments could not be loaded.' : activeTasks.length ? 'Tasks currently assigned to your account.' : 'No active assignments are recorded.'} href="/dashboard/consultant/tasks" action="Open tasks" state={!hasTaskAccess ? undefined : tasksQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="Awaiting review" value={!hasTaskAccess ? '0' : tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(awaitingReview.length)} detail={!hasTaskAccess ? 'Assignments awaiting reviewer decision will appear here.' : tasksQuery.isError ? 'Submission status could not be loaded.' : 'Work you submitted and is awaiting reviewer action.'} href="/dashboard/consultant/tasks" action="View submissions" state={!hasTaskAccess ? undefined : tasksQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="Changes requested" value={!hasTaskAccess ? '0' : tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(changesRequested.length)} detail={!hasTaskAccess ? 'Assignments requiring revision will appear here.' : tasksQuery.isError ? 'Revision status could not be loaded.' : 'Assignments returned with feedback for revision.'} href="/dashboard/consultant/tasks" action="Review feedback" state={!hasTaskAccess ? undefined : tasksQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="Completed assignments" value={!hasTaskAccess ? '0' : tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(completedTasks.length)} detail={!hasTaskAccess ? 'Completed client work records will appear here.' : tasksQuery.isError ? 'Completion records could not be loaded.' : 'Tasks with completed or approved status.'} href="/dashboard/consultant/tasks" action="View tasks" state={!hasTaskAccess ? undefined : tasksQuery.isError ? 'Unavailable' : undefined} />
                 </div>
             </section>
 
@@ -86,9 +102,13 @@ export default function ConsultantDashboard() {
                         emptyContent={
                             <div className="py-8 text-center">
                                 <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">assignment</span>
-                                <p className="mt-2 text-sm font-semibold text-slate-700">No tasks assigned yet</p>
+                                <p className="mt-2 text-sm font-semibold text-slate-700">
+                                    {!hasTaskAccess ? 'Assignments unlock after verification' : 'No tasks assigned yet'}
+                                </p>
                                 <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">
-                                    Tasks delegated to your account from CHS businesses will appear here.
+                                    {!hasTaskAccess
+                                        ? 'Your verification is under review. Assigned work from CHS businesses will appear here once approved.'
+                                        : 'Tasks delegated to your account from CHS businesses will appear here.'}
                                 </p>
                             </div>
                         }
@@ -98,7 +118,15 @@ export default function ConsultantDashboard() {
                 </section>
                 <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-span-2">
                     <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-950">Consultancy sessions</h2><p className="mt-1 text-xs text-slate-500">Consultancy-type assignments in your task records</p></div><Link href="/dashboard/consultant/sessions" className="text-xs font-semibold text-blue-700 hover:underline">Sessions</Link></div>
-                    {tasksQuery.isLoading && !tasksQuery.isError ? (
+                    {!hasTaskAccess ? (
+                        <div className="py-8 text-center">
+                            <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">event_available</span>
+                            <p className="mt-2 text-sm font-semibold text-slate-700">Sessions unlock after verification</p>
+                            <p className="mx-auto mt-1 max-w-xs text-xs text-slate-500">
+                                Client appointments and consultation sessions will appear here once your ID verification is approved.
+                            </p>
+                        </div>
+                    ) : tasksQuery.isLoading && !tasksQuery.isError ? (
                         <p className="py-3 text-xs text-slate-500">Loading sessions…</p>
                     ) : tasksQuery.isError ? (
                         <RequestErrorState area="Consultancy sessions" label="Consultancy sessions" error={tasksQuery.error} onRetry={() => void tasksQuery.refetch()} supportHref="/dashboard/consultant/messages" />

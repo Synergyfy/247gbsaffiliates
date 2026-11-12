@@ -98,6 +98,7 @@ export default function ChatWorkspace({
     conversations,
     messages,
     isLoading,
+    isLoadingConversations,
     isSending,
     isConnected,
     connectionState,
@@ -131,13 +132,37 @@ export default function ChatWorkspace({
   }, [selectedId, messages.length]);
 
   // Deep links and toast clicks open a specific conversation.
-  useEffect(() => {
-    const selectFromUrl = () => {
-      const id = new URLSearchParams(window.location.search).get('conversationId');
-      if (id) setSelectedId(id);
-    };
-    selectFromUrl();
+  const autoCreatedRecipientRef = useRef<string | null>(null);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('conversationId');
+    if (id) {
+      setSelectedId(id);
+      return;
+    }
+
+    const recipientId = params.get('recipientId') || params.get('affiliateId');
+    if (recipientId && user?.id) {
+      const existing = conversations.find((c) =>
+        (c.participants || []).some((p) => p.id === recipientId),
+      );
+      if (existing) {
+        if (selectedId !== existing.id) setSelectedId(existing.id);
+      } else if (!isLoadingConversations && !isCreatingConversation && autoCreatedRecipientRef.current !== recipientId) {
+        autoCreatedRecipientRef.current = recipientId;
+        createConversation(recipientId)
+          .then((conv) => {
+            if (conv?.id) setSelectedId(conv.id);
+          })
+          .catch((err) => {
+            console.error('Could not auto-start conversation with recipient:', err);
+          });
+      }
+    }
+  }, [conversations, user?.id, isLoadingConversations, isCreatingConversation, createConversation, selectedId]);
+
+  useEffect(() => {
     const onOpenConversation = (event: Event) => {
       const id = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId;
       if (id) setSelectedId(id);

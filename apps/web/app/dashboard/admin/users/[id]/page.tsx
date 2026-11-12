@@ -62,9 +62,6 @@ export default function AdminAffiliateProfilePage() {
                         {Object.entries({
                             Bio: profile.bio,
                             Skills: affiliate.skills,
-                            Sector: profile.sectorId,
-                            Category: profile.categoryId,
-                            'Sub-category': profile.subCategoryId,
                             'Hourly rate': profile.hourlyRate,
                             Currency: profile.currency,
                         }).map(([key, value]) => <div key={key}><dt className="text-[10px] font-semibold uppercase text-slate-500">{key}</dt><dd className="mt-0.5 break-words text-sm text-slate-800">{display(value)}</dd></div>)}

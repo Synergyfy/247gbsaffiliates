@@ -164,9 +164,10 @@ export class UsersService {
 
     let territory: { city?: string; region?: string; postcode?: string } | null = null;
     let origin: GeoPoint | null = null;
-    if (filters.postcode?.trim()) {
+    const searchedPostcode = filters.postcode?.trim();
+    if (searchedPostcode) {
       try {
-        const resolved = await this.lookupPostalCode(filters.postcode);
+        const resolved = await this.lookupPostalCode(searchedPostcode);
         if (resolved?.found) {
           territory = {
             city: resolved.city,
@@ -179,7 +180,7 @@ export class UsersService {
         }
       } catch (err) {
         this.logger.warn(
-          `Postal lookup unavailable for "${filters.postcode}", returning directory without distance filter: ${
+          `Postal lookup unavailable for "${searchedPostcode}": ${
             err instanceof Error ? err.message : String(err)
           }`,
         );
@@ -267,35 +268,50 @@ export class UsersService {
       };
     });
 
-    // Radius is measured from each affiliate's own postcode. Members whose
-    // postcode cannot be geocoded have no verifiable distance and are
-    // excluded from a radius search, so the result count always matches the
-    // advertised radius. If the bulk geocoder fails outright (affiliates have
-    // postcodes but none resolved), keep the unfiltered list instead of
-    // pretending every member is out of range.
-    const geocodingFailed =
-      Boolean(origin) &&
-      users.some((user) => Boolean(user.postcode?.trim())) &&
-      geoByPostcode.size === 0;
+    // When a postcode is searched, only return affiliates verifiable within the requested radius
+    // or matching the postcode/outcode. Never return all members across the country when a postcode was searched.
+    const searchedClean = searchedPostcode ? this.compactPostcode(searchedPostcode) : '';
+    const searchedOutcode = searchedPostcode ? this.extractOutcode(searchedPostcode) : '';
 
-    const matching =
-      origin && !geocodingFailed
-        ? items
-            .filter(
-              (item) =>
-                item.distanceMiles != null && item.distanceMiles <= radiusMiles,
-            )
-            .sort(
-              (a, b) =>
-                (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity),
-            )
-        : items;
+    let matching: typeof items;
+    if (origin) {
+      matching = items
+        .filter((item) => {
+          if (item.distanceMiles != null) {
+            return item.distanceMiles <= radiusMiles;
+          }
+          if (searchedOutcode && item.postcode) {
+            const affiliateOutcode = this.extractOutcode(item.postcode);
+            return affiliateOutcode && affiliateOutcode === searchedOutcode;
+          }
+          return false;
+        })
+        .sort(
+          (a, b) =>
+            (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity),
+        );
+    } else if (searchedPostcode) {
+      matching = items.filter((item) => {
+        if (!item.postcode) return false;
+        const affiliateClean = this.compactPostcode(item.postcode);
+        const affiliateOutcode = this.extractOutcode(item.postcode);
+        if (searchedClean && (affiliateClean.startsWith(searchedClean) || searchedClean.startsWith(affiliateClean))) {
+          return true;
+        }
+        if (searchedOutcode && affiliateOutcode && searchedOutcode === affiliateOutcode) {
+          return true;
+        }
+        return false;
+      });
+    } else {
+      matching = items;
+    }
 
     return {
       items: matching.slice(0, limit),
       total: matching.length,
       territory,
-      distanceFrom: territory?.postcode ?? null,
+      distanceFrom: territory?.postcode ?? (searchedPostcode || null),
     };
   }
 
@@ -451,6 +467,13 @@ export class UsersService {
     return this.normalizePostcode(postcode).replace(/\s+/g, '');
   }
 
+  private extractOutcode(postcode?: string | null): string {
+    const compact = this.compactPostcode(postcode);
+    if (!compact) return '';
+    if (compact.length <= 4) return compact;
+    return compact.slice(0, -3);
+  }
+
   private haversineKm(a: GeoPoint, b: GeoPoint): number {
     const toRad = (value: number) => (value * Math.PI) / 180;
     const radius = 6371;
@@ -553,6 +576,37 @@ export class UsersService {
       );
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
+        // Fall back to outcode lookup (e.g. SW1A, M1, EC1A)
+        try {
+          const outcodeRes = await axios.get<{
+            result?: {
+              outcode?: string;
+              latitude?: number;
+              longitude?: number;
+              admin_district?: string | string[];
+            };
+          }>(`https://api.postcodes.io/outcodes/${encodeURIComponent(clean)}`, {
+            timeout: 8000,
+          });
+          const outResult = outcodeRes.data?.result;
+          if (outResult) {
+            const district = Array.isArray(outResult.admin_district)
+              ? outResult.admin_district[0]
+              : outResult.admin_district || '';
+            return {
+              found: true,
+              postalCode: outResult.outcode || clean,
+              city: district,
+              region: district,
+              country: 'United Kingdom',
+              latitude: outResult.latitude ?? null,
+              longitude: outResult.longitude ?? null,
+              displayName: [outResult.outcode || clean, district, 'United Kingdom'].filter(Boolean).join(', '),
+            };
+          }
+        } catch {
+          // Outcode failed, proceed with original 404
+        }
         throw new BadRequestException('We could not find that UK postcode.');
       }
       throw error;

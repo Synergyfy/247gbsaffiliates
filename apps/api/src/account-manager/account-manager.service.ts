@@ -313,8 +313,22 @@ export class AccountManagerService {
     return this.centralPost(accountManagerId, `/requests/${encodeURIComponent(requestId)}/convert`, body);
   }
 
-  getManagedProjects(accountManagerId: string, query: Record<string, unknown>) {
-    return this.centralGet(accountManagerId, '/projects', query);
+  async getManagedProjects(accountManagerId: string, query: Record<string, unknown>) {
+    // Strip status before forwarding to Central Hub because Central's AffiliateTaskQueryDto
+    // strictly validates against AffiliateTaskStatus enum which rejects AffiliateProjectStatus values (e.g. ACTIVE, ON_HOLD).
+    const { status, ...centralQuery } = query;
+    const response: any = await this.centralGet(accountManagerId, '/projects', centralQuery);
+    if (status && response && Array.isArray(response.data)) {
+      const filtered = response.data.filter(
+        (proj: any) => String(proj.status).toUpperCase() === String(status).toUpperCase(),
+      );
+      return {
+        ...response,
+        data: filtered,
+        total: filtered.length,
+      };
+    }
+    return response;
   }
 
   closeManagedProject(

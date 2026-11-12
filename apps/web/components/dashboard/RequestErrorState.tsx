@@ -93,12 +93,13 @@ export function RequestErrorState({
         }
       : kind === 'onboarding_required'
         ? {
-            icon: 'flag',
-            title: 'Onboarding required',
-            message: 'Complete setup to unlock assigned tasks.',
+            icon: 'verified_user',
+            title: 'Verification in review',
+            message:
+              'Your profile and quiz have been submitted. An administrator is currently reviewing your ID verification before client assignments unlock.',
             action: (
-              <Link href="/onboarding" className="font-semibold text-blue-700 hover:underline">
-                Finish setup
+              <Link href="/onboarding?edit-profile=1" className="font-semibold text-blue-700 hover:underline">
+                Review profile
               </Link>
             ),
           }
