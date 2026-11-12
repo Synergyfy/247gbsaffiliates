@@ -233,7 +233,7 @@ describe('UsersService public directory radius filter', () => {
     expect(result.items.map((item) => item.id)).toEqual(['near', 'mid', 'far']);
   });
 
-  it('returns the unfiltered list when affiliate geocoding is unavailable', async () => {
+  it('filters by matching postcode when affiliate geocoding is unavailable', async () => {
     const service = createService(users);
     (
       service as unknown as { bulkGeocodePostcodes: jest.Mock }
@@ -241,12 +241,19 @@ describe('UsersService public directory radius filter', () => {
 
     const result = await service.findPublicDirectory({ postcode: 'SW1A 1AA' });
 
+    expect(result.items.map((item) => item.id)).toEqual(['near']);
+    expect(result.items.every((item) => item.distanceMiles == null)).toBe(true);
+  });
+
+  it('returns all active affiliates when no postcode filter is provided', async () => {
+    const service = createService(users);
+    const result = await service.findPublicDirectory({});
+
     expect(result.items.map((item) => item.id)).toEqual([
       'near',
       'mid',
       'far',
       'unknown',
     ]);
-    expect(result.items.every((item) => item.distanceMiles == null)).toBe(true);
   });
 });

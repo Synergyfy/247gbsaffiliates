@@ -77,10 +77,13 @@ export default function AccountManagerDashboard() {
     const attemptQuery = stabilizeErrorRetry(useQuery({ queryKey: ['affiliate-dashboard-latest-attempt'], queryFn: async () => unwrap<Attempt>((await apiClient.get('/assessment/latest-attempt')).data) }));
     const resourcesQuery = useLearningResources(role);
     const progressQuery = useLearningProgress(Boolean(profile?.id));
-    const tasksQuery = useTasks({ limit: 50 });
-    const reviewTasksQuery = useManagedTasks({ status: 'SUBMITTED', limit: 50 });
+    const verified = profile?.verificationStatus?.toLowerCase() === 'verified';
+    const isPendingVerification = profile?.verificationStatus?.toLowerCase() === 'pending' || (!verified && profile?.verificationStatus !== 'rejected');
+    const hasTaskAccess = Boolean(verified && profile?.isOnboarded);
+    const tasksQuery = useTasks({ limit: 50, enabled: hasTaskAccess });
+    const reviewTasksQuery = useManagedTasks({ status: 'SUBMITTED', limit: 50 }, hasTaskAccess);
     const businessesQuery = useAssignedBusinesses();
-    const projectsQuery = useManagedProjects({ limit: 50 });
+    const projectsQuery = useManagedProjects({ limit: 50 }, hasTaskAccess);
     const walletQuery = useMcomWallet();
 
     const myTasks = profile?.id ? (tasksQuery.tasks || []).filter((task) => task.assignedAgentId === profile.id || (task.assigneeEmail && task.assigneeEmail.toLowerCase() === profile.email?.toLowerCase())) : [] as Task[];
@@ -89,7 +92,6 @@ export default function AccountManagerDashboard() {
     const businesses = assignedBusinesses?.businesses || [];
     const completedResources = (progressQuery.data || []).filter((row) => row.status === 'completed').length;
     const resources = resourcesQuery.data || [];
-    const verified = profile?.verificationStatus?.toLowerCase() === 'verified';
     const verificationLabel = profile?.verificationStatus?.replaceAll('_', ' ') || 'Not recorded';
     const latestAttempt = attemptQuery.data;
     const pendingReview = reviewTasksQuery.data?.length || 0;
@@ -109,19 +111,33 @@ export default function AccountManagerDashboard() {
 
     let nextStep = { title: 'Review your assigned work', detail: activeTasks ? `You have ${activeTasks} active task${activeTasks === 1 ? '' : 's'}${pendingReview ? ` and ${pendingReview} submission${pendingReview === 1 ? '' : 's'} awaiting review` : ''}.` : 'Check your work queue for tasks and submitted work that needs review.', href: '/dashboard/account-manager/tasks', action: 'Open tasks' };
     if (profile?.verificationStatus === 'rejected') nextStep = { title: 'Review your verification status', detail: 'Your account has a persisted rejected status. Open the verification page for the recorded status and next available step.', href: '/dashboard/account-manager/verification', action: 'Review status' };
+    else if (isPendingVerification) nextStep = { title: 'Verification under administrator review', detail: 'Your profile and quiz have been submitted. An administrator is currently reviewing your ID verification before client assignments unlock.', href: '/dashboard/account-manager/verification', action: 'Check verification' };
 
     return (
         <RoleOverview name={displayName.split(/\s+/)[0]} description="Track your account setup and the businesses, projects and tasks assigned to you." stages={stages} nextStep={nextStep} profileHref="/dashboard/account-manager/profile">
             {profileQuery.isError && <RequestErrorState area="Account Manager profile" label="Profile status" error={profileQuery.error} onRetry={() => void profileQuery.refetch()} supportHref="/dashboard/account-manager/messages" />}
+            {isPendingVerification && (
+                <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-xl text-blue-700 mt-0.5">verified_user</span>
+                        <div>
+                            <h3 className="text-sm font-semibold text-slate-900">Verification in progress</h3>
+                            <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                                Your profile and quiz have been submitted. An administrator is currently reviewing your ID verification before client assignments unlock.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+            )}
             <section>
                 <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                     <div><h2 className="text-lg font-semibold text-slate-950">Account Manager work</h2><p className="mt-0.5 text-sm text-slate-600">Your assigned businesses and personal task queue.</p></div>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <SummaryCard title="Assigned businesses" value={businessesQuery.isLoading ? '…' : businessesUnavailable ? '—' : String(businessesQuery.data?.total ?? businesses.length)} detail={businessesUnavailable ? 'Central Hub business data failed to load.' : businesses.length ? 'Businesses matched to you by Central Hub.' : 'Central Hub returned no businesses for your account.'} href="/dashboard/account-manager/businesses" action={businessesUnavailable ? 'Review status' : 'View businesses'} state={businessesUnavailable ? 'Unavailable' : undefined} />
-                    <SummaryCard title="My active tasks" value={tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(activeTasks)} detail={tasksQuery.isError ? 'Task assignments could not be loaded.' : activeTasks ? 'Tasks assigned directly to your account.' : 'No tasks are currently assigned to you.'} href="/dashboard/account-manager/tasks" action="Open tasks" state={tasksQuery.isError ? 'Unavailable' : undefined} />
-                    <SummaryCard title="Awaiting my review" value={reviewTasksQuery.isLoading ? '…' : reviewTasksQuery.isError ? '—' : String(pendingReview)} detail={reviewTasksQuery.isError ? 'Review submissions could not be loaded.' : 'Managed assignments waiting for your review.'} href="/dashboard/account-manager/tasks" action="Review submissions" state={reviewTasksQuery.isError ? 'Unavailable' : undefined} />
-                    <SummaryCard title="Managed projects" value={projectsQuery.isLoading ? '…' : projectsQuery.isError ? '—' : String(projects.length)} detail={projectsQuery.isError ? 'Managed projects could not be loaded.' : projects.length ? 'Projects assigned to your manager account.' : 'No managed projects are currently recorded.'} href="/dashboard/account-manager/tasks" action="Open work queue" state={projectsQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="My active tasks" value={!hasTaskAccess ? '0' : tasksQuery.isLoading ? '…' : tasksQuery.isError ? '—' : String(activeTasks)} detail={!hasTaskAccess ? 'Tasks unlock once your verification is approved.' : tasksQuery.isError ? 'Task assignments could not be loaded.' : activeTasks ? 'Tasks assigned directly to your account.' : 'No tasks are currently assigned to you.'} href="/dashboard/account-manager/tasks" action="Open tasks" state={!hasTaskAccess ? undefined : tasksQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="Awaiting my review" value={!hasTaskAccess ? '0' : reviewTasksQuery.isLoading ? '…' : reviewTasksQuery.isError ? '—' : String(pendingReview)} detail={!hasTaskAccess ? 'Review queue will activate once verified.' : reviewTasksQuery.isError ? 'Review submissions could not be loaded.' : 'Managed assignments waiting for your review.'} href="/dashboard/account-manager/tasks" action="Review submissions" state={!hasTaskAccess ? undefined : reviewTasksQuery.isError ? 'Unavailable' : undefined} />
+                    <SummaryCard title="Managed projects" value={!hasTaskAccess ? '0' : projectsQuery.isLoading ? '…' : projectsQuery.isError ? '—' : String(projects.length)} detail={!hasTaskAccess ? 'Projects will appear once verified.' : projectsQuery.isError ? 'Managed projects could not be loaded.' : projects.length ? 'Projects assigned to your manager account.' : 'No managed projects are currently recorded.'} href="/dashboard/account-manager/tasks" action="Open work queue" state={!hasTaskAccess ? undefined : projectsQuery.isError ? 'Unavailable' : undefined} />
                 </div>
             </section>
 

@@ -1,163 +1,224 @@
-# 247GBS Affiliates — Backend Engineering Handoff & Audit Report
+# 247GBS Affiliates — Consolidated Backend Engineering Handoff & Specification
 
-Prepared **6 November 2026** for the Backend Engineering team.  
-This document consolidates the end-to-end technical audit of `apps/api` and the exact backend endpoints, security fixes, and contract updates required by the `apps/web` frontend across the **Account Manager**, **Agent**, **Consultant**, **Admin**, and **Find Affiliates (`/find-agent`)** workflows.
-
----
-
-## Status Update (6 November 2026 - Latest Session Fixes)
-
-The following recent integration and resilience issues have been investigated, resolved, and verified:
-
-1. **Tasks 403 Forbidden on Unverified/New Affiliates (`GET /tasks`):**
-   - **Resolved**: `TasksService.findAll` previously threw `403 Forbidden` (`assertQualifiedAffiliate`) for affiliates who had not completed onboarding or verification. It has been updated to catch qualification assertions and return an empty task collection `{ items: [], meta: { total: 0 } }`. Affiliates now see a clean empty state rather than an error banner.
-2. **CHS MCOM Wallet Handshake (`GET /affiliate/wallets/:userId`):**
-   - **Resolved**: CHS (`McomSolutions/apps/backend/.env`) was missing `INTERNAL_API_KEY="dev-internal-api-key"`, causing `AffiliateApiKeyGuard` to reject requests with 401 Unauthorized. The internal secret was added, allowing 247GBS backend calls to authenticate successfully.
-3. **CHS Businesses 503 Service Unavailable (`GET /business-acquisition/acquired`):**
-   - **Resolved**: In `BusinessAcquisitionService.getCentralBusinesses`, CHS requests that return 404/not found for affiliates with no attributed businesses are now caught and return `{ total: 0, businesses: [] }` instead of throwing an unhandled `503 ServiceUnavailableException`.
-4. **Dashboard Empty States Standardization:**
-   - **Resolved**: Standardized centered empty states with icons and descriptive helper text across **Assigned Tasks** (`AgentTasksPage`), **Consultancy Sessions** (`SessionsPage`), **Business Acquisition** (`BusinessAcquisitionWorkspace`), and **Consultant Overview** (`consultant/page.tsx`).
-5. **Brand Name Standardization:**
-   - **Resolved**: Replaced all remaining standalone "247gbs" mentions with the official brand name **"247GBS Affiliate"**.
+**Target Developer:** Azeem & Backend Engineering Team  
+**Repositories:** `247gbsaffiliates` (`apps/api`) & `McomSolutions` (`apps/backend`)  
+**Date:** 12 November 2026  
+**Status:** Active Implementation Handoff  
+**PR Reference:** [PR #37](https://github.com/Synergyfy/247gbsaffiliates/pull/37) on branch `fix/postcode-directory-search-and-managed-projects-dropdown`
 
 ---
 
-## Current Repository State
+## Executive Summary
 
-- **Repository**: `/home/davestack/Documents/247gbsaffiliates`
-- **Active Branch**: `feat/agent-dashboard-mobile` (fast-forwarded to match `origin/dev` at commit `cafdb6c` — *Merge PR #23 `feat/central-mcom-wallet-and-earnings`*).
-- **Database Migrations**: SQL migrations exist under `apps/api/migrations/` (up through `202611050002_add_wallet_transaction_task_reference.sql`), while TypeORM runs with `synchronize: false`. Verify migration state in staging/production before deployment.
+This handoff consolidates the exact backend requirements, contracts, and bug fixes required by the `apps/web` frontend across all user roles (**Agent**, **Consultant**, **Account Manager**, **Admin**, and **Business**).
 
----
-
-## Priority 1 — Critical Security & Authorization Fixes (`apps/api`)
-
-### 1.1 Unauthenticated Wallet Deposit Endpoint (`POST /wallet/deposit`)
-- **File**: `apps/api/src/wallet/wallet.controller.ts` (lines 42–48)
-- **Issue**: `POST /wallet/deposit` is exposed to any authenticated user (`@UseGuards(JwtAuthGuard)`) with no `@Roles(UserRole.ADMIN)` guard or environment restriction, allowing any logged-in user to mint arbitrary balance into their local wallet.
-- **Required Fix**: Restrict `POST /wallet/deposit` to `@Roles(UserRole.ADMIN)` (or disable when `NODE_ENV === 'production'`).
-
-### 1.2 Unauthenticated Task Evidence File Downloads (`GET /tasks/attachments/:fileName`)
-- **File**: `apps/api/src/tasks/tasks.controller.ts` (lines 176–191)
-- **Issue**: Decorated with `@Public()`, allowing anyone on the internet who guesses or obtains a filename to download task evidence attachments without authentication or task ownership checks.
-- **Required Fix**: Remove `@Public()` or validate a signed token / authenticated user's access to the associated task.
-
-### 1.3 Account Manager Revenue Dashboard Globally Scoped (`GET /account-manager/dashboard/revenue`)
-- **File**: `apps/api/src/account-manager/account-manager.service.ts` (lines 173–220)
-- **Issue**: `getRevenueDashboard(accountManagerId)` accepts `accountManagerId` but never filters by it — it queries all `UserRole.AGENT` records globally (`this.usersRepo.find({ where: { role: UserRole.AGENT } })`) and sums `task.budget` across all currencies without grouping by currency.
-- **Required Fix**:
-  1. Scope the query to agents/tasks coordinated by `accountManagerId` (or their assigned Central Hub businesses).
-  2. Group or separate revenue totals by currency (`GBP`, `USD`, etc.) rather than summing mixed currencies.
-
-### 1.4 Hardcoded Secrets Fallback
-- **Files**:
-  - `apps/api/src/auth/strategies/jwt.strategy.ts` (`'super-secret-jwt-key-change-in-production'`)
-  - `apps/api/src/auth/guards/api-key.guard.ts` (`'mcom-internal-secret-key-247gbs'`)
-- **Required Fix**: Fail fast on startup when `JWT_SECRET` or `INTERNAL_API_KEY` is missing in non-test environments.
+All frontend workflows, role-specific navigations, and verification states have been aligned and verified via Next.js production builds. The frontend does **not** require architectural workarounds; this document outlines the definitive backend tasks needed to complete the ecosystem loop cleanly.
 
 ---
 
-## Priority 2 — Account Manager Project & Task Delegation Gaps
-
-The frontend Account Manager workspace (`apps/web/components/dashboard/AccountManagerReviewQueue.tsx` and `apps/web/hooks/useTasks.ts`) now implements:
-- Service request clarification, quoting, and conversion to projects (`POST /account-manager/managed-requests/:id/convert`)
-- Managed projects listing & filtering (`GET /account-manager/managed-projects`)
-- Project closure with outcome summary & follow-up notes (`POST /account-manager/managed-projects/:id/close`)
-- Managed task detail inspection with audit trail (`GET /account-manager/managed-tasks/:id`)
-- Task delegation to verified affiliates (`POST /account-manager/managed-tasks/:id/assign`)
-
-### Backend items needed to complete the Account Manager loop:
-
-### 2.1 Missing Endpoint to Create Tasks Inside a Managed Project
-- **Files**: `apps/api/src/account-manager/account-manager.controller.ts` & `account-manager.service.ts`
-- **Issue**: After an Account Manager converts a service request into a project (`POST /account-manager/managed-requests/:id/convert`), the UI instructs them: *"Project created. Add tasks and assign an agent or consultant."* However, `AccountManagerController` has **no endpoint** to create a task under a managed project (`POST /account-manager/managed-projects/:id/tasks`).
-- **Required Fix**: Add `POST /account-manager/managed-projects/:id/tasks` on `AccountManagerController` proxying to Central Hub (`POST /affiliate/account-managers/:mcomUserId/projects/:projectId/tasks`) and syncing the created task back to 247GBS.
-
-### 2.2 Include `mcomUserId` in `GET /users/directory` for Task Delegation
-- **File**: `apps/api/src/users/users.service.ts` (`findPublicDirectory`, lines 214–243)
-- **Issue**: `POST /account-manager/managed-tasks/:id/assign` expects `{ assigneeUserId }`. Central Hub expects the affiliate's Central Hub user ID (`mcomUserId`), whereas `GET /users/directory` only returns the local 247GBS `user.id`. Currently, the frontend has to cross-reference `GET /messaging/directory` (`localUserId` -> `id`) to resolve `centralUserId`.
-- **Required Fix**: Include `mcomUserId: user.mcomUserId ?? null` in the `findPublicDirectory` response items (or resolve local `user.id` -> `user.mcomUserId` automatically inside `AccountManagerService.assignManagedTask` before forwarding to Central Hub).
-
-### 2.3 Account Manager Agents Screen (`GET /account-manager/agents`)
-- **Files**:
-  - `apps/web/app/dashboard/account-manager/agents/page.tsx`
-  - `apps/api/src/users/users.controller.ts` (`GET /users/agents`)
-- **Issue**: The Account Manager Agents screen previously called `useAdminUsers` (`GET /admin/users`), which returns `403 Forbidden` for `ACCOUNT_MANAGER`. Meanwhile, `GET /users/agents` returns all agents globally with minimal fields.
-- **Required Fix**: Expose `GET /account-manager/agents` (or enrich `GET /users/agents`) returning manager-scoped agents with full verification, onboarding, assessment pass status, skills, and active/completed task counts.
-
-### 2.4 Distinguish Central Hub Outages / Unlinked Accounts from Empty Lists
-- **File**: `apps/api/src/account-manager/account-manager.service.ts` (lines 68–93)
-- **Issue**: When `manager.mcomUserId` is null or Central Hub is unreachable, `centralGet` returns HTTP `200` with `{ success: false, data: [], total: 0, message: '...' }`.
-- **Required Fix**: Return appropriate HTTP status codes (`409 Conflict` when `mcomUserId` is not linked; `503 Service Unavailable` when Central Hub is unreachable) or ensure the frontend error boundary receives a non-2xx response so outages do not masquerade as "0 projects / 0 tasks".
+## Table of Contents
+1. [Core Architectural Principles & Clarifications](#1-core-architectural-principles--clarifications)
+2. [Priority 1: Urgent Backend Fixes (Immediate Unblockers)](#2-priority-1-urgent-backend-fixes-immediate-unblockers)
+   - 2.1 Open / Unassigned Task Detail 404 Bug (`GET /tasks/:id`)
+   - 2.2 Role-Based Onboarding Qualification (`skills` bypass for Non-Agents)
+   - 2.3 Consultancy Appointments / Sessions Architecture (`apps/api/src/appointments/`)
+3. [Priority 2: CHS Integration, Wallets & Communication](#3-priority-2-chs-integration-wallets--communication)
+   - 3.1 MCOM Wallet & Payout Architecture (No Duplicate 247GBS Withdrawal Engine)
+   - 3.2 Notification Architecture (Communication via Messaging & CHS)
+   - 3.3 Managed Projects Status Query Validation on CHS
+4. [Priority 3: Verification Lifecycle & Access Enforcement](#4-priority-3-verification-lifecycle--access-enforcement)
+   - 4.1 Affiliate Verification Review State (`PENDING` vs `VERIFIED`)
+   - 4.2 Task Access Enforcement vs Graceful Empty Returns
+5. [Priority 4: Currency, Pricing & Geolocation Standards](#5-priority-4-currency-pricing--geolocation-standards)
+   - 5.1 Currency Fixed to EUR (€) & Hourly Rate Deprecation
+   - 5.2 Postcode Geocoding vs Timezone
+6. [Priority 5: Critical Security Fixes (From Technical Audit)](#6-priority-5-critical-security-fixes-from-technical-audit)
+   - 6.1 Unauthenticated Wallet Deposit Endpoint
+   - 6.2 Unauthenticated Task Evidence File Downloads
+   - 6.3 Account Manager Revenue Dashboard Scoping
+7. [Comprehensive Task Matrix for Backend](#7-comprehensive-task-matrix-for-backend)
 
 ---
 
-## Priority 3 — Public Directory & `/find-agent` (Find Affiliates) Enhancements
+## 1. Core Architectural Principles & Clarifications
 
-The `/find-agent` page (`apps/web/app/find-agent/page.tsx`) was updated with:
-- Multi-select role dropdown filter (`All Affiliates`, `Agents`, `Managers`, `Consultants`) + `Clear` filter control.
-- Compact partner cards with avatar, role badge, location + distance (`mi`), bio, and **Contact Me** button.
-- Mobile-responsive **Affiliate Profile Modal** displaying **Score (`%`)**, **On-Time (`%`)**, **Tasks Done**, **Guide Rate (`£/hr`)**, **About**, **Credentials** (`Skill Assessment` progress bar, `ID Verified`, `Reply time`), **Skills**, **Languages**, **Timezone**, and a sticky **Delegate Task** CTA.
-
-### Backend items needed for `/find-agent`:
-
-### 3.1 Expose Real Affiliate Performance Metrics in `GET /users/directory`
-- **File**: `apps/api/src/users/users.service.ts` (`findPublicDirectory`, lines 143–258)
-- **Issue**: `findPublicDirectory` currently returns profile fields (`firstName`, `lastName`, `bio`, `skills`, `languages`, `hourlyRate`, `timezone`, `city`, `region`, `distanceMiles`, `isQuizPassed`, `verificationStatus`), but does **not** return:
-  - `assessmentScore` (latest passed `QuizAttempt.score` percentage)
-  - `completedTasksCount` (count of `Task` records with `assignedAgentId = user.id` and `status = 'completed'`)
-  - `onTimeRate` / `averageResponseTime`
-- **Required Fix**: Aggregate and return real `assessmentScore` (from `quiz_attempts`) and `completedTasksCount` (from `tasks`) in `findPublicDirectory` so the Affiliate Profile Modal on `/find-agent` displays live database metrics instead of derived estimates.
-
-### 3.2 Support Multi-Role Filtering on `GET /users/directory`
-- **File**: `apps/api/src/users/users.service.ts` (lines 181–189)
-- **Issue**: `GET /users/directory?role=...` only accepts a single role string (`agent`, `account_manager`, or `consultant`).
-- **Required Fix**: Support comma-separated roles (e.g. `?role=agent,consultant` or `?roles=agent,consultant`) in `findPublicDirectory` alongside the existing client-side multi-role filter.
-
-### 3.3 Reliable Live UK Postcode Lookup (`GET /users/postal-code-lookup`)
-- **File**: `apps/api/src/users/users.service.ts` (lines 300–450)
-- **Issue**: `lookupPostalCode` has a hardcoded fallback for `SW1A 1AA` when Nominatim is unreachable, and `apps/api/src/users/users.service.spec.ts` currently fails 1 test because it expects `SW1A 1AA` to call Nominatim and return `region: 'England'` instead of the hardcoded `'Greater London'`.
-- **Required Fix**:
-  1. Ensure reliable server-side postcode geocoding (`postcodes.io` + Nominatim fallback) in all deployed environments.
-  2. Align `users.service.spec.ts` with `users.service.ts` so unit tests pass cleanly.
+Before implementing the items below, please note the agreed architectural boundaries:
+- **Central Hub Solutions (CHS) is the Master for Payments & Payouts:** 247GBS displays affiliate earnings and bounty balances via server-to-server proxy from CHS. 247GBS must **not** implement a separate bank withdrawal or payout system. Affiliates manage their withdrawals directly in Central Hub.
+- **No Redundant Notification Subsystem in 247GBS:** Real-time messaging (`/dashboard/{role}/messages`) and email/CHS handle communication. A standalone in-app notification engine inside 247GBS is out of scope and deprecated.
+- **Fixed Pricing Only:** All task budgets, project estimates, and wallet balances operate in **EUR (€)**. Hourly rates (`hourlyRate`) are legacy artifacts and should not be used in task assignment logic.
 
 ---
 
-## Priority 4 — Consultant, Qualification & Wallet Contracts
+## 2. Priority 1: Urgent Backend Fixes (Immediate Unblockers)
 
-### 4.1 Appointments & Consultant Sessions Architecture
-- **Files**: `apps/web/app/dashboard/consultant/sessions/page.tsx`, `apps/api/src/appointments/`
-- **Issue**: The Consultant Sessions page previously filtered `/tasks` for `type === 'consultancy'`. Rather than overloading tasks or creating three separate appointment systems, a dedicated `Appointment` module (`apps/api/src/appointments/`) is approved for Stage 1.
-- **Design Decisions**:
-  - Unified appointments table serving all three affiliate roles (**Agent**, **Account Manager**, **Consultant**).
-  - Concurrency-safe slot booking to prevent double-booking.
-  - Linked to `centralBusinessId` and prepares audit columns (`convertedTaskId`, `convertedAt`, `convertedByUserId`) for conversion into delegated tasks in Task 2.
-- **Status**: Stage 1 backend implementation pending approval/execution.
-
-### 4.2 Persisted Qualification State for Account Managers & Consultants
-- **Files**: `apps/api/src/users/entities/user.entity.ts`, `apps/api/src/users/users.service.ts`
-- **Issue**: Onboarding/qualification checks (`checkAndSetOnboarding`) are tailored around Agent quiz + skills. Account Manager and Consultant dashboards need an explicit, persisted qualification/readiness status (`isQualified` or role-specific readiness checklist) on the authenticated profile response (`GET /auth/profile`).
-
-### 4.3 Wallet Withdrawal Route (`POST /wallet/withdraw`)
-- **Files**: `apps/web/hooks/useWallet.ts`, `apps/api/src/wallet/wallet.controller.ts`
-- **Issue**: `useWallet.ts` calls `POST /wallet/withdraw`, which does not exist on `WalletController` (`GET /wallet/mcom`, `GET /wallet`, `POST /wallet/deposit`, `GET /wallet/transactions`).
-- **Required Fix**: Either implement `POST /wallet/withdraw` (or proxy to Central Hub MCOM Wallet withdrawal if payouts are centrally managed) or confirm that withdrawals must be initiated in Central Hub.
+### 2.1 Open / Unassigned Task Detail 404 Bug
+- **Endpoint:** `GET /tasks/:id` (`TasksController.findOneForUser`)
+- **File:** `apps/api/src/tasks/tasks.service.ts` (`findOneForUser`)
+- **Frontend Symptom:** When an affiliate (Agent or Consultant) views the list of assigned/open tasks on their dashboard (`/dashboard/consultant/tasks` or `/dashboard/agent/tasks`), open unassigned tasks are listed. However, clicking **"Open Task"** crashes with:
+  > *"Couldn't load task details. Temporary connection issue."* (HTTP 404 Not Found)
+- **Root Cause in Backend:**  
+  `tasks.service.ts` currently searches with:
+  ```typescript
+  where: { id: taskId, assignedAgentId: userId }
+  ```
+  When an Account Manager or Admin creates an open/unassigned task (`assignedAgentId: null` or status `OPEN`), the task exists in the database, but `findOneForUser` cannot find it because it is not yet assigned to the requesting user's ID.
+- **Required Backend Fix:**  
+  Update `findOneForUser(taskId, userId)`:
+  1. Allow lookup if `task.assignedAgentId === userId`.
+  2. **OR** if the task is in `OPEN` / `UNASSIGNED` status and the requesting affiliate is verified and qualified (allowing them to preview task scope, requirements, and budget).
+  3. Return the full task payload so the affiliate can see details and accept the assignment.
 
 ---
 
-## Summary Checklist for Backend Developer
+### 2.2 Role-Based Onboarding Qualification (`skills` bypass for Non-Agents)
+- **Endpoints:** `PATCH /users/profile`, `GET /auth/profile`, `POST /auth/register`
+- **Files:** `apps/api/src/users/users.service.ts` (`checkAndSetOnboarding`, `updateProfile`)
+- **Frontend Alignment Done in PR #37:**  
+  In `/onboarding`, the **Skill Selection** step is now strictly presented to **Agents** only. **Account Managers** and **Consultants** automatically skip skills and proceed directly from Basic/Profile Info to the **Onboarding Assessment Test**.
+- **Required Backend Fix:**  
+  Ensure backend onboarding completion logic does **not** require skills for non-agents:
+  ```typescript
+  // In UsersService.checkAndSetOnboarding:
+  let isComplete = false;
+  if (user.role === UserRole.AGENT) {
+    // Agents require bio, selected skills, and passed quiz
+    isComplete = Boolean(user.bio?.trim() && user.skills?.length > 0 && user.isQuizPassed);
+  } else {
+    // Consultants and Account Managers require bio and passed quiz (skills not required)
+    isComplete = Boolean(user.bio?.trim() && user.isQuizPassed);
+  }
+  user.isOnboarded = isComplete;
+  await this.usersRepo.save(user);
+  ```
+  Ensure `updateProfile` validation DTO does not throw validation errors if `skills` is empty or omitted when `role !== 'agent'`.
 
-| # | Priority | Area | Action Required |
-|---|---|---|---|
-| 1 | **Critical** | Wallet Security | Guard `POST /wallet/deposit` with `@Roles(UserRole.ADMIN)` or disable in production |
-| 2 | **Critical** | File Security | Remove `@Public()` from `GET /tasks/attachments/:fileName` and enforce auth/ownership |
-| 3 | **High** | Account Manager | Scope `GET /account-manager/dashboard/revenue` to the manager's agents/businesses and group by currency |
-| 4 | **High** | Account Manager | Add `POST /account-manager/managed-projects/:id/tasks` to create tasks inside a managed project |
-| 5 | **High** | Task Delegation | Return `mcomUserId` in `GET /users/directory` (or map local `user.id` -> `mcomUserId` in `assignManagedTask`) |
-| 6 | **High** | Account Manager | Add manager-scoped `GET /account-manager/agents` endpoint with verification/qualification/task stats |
-| 7 | **High** | Error Handling | Return `409` / `503` (instead of `200` empty array) when Central Hub is unlinked or unreachable |
-| 8 | **Medium** | Find Affiliates | Return real `assessmentScore` and `completedTasksCount` in `GET /users/directory` |
-| 9 | **Medium** | Postcode Lookup | Fix `users.service.spec.ts` test mismatch for `SW1A 1AA` and verify live postcode lookup |
-| 10 | **High** | Appointments | Build unified Appointment module for all roles (Agent/Manager/Consultant) with task conversion support |
-| 11 | **Medium** | Wallet | Implement `POST /wallet/withdraw` or align with Central Hub MCOM Wallet payout flow |
-| 12 | **Medium** | Database | Verify and apply pending SQL migrations in `apps/api/migrations/` up to `202611050002` |
+---
+
+### 2.3 Consultancy Appointments / Sessions Architecture
+- **Target Module:** `apps/api/src/appointments/` (New module)
+- **Frontend Context:** `/dashboard/consultant/sessions`
+- **Issue:** The frontend `Sessions` tab was temporarily querying regular tasks filtering for `type === 'consultancy'`. There is currently **zero backend support** for appointments (no table, no controller, no service).
+- **Required Backend Implementation (Unified Appointments Module):**
+  1. **Entity `Appointment`:**
+     - `id`: UUID
+     - `consultantId`: UUID (foreign key to `users.id`)
+     - `clientBusinessId`: UUID (foreign key to `businesses.id` / CHS business)
+     - `title`: string
+     - `notes`: text
+     - `scheduledAt`: timestamp with timezone
+     - `durationMinutes`: integer (default 30 or 60)
+     - `meetingUrl`: string (video call link)
+     - `status`: enum (`SCHEDULED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `RESCHEDULED`)
+     - `convertedTaskId`: UUID (nullable, for converting session action items into delegated tasks)
+  2. **Endpoints:**
+     - `GET /appointments`: list appointments for current user (filtered by `consultantId` or `clientBusinessId`).
+     - `GET /appointments/:id`: single appointment details.
+     - `POST /appointments`: schedule an appointment (enforce slot collision checks).
+     - `PATCH /appointments/:id`: update notes, meeting link, or status.
+     - `POST /appointments/:id/convert-to-task`: converts advisory recommendations into a billable 247GBS task assigned to an Agent or Consultant.
+
+---
+
+## 3. Priority 2: CHS Integration, Wallets & Communication
+
+### 3.1 MCOM Wallet & Payout Architecture
+- **Status:** **Do NOT build a separate withdrawal / payout system in 247GBS.**
+- **Frontend Alignment Done in PR #37:**  
+  `<McomWalletPanel />` now displays real-time balances and pending holds, and provides a direct CTA deep-linking the affiliate to Central Hub:
+  ```
+  ${NEXT_PUBLIC_CENTRAL_HUB_URL}/dashboard/wallet
+  ```
+- **Backend Requirement:**
+  1. 247GBS backend proxies wallet data via `McomService.getWallet(userId)`.
+  2. Ensure webhook handling or background balance refreshes from Central Hub accurately reflect task earnings credited upon task completion.
+  3. Ensure no unauthenticated balance deposit routes remain active in production (see Section 6.1).
+
+---
+
+### 3.2 Notification Architecture
+- **Status:** **Do NOT build an independent notification subsystem in 247GBS.**
+- **Rationale:** 247GBS relies on real-time direct messaging (`/dashboard/{role}/messages`) backed by WebSocket / CHS chat. Both frontend and backend should continue using the messaging inbox for all user-to-user and business communications.
+
+---
+
+### 3.3 Managed Projects Status Query Validation on CHS
+- **Service:** `apps/api/src/account-manager/account-manager.service.ts` & CHS `AffiliateProjectService`
+- **Issue:** When Account Managers query managed projects with status filters (e.g. `GET /account-manager/managed-projects?status=ACTIVE`), Central Hub's `AffiliateTaskQueryDto` rejected project statuses because it strictly validated against `AffiliateTaskStatus` enum.
+- **Interim Fix in PR #37:** 247GBS backend now strips `status` before forwarding the query to CHS, filtering the returned array in memory.
+- **Required CHS Fix:** In CHS `AffiliateProjectController`, validate query status against `AffiliateProjectStatus` (`ACTIVE`, `COMPLETED`, `ON_HOLD`, `ARCHIVED`) rather than task status.
+
+---
+
+## 4. Priority 3: Verification Lifecycle & Access Enforcement
+
+### 4.1 Affiliate Verification Review State (`PENDING` vs `VERIFIED`)
+- **Endpoints:** `GET /admin/verifications`, `POST /admin/verifications/:id/approve`, `POST /admin/verifications/:id/reject`
+- **Frontend Alignment Done in PR #37:**  
+  When an affiliate completes onboarding and submits their ID verification, their status is `PENDING`. Dashboards display:
+  > *"Your profile and quiz have been submitted. An administrator is currently reviewing your ID verification before client assignments unlock."*
+- **Backend Requirement:**
+  1. When an Admin approves a verification (`/admin/verifications/:id/approve`), ensure `user.verificationStatus` updates to `'VERIFIED'`.
+  2. Public directory (`GET /users/directory`) must only return affiliates whose `verificationStatus === 'VERIFIED'`. Unverified affiliates must not appear in directory searches.
+
+---
+
+### 4.2 Task Access Enforcement vs Graceful Empty Returns
+- **Endpoint:** `GET /tasks`
+- **Behavior Requirement:** If an unverified or pending affiliate queries `GET /tasks`, the backend should return `{ items: [], meta: { total: 0 } }` rather than throwing a technical `403 Forbidden` exception, preventing unhandled error banners on client dashboards.
+
+---
+
+## 5. Priority 4: Currency, Pricing & Geolocation Standards
+
+### 5.1 Currency Fixed to EUR (€) & Hourly Rate Deprecation
+- **Rule:** Standardize on fixed project budgets in **EUR (€)**.
+- **Backend Actions:**
+  - In `tasks` and `campaigns` tables, default `currency` column to `'EUR'`.
+  - Remove mandatory validation or calculation dependencies on `hourlyRate`.
+
+---
+
+### 5.2 Postcode Geocoding vs Timezone
+- **Endpoint:** `GET /users/postal-code-lookup`
+- **Rule:** UK Postcode lookup via `postcodes.io` provides coordinates (`latitude`, `longitude`), city, and administrative district.
+- **Clarification:** Do **not** attempt to infer timezone from UK postcodes. The frontend standardizes UK affiliates to `GMT / BST (UK)` (`Europe/London`).
+
+---
+
+## 6. Priority 5: Critical Security Fixes (From Technical Audit)
+
+### 6.1 Unauthenticated Wallet Deposit Endpoint
+- **File:** `apps/api/src/wallet/wallet.controller.ts` (lines 42–48)
+- **Issue:** `POST /wallet/deposit` is exposed to any authenticated user without role checks, allowing users to mint arbitrary balances.
+- **Required Fix:** Restrict to `@Roles(UserRole.ADMIN)` or disable when `NODE_ENV === 'production'`.
+
+---
+
+### 6.2 Unauthenticated Task Evidence File Downloads
+- **File:** `apps/api/src/tasks/tasks.controller.ts` (lines 176–191)
+- **Issue:** `GET /tasks/attachments/:fileName` is decorated with `@Public()`, allowing unauthenticated downloads of task deliverables.
+- **Required Fix:** Remove `@Public()` and verify the requesting user is either the assigned affiliate, the coordinating Account Manager, or an Admin.
+
+---
+
+### 6.3 Account Manager Revenue Dashboard Scoping
+- **File:** `apps/api/src/account-manager/account-manager.service.ts` (`getRevenueDashboard`)
+- **Issue:** `getRevenueDashboard(accountManagerId)` queries all agents globally rather than filtering by agents assigned to the requesting Account Manager's managed projects.
+- **Required Fix:** Filter the revenue metrics by tasks and projects managed by `accountManagerId`.
+
+---
+
+## 7. Comprehensive Task Matrix for Backend
+
+| # | Domain | Endpoint / Component | Issue / Requirement | Severity |
+|---|---|---|---|---|
+| **1** | **Tasks** | `GET /tasks/:id` | Allow qualified affiliates to view open/unassigned task details (currently returns 404). | **Blocker** |
+| **2** | **Onboarding** | `UsersService.checkAndSetOnboarding` | Do not require `skills` for Consultants and Account Managers to reach `isOnboarded: true`. | **High** |
+| **3** | **Appointments** | `apps/api/src/appointments/` | Implement dedicated appointments module with scheduling, slot collision check, and task conversion. | **High** |
+| **4** | **Managed Projects** | CHS `AffiliateProjectController` | Fix status query DTO to accept project statuses (`ACTIVE`, `COMPLETED`, `ON_HOLD`). | **Medium** |
+| **5** | **Security** | `POST /wallet/deposit` | Guard with `@Roles(ADMIN)` or disable in production. | **Critical** |
+| **6** | **Security** | `GET /tasks/attachments/:fileName` | Remove `@Public()` and enforce task authorization checks. | **Critical** |
+| **7** | **Directory** | `GET /users/directory` | Include `mcomUserId` in directory items to streamline task delegation. | **Medium** |
+| **8** | **Currency** | `tasks`, `campaigns` | Standardize default currency to EUR (`€`); remove hourly rate dependencies. | **Medium** |
+| **9** | **Revenue** | `GET /account-manager/dashboard/revenue` | Scope revenue calculations strictly to the Account Manager's assigned projects/agents. | **Medium** |
+| **10** | **Wallet Sync** | `McomService` | Ensure webhook updates from Central Hub wallet reliably reflect bounty payouts. | **Medium** |

@@ -22,9 +22,6 @@ type DashboardProfile = {
     role: string;
     bio?: string | null;
     skills?: string[] | null;
-    sectorId?: string | null;
-    categoryId?: string | null;
-    subCategoryId?: string | null;
     verificationStatus?: string;
     verificationNotes?: string | null;
     verificationSubmission?: Record<string, unknown> | null;
@@ -170,7 +167,7 @@ export default function AgentDashboard() {
                 : 'in_progress';
     const profileStatus: WorkflowStatus = hasProfileSubmission
         ? 'completed'
-        : profile?.bio || profile?.skills?.length || profile?.sectorId || profile?.categoryId
+        : profile?.bio || profile?.skills?.length
             ? 'in_progress'
             : 'not_started';
     const verificationStageStatus: WorkflowStatus = verificationStatus === 'verified'

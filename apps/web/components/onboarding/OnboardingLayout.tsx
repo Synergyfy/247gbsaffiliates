@@ -12,7 +12,7 @@ interface OnboardingLayoutProps {
     hideSkipToDashboard?: boolean;
 }
 
-const steps = [
+const ALL_STEPS = [
     { id: 'basic-info', label: 'Basic Info' },
     { id: 'profile-info', label: 'Professional Profile' },
     { id: 'questionnaire', label: 'Expertise' },
@@ -28,6 +28,9 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children, hi
     // Prefer the authenticated user's role: the persisted onboarding store can
     // still hold the previous account's role until it re-syncs.
     const role = user?.role || onboardingRole;
+    const normalizedRole = (role || '').toLowerCase().replace(/_/g, '-');
+    const isAgent = normalizedRole === 'agent' || !normalizedRole;
+    const steps = isAgent ? ALL_STEPS : ALL_STEPS.filter((s) => s.id !== 'questionnaire');
     const currentStepIndex = steps.findIndex(s => s.id === currentStep);
 
     const handleSkipToDashboard = () => {

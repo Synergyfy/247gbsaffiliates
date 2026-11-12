@@ -2368,7 +2368,7 @@ export default function AccountManagerReviewQueue() {
     isError: isErrorProjects,
     error: projectsError,
     refetch: refetchProjects,
-  } = useManagedProjects({ status: projectStatus || undefined, limit: 50 });
+  } = useManagedProjects({ limit: 50 });
   const {
     data: requests,
     isLoading: isLoadingRequests,
@@ -2435,7 +2435,10 @@ export default function AccountManagerReviewQueue() {
   }, [requests, requestFilter, requestSort]);
 
   const sortedProjects = useMemo(() => {
-    const list = [...(projects ?? [])];
+    let list = [...(projects ?? [])];
+    if (projectStatus) {
+      list = list.filter((p) => String(p.status).toUpperCase() === projectStatus.toUpperCase());
+    }
     list.sort((a, b) => {
       if (projectSort === 'due_soon') {
         const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY;
@@ -2447,7 +2450,7 @@ export default function AccountManagerReviewQueue() {
       return projectSort === 'oldest' ? aTime - bTime : bTime - aTime;
     });
     return list;
-  }, [projects, projectSort]);
+  }, [projects, projectStatus, projectSort]);
 
   const sortedTasks = useMemo(() => {
     const list = [...(tasks ?? [])];
@@ -2769,8 +2772,10 @@ export default function AccountManagerReviewQueue() {
               >
                 <option value="">All project statuses</option>
                 <option value="ACTIVE">Active</option>
-                <option value="PLANNING">Planning</option>
-                <option value="COMPLETED">Completed / closed</option>
+                <option value="AWAITING_BUSINESS_APPROVAL">Awaiting approval</option>
+                <option value="ON_HOLD">On hold</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
               </select>
               <select
                 value={projectSort}

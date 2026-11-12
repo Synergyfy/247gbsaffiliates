@@ -30,17 +30,11 @@ type Profile = {
     verificationSubmission?: ProfileSubmission | null;
     bio?: string | null;
     skills?: string[] | null;
-    sectorId?: string | null;
-    categoryId?: string | null;
-    subCategoryId?: string | null;
     hourlyRate?: string | number | null;
     currency?: string | null;
     referralCode?: string | null;
     referralLink?: string | null;
 };
-
-type Sector = { id: string; name: string; categories?: Category[] };
-type Category = { id: string; name: string; children?: Category[] };
 
 function unwrap<T,>(value: unknown): T {
     if (value && typeof value === 'object' && 'data' in value) {
@@ -49,10 +43,6 @@ function unwrap<T,>(value: unknown): T {
         return outer as T;
     }
     return value as T;
-}
-
-function flattenCategories(categories: Category[] = []): Category[] {
-    return categories.flatMap((category) => [category, ...flattenCategories(category.children || [])]);
 }
 
 function displayValue(value: unknown): string | null {
@@ -105,14 +95,6 @@ export default function AgentProfilePage() {
             queryFn: async () => unwrap<Profile>((await apiClient.get('/auth/profile')).data),
         }),
     );
-    const sectorsQuery = useQuery({
-        queryKey: ['profile-sectors'],
-        queryFn: async () => unwrap<Sector[]>((await apiClient.get('/sectors')).data),
-    });
-    const categoriesQuery = useQuery({
-        queryKey: ['profile-categories'],
-        queryFn: async () => unwrap<Category[]>((await apiClient.get('/categories')).data),
-    });
 
     const profile = (profileQuery.data || user) as Profile | null;
     if (profileQuery.isLoading && !profileQuery.isError && !user) {
@@ -143,12 +125,6 @@ export default function AgentProfilePage() {
     const hasVerificationSubmission = Boolean(profile.verificationSubmission);
     const verificationLabel = getVerificationLabel(profile.verificationStatus, hasVerificationSubmission);
     const avatar = profile.profileImage || profile.avatar || profile.image;
-
-    const sectorMap = new Map((sectorsQuery.data || []).map((sector) => [sector.id, sector.name]));
-    const categoryMap = new Map(flattenCategories(categoriesQuery.data || []).map((category) => [category.id, category.name]));
-    const sectorValue = profile.sectorId ? sectorMap.get(profile.sectorId) || 'Saved selection' : null;
-    const categoryValue = profile.categoryId ? categoryMap.get(profile.categoryId) || 'Saved selection' : null;
-    const subCategoryValue = profile.subCategoryId ? categoryMap.get(profile.subCategoryId) || 'Saved selection' : null;
     const rateValue = hourlyRate ? [currency, hourlyRate].filter(Boolean).join(' ') : null;
 
     const completionItems = [
@@ -156,9 +132,6 @@ export default function AgentProfilePage() {
         { label: 'Account email', complete: Boolean(displayValue(profile.email)) },
         { label: 'Professional bio', complete: Boolean(bio) },
         { label: 'Skills', complete: skills.length > 0 },
-        { label: 'Sector', complete: Boolean(profile.sectorId) },
-        { label: 'Category', complete: Boolean(profile.categoryId) },
-        { label: 'Sub-category', complete: Boolean(profile.subCategoryId) },
         { label: 'Target hourly rate', complete: Boolean(hourlyRate) },
     ];
     const completedCount = completionItems.filter((item) => item.complete).length;
@@ -248,9 +221,6 @@ export default function AgentProfilePage() {
                         </div>}
                         <dl className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
                             {skills.length === 0 && <ProfileField label="Skills" value={null} hint="Choose your skills during profile setup." />}
-                            <ProfileField label="Sector" value={sectorValue} />
-                            <ProfileField label="Category" value={categoryValue} />
-                            <ProfileField label="Sub-category" value={subCategoryValue} />
                             <ProfileField label="Target hourly rate" value={rateValue} />
                         </dl>
                     </section>
