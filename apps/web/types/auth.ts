@@ -13,6 +13,8 @@ export interface User {
   verificationNotes?: string | null;
   verificationSubmission?: Record<string, unknown> | null;
   verificationReviewedAt?: string | null;
+  verificationDocumentName?: string | null;
+  verificationDocumentMimeType?: string | null;
   avatar?: string;
   image?: string;
   score?: number;
