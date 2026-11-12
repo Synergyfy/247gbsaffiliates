@@ -7,7 +7,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useAuthStore } from '@/store/useAuthStore';
-import { getAffiliateRegisterUrl } from '@/lib/centralHub';
+import { getAffiliateRegisterUrl, getCentralHubUrl, getBusinessSignupUrl } from '@/lib/centralHub';
 
 interface AgentRecord {
   id: string;
@@ -40,6 +40,7 @@ interface AgentRecord {
   isExactMatch?: boolean;
   isOutcodeMatch?: boolean;
   mcomUserId?: string | null;
+  centralUserId?: string | null;
   assessmentScore?: number | null;
   completedTasksCount?: number;
   activeTasksCount?: number;
@@ -66,8 +67,9 @@ const ROLE_FILTER_OPTIONS: Array<{ id: AffiliateRoleOption; label: string }> = [
   { id: 'consultant', label: 'Consultants' },
 ];
 
-const DEFAULT_RADIUS_MILES = 50;
-const RADIUS_OPTIONS = [10, 25, 50, 100, 250, 500];
+const DEFAULT_RADIUS_KM = 5;
+const MIN_RADIUS_KM = 0;
+const MAX_RADIUS_KM = 50;
 
 const DEMO_POSTCODE = 'SW1A 1AA';
 const DEMO_AFFILIATES: AgentRecord[] = [
@@ -120,11 +122,15 @@ const getAgentAvatarUrl = (agent: AgentRecord): string => {
   return `https://i.pravatar.cc/150?u=${encodeURIComponent(seed)}`;
 };
 
-const formatDistance = (miles?: number | null, label?: string | null): string | null => {
-  if (miles != null) {
-    return `${miles} ${miles === 1 ? 'mile' : 'miles'} away`;
+const formatDistance = (km?: number | null, miles?: number | null, label?: string | null): string | null => {
+  if (km != null) {
+    return `${km} km away`;
   }
-  return label ? label.replace(/\bmi\b/gi, 'miles') : null;
+  if (miles != null) {
+    const calcKm = Math.round(miles * 1.60934 * 10) / 10;
+    return `${calcKm} km away`;
+  }
+  return label ? label.replace(/\bmi\b/gi, 'km').replace(/miles?/gi, 'km') : null;
 };
 
 const isPostalLookupUnavailable = (error: unknown) => {
@@ -150,11 +156,8 @@ export default function FindAgentPage() {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const roleDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Distance filtering — measured from each affiliate's postcode against the
-  // searched postcode. 50 miles by default, matching the API default.
-  const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
-  const [radiusDropdownOpen, setRadiusDropdownOpen] = useState(false);
-  const radiusDropdownRef = useRef<HTMLDivElement>(null);
+  // Distance filtering — draggable slider from 0 km to 50 km (default: 5 km)
+  const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM);
 
   const isAllRolesSelected =
     selectedRoles.length === 0 || selectedRoles.length === ROLE_FILTER_OPTIONS.length;
@@ -182,16 +185,6 @@ export default function FindAgentPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (!radiusDropdownOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (radiusDropdownRef.current && !radiusDropdownRef.current.contains(event.target as Node)) {
-        setRadiusDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [radiusDropdownOpen]);
 
   const roleFilterSummary = useMemo(() => {
     if (isAllRolesSelected) return 'All Roles';
@@ -287,7 +280,7 @@ export default function FindAgentPage() {
     error: directoryError,
     refetch: refetchDirectory,
   } = useQuery<{ items: AgentRecord[]; distanceFrom?: string | null; source: 'live' | 'demo' }>({
-    queryKey: ['public-directory', submittedPostcode, radiusMiles],
+    queryKey: ['public-directory', submittedPostcode, radiusKm],
     enabled: Boolean(submittedPostcode),
     placeholderData: keepPreviousData,
     queryFn: async () => {
@@ -295,11 +288,13 @@ export default function FindAgentPage() {
       const isDemoPostcode = normalizedPostcode.replace(/\s/g, '') === DEMO_POSTCODE.replace(/\s/g, '');
 
       try {
+        // Convert radiusKm to miles for the backend API (1 km = 0.621371 miles)
+        const queryRadiusMiles = Math.max(0.1, radiusKm * 0.621371);
         const response = await apiClient.get('/users/directory', {
           params: {
             postcode: submittedPostcode,
             limit: 100,
-            radius: radiusMiles,
+            radius: queryRadiusMiles,
           },
         });
 
@@ -324,25 +319,15 @@ export default function FindAgentPage() {
 
         return { items: [], total: 0, distanceFrom: submittedPostcode, source: 'live' as const };
       } catch (error) {
-        // Lookup outage: show the unfiltered directory rather than nothing, or
-        // demo profiles for the demo postcode.
+        // For demo postcode during lookup outages, return the demo profiles
         if (isDemoPostcode && isPostalLookupUnavailable(error)) {
           return { items: DEMO_AFFILIATES, total: DEMO_AFFILIATES.length, distanceFrom: DEMO_POSTCODE, source: 'demo' as const };
         }
 
-        try {
-          const fallback = await apiClient.get('/users/directory', { params: { limit: 100 } });
-          const items: AgentRecord[] = fallback.data?.items ?? [];
-          if (items.length > 0) {
-            return {
-              items,
-              total: items.length,
-              distanceFrom: submittedPostcode,
-              source: 'live' as const,
-            };
-          }
-        } catch {
-          // Fall through to the original error below.
+        // If the postcode was unknown or invalid (400 / 404), return empty results so the user gets clean feedback
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 400 || status === 404) {
+          return { items: [], total: 0, distanceFrom: submittedPostcode, source: 'live' as const };
         }
 
         throw error;
@@ -352,13 +337,24 @@ export default function FindAgentPage() {
 
   const displayedAgents = useMemo(() => {
     const rawItems = directoryResult?.items ?? [];
-    if (isAllRolesSelected) return rawItems;
-    const allowed = new Set<string>(selectedRoles);
-    return rawItems.filter((affiliate) => {
-      const normalizedRole = (affiliate.role || 'agent').toLowerCase().replace('-', '_');
-      return allowed.has(normalizedRole);
+    const roleFiltered = isAllRolesSelected
+      ? rawItems
+      : rawItems.filter((affiliate) => {
+          const normalizedRole = (affiliate.role || 'agent').toLowerCase().replace('-', '_');
+          return selectedRoles.includes(normalizedRole as AffiliateRoleOption);
+        });
+
+    return roleFiltered.filter((affiliate) => {
+      if (affiliate.distanceKm != null) {
+        return affiliate.distanceKm <= radiusKm;
+      }
+      if (affiliate.distanceMiles != null) {
+        const km = Math.round(affiliate.distanceMiles * 1.60934 * 10) / 10;
+        return km <= radiusKm;
+      }
+      return true;
     });
-  }, [directoryResult?.items, isAllRolesSelected, selectedRoles]);
+  }, [directoryResult?.items, isAllRolesSelected, selectedRoles, radiusKm]);
   const directoryErrorMessage = (() => {
     const message = (directoryError as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
     if (Array.isArray(message)) return message.join(', ');
@@ -433,6 +429,23 @@ export default function FindAgentPage() {
       return `/dashboard/admin/tasks?affiliateId=${encodeURIComponent(agent.id)}`;
     }
     return `/login?redirect=${encodeURIComponent('/find-agent')}`;
+  };
+
+  const getChatHref = (agent: AgentRecord): string | null => {
+    // CHS owns business accounts and their inbox. Directory `id` is the local
+    // 247GBS affiliate ID; direct chat must target the affiliate's CHS identity.
+    // Clicking "Chat with..." leads the user to the Business signup / onboarding page
+    // (with sign-in option for existing businesses), which then routes directly to
+    // the direct chat conversation once authenticated.
+    const recipientId = agent.mcomUserId || agent.centralUserId;
+    if (!recipientId || agent.isDemoProfile) return null;
+    const chatDestination = `/dashboard/messages?recipientId=${encodeURIComponent(recipientId)}`;
+    return getBusinessSignupUrl(chatDestination);
+  };
+
+  const handleStartChat = (agent: AgentRecord) => {
+    const href = getChatHref(agent);
+    if (href) window.location.assign(href);
   };
 
   const getAgentDisplayName = (agent: AgentRecord) => {
@@ -687,7 +700,7 @@ export default function FindAgentPage() {
                   ? 'Demo profiles shown because the live postcode lookup is unavailable.'
                   : displayedAgents.some((a) => a.isExactMatch || a.isOutcodeMatch)
                     ? `Verified members matching postcode “${submittedPostcode}”.`
-                    : `Verified members within ${radiusMiles} miles, nearest first.`}
+                    : `Verified members within ${radiusKm} km, nearest first.`}
               </p>
             </div>
 
@@ -812,70 +825,31 @@ export default function FindAgentPage() {
                 )}
               </div>
 
-              {/* Radius filter dropdown */}
-              <div ref={radiusDropdownRef} className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setRadiusDropdownOpen((prev) => !prev)}
-                  aria-expanded={radiusDropdownOpen}
-                  aria-haspopup="listbox"
-                  aria-label={`Search radius: ${radiusMiles} miles`}
-                  className="inline-flex items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 sm:px-3"
+              {/* Draggable radius slider (0 km to 50 km, default 5 km) */}
+              <div className="flex shrink-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 shadow-xs">
+                <span
+                  className="material-symbols-outlined shrink-0 leading-none text-blue-600"
+                  style={{ fontSize: '14px' }}
                 >
-                  <span
-                    className="material-symbols-outlined shrink-0 leading-none text-blue-600"
-                    style={{ fontSize: '14px' }}
-                  >
-                    distance
-                  </span>
+                  distance
+                </span>
+                <span className="flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-slate-700">
                   <span className="hidden font-medium text-slate-500 sm:inline">Within</span>
-                  <span className="whitespace-nowrap font-bold text-slate-900">{radiusMiles} miles</span>
-                  <span
-                    className="material-symbols-outlined shrink-0 leading-none text-slate-400"
-                    style={{ fontSize: '15px' }}
-                  >
-                    {radiusDropdownOpen ? 'expand_less' : 'expand_more'}
-                  </span>
-                </button>
-
-                {radiusDropdownOpen && (
-                  <div
-                    role="listbox"
-                    aria-label="Search radius"
-                    className="absolute right-0 top-full z-30 mt-1 w-40 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg"
-                  >
-                    {RADIUS_OPTIONS.map((option) => {
-                      const isActive = radiusMiles === option;
-                      return (
-                        <button
-                          key={option}
-                          type="button"
-                          role="option"
-                          aria-selected={isActive}
-                          onClick={() => {
-                            setRadiusMiles(option);
-                            setRadiusDropdownOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs font-semibold transition-colors ${
-                            isActive
-                              ? 'bg-blue-50 text-blue-700'
-                              : 'text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span>{option} miles</span>
-                          {isActive && (
-                            <span
-                              className="material-symbols-outlined shrink-0 leading-none"
-                              style={{ fontSize: '15px' }}
-                            >
-                              check
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                  <span className="min-w-[42px] font-bold tabular-nums text-slate-900">{radiusKm} km</span>
+                </span>
+                <input
+                  type="range"
+                  min={MIN_RADIUS_KM}
+                  max={MAX_RADIUS_KM}
+                  step="1"
+                  value={radiusKm}
+                  onChange={(e) => setRadiusKm(Number(e.target.value))}
+                  aria-label={`Search radius: ${radiusKm} kilometers`}
+                  style={{
+                    background: `linear-gradient(to right, #2563eb ${((radiusKm - MIN_RADIUS_KM) / (MAX_RADIUS_KM - MIN_RADIUS_KM)) * 100}%, #e2e8f0 ${((radiusKm - MIN_RADIUS_KM) / (MAX_RADIUS_KM - MIN_RADIUS_KM)) * 100}%)`,
+                  }}
+                  className="h-1.5 w-20 sm:w-28 cursor-pointer appearance-none rounded-lg accent-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 [&::-webkit-slider-thumb]:size-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-xs hover:[&::-webkit-slider-thumb]:bg-blue-700 [&::-moz-range-thumb]:size-3.5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-blue-600 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:shadow-xs hover:[&::-moz-range-thumb]:bg-blue-700"
+                />
               </div>
 
               {selectedRoles.length > 0 && (
@@ -924,7 +898,7 @@ export default function FindAgentPage() {
               </div>
               <h3 className="text-base font-bold font-display text-slate-900 mb-1">No Verified Affiliates Nearby</h3>
               <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                No verified affiliates of this type were found within {radiusMiles} miles of <strong className="text-slate-800">{submittedPostcode}</strong>. Try a different role, a larger radius, or a nearby postcode.
+                No verified affiliates of this type were found within {radiusKm} km of <strong className="text-slate-800">{submittedPostcode}</strong>. Try a different role, a larger radius, or a nearby postcode.
               </p>
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
                 <button
@@ -934,16 +908,13 @@ export default function FindAgentPage() {
                 >
                   Clear Role Filter
                 </button>
-                {radiusMiles < RADIUS_OPTIONS[RADIUS_OPTIONS.length - 1] && (
+                {radiusKm < MAX_RADIUS_KM && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const nextRadius = RADIUS_OPTIONS.find((option) => option > radiusMiles);
-                      if (nextRadius) setRadiusMiles(nextRadius);
-                    }}
+                    onClick={() => setRadiusKm((prev) => Math.min(MAX_RADIUS_KM, prev + 10))}
                     className="px-4 py-1.5 rounded-md bg-blue-50 hover:bg-blue-100 text-xs font-semibold font-display text-blue-700 transition-all"
                   >
-                    Widen Radius to {RADIUS_OPTIONS.find((option) => option > radiusMiles)} Miles
+                    Widen Radius to {Math.min(MAX_RADIUS_KM, radiusKm + 10)} km
                   </button>
                 )}
                 <button
@@ -966,7 +937,7 @@ export default function FindAgentPage() {
                   agent.city && agent.region && !agent.region.toLowerCase().includes(agent.city.toLowerCase())
                     ? `${agent.region}, ${agent.city}`
                     : agent.region || agent.city || agent.country || 'United Kingdom';
-                const distanceShort = formatDistance(agent.distanceMiles, agent.distanceLabel);
+                const distanceShort = formatDistance(agent.distanceKm, agent.distanceMiles, agent.distanceLabel);
 
                 return (
                   <article
@@ -1025,13 +996,14 @@ export default function FindAgentPage() {
                       </p>
                     </div>
 
-                    {/* Full-width Contact Me button */}
+                    {/* Open the affiliate preview first; the preview owns the chat CTA. */}
                     <button
                       type="button"
                       onClick={() => handleOpenRequestModal(agent)}
-                      className="flex w-full items-center justify-center rounded-md border border-blue-700/20 bg-blue-600 px-3 py-2 font-display text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700 active:scale-[0.99]"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-700/20 bg-blue-600 px-3 py-2 font-display text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700 active:scale-[0.99]"
                     >
-                      Contact Me
+                      <span className="material-symbols-outlined text-[15px]">chat</span>
+                      <span>Chat with {agent.firstName || agent.name?.split(' ')[0] || 'Affiliate'}</span>
                     </button>
                   </article>
                 );
@@ -1206,7 +1178,7 @@ export default function FindAgentPage() {
           [selectedAgent.city, selectedAgent.region].filter(Boolean).join(', ') ||
           selectedAgent.country ||
           'United Kingdom';
-        const distanceShort = formatDistance(selectedAgent.distanceMiles, selectedAgent.distanceLabel);
+        const distanceShort = formatDistance(selectedAgent.distanceKm, selectedAgent.distanceMiles, selectedAgent.distanceLabel);
 
         return (
           <div
@@ -1418,15 +1390,18 @@ export default function FindAgentPage() {
               {/* Sticky Bottom CTA Bar */}
               <div className="border-t border-slate-200 bg-white px-3.5 py-2.5 sm:px-5 sm:py-3">
                 <div className="flex items-center gap-2">
-                  <Link
-                    href={getDelegateTaskHref(selectedAgent)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 font-display text-xs font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-blue-700 active:scale-[0.99] sm:py-2.5"
+                  <button
+                    type="button"
+                    onClick={() => handleStartChat(selectedAgent)}
+                    disabled={!getChatHref(selectedAgent)}
+                    title={!getChatHref(selectedAgent) ? 'Chat is unavailable for showcase profiles.' : undefined}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 font-display text-xs font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-blue-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400 disabled:hover:bg-slate-400 sm:py-2.5"
                   >
                     <span className="material-symbols-outlined leading-none" style={{ fontSize: '15px' }}>
-                      assignment_ind
+                      chat
                     </span>
-                    <span>Delegate Task</span>
-                  </Link>
+                    <span className="truncate">{getChatHref(selectedAgent) ? `Chat with ${getAgentDisplayName(selectedAgent)}` : 'Chat unavailable for demo'}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setShowRequestModal(false)}

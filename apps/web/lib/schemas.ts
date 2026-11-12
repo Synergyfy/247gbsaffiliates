@@ -2,9 +2,9 @@ import { z } from 'zod';
 
 export const profileSchema = z.object({
     role: z.string(),
-    hourlyRate: z.string().min(1, "Hourly/Rate is required"),
+    hourlyRate: z.string().optional(),
     bio: z.string().min(20, "Bio must be at least 20 characters").max(120, "Bio must be under 120 characters"),
-    phone: z.string().trim().min(1, "Phone number is required"),
+    phone: z.string().trim().optional(),
     // Postcode and location are synced from Central Hub at login; the hidden
     // fields carry the synced values into the verification submission.
     postalCode: z.string().trim().optional(),

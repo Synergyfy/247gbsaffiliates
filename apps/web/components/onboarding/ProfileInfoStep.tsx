@@ -2,10 +2,9 @@
 
 import React, { useState } from 'react';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { profileSchema, ProfileFormValues } from '@/lib/schemas';
-import { FormInput } from '@/components/ui/FormComponents';
 import { toast } from 'react-toastify';
 import apiClient from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -15,21 +14,27 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
     const { updateUser, user } = useAuthStore();
     const [identityDocument, setIdentityDocument] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const hasExistingSubmission = Boolean(
-        user?.verificationSubmission && Object.keys(user.verificationSubmission).length > 0,
+    const existingBio = String(
+        profileInfo.bio ||
+        (user?.verificationSubmission && typeof user.verificationSubmission === 'object' && (user.verificationSubmission as Record<string, unknown>).bio) ||
+        user?.bio ||
+        '',
     );
+    const hasDocumentOnFile = Boolean(user?.verificationDocumentName);
+    const isVerified = user?.verificationStatus === 'verified';
+    // Only lock to "already submitted" view if the user is already verified and not actively editing
+    const showAlreadySubmittedCard = isVerified && !isEditingProfile;
 
     const {
         register,
         handleSubmit,
-        control,
         formState: { errors },
     } = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
         defaultValues: {
             role: role || 'agent',
             hourlyRate: String(profileInfo.hourlyRate ?? ''),
-            bio: String(profileInfo.bio ?? ''),
+            bio: existingBio,
             phone: basicInfo.phone || String(profileInfo.phone ?? '') || user?.phone || '',
             postalCode: basicInfo.zipCode || String(profileInfo.postalCode ?? '') || user?.postcode || user?.postalCode || '',
             city: basicInfo.city || String(profileInfo.city ?? '') || user?.city || '',
@@ -43,33 +48,21 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
         },
     });
 
-    const watchedCountry = useWatch({ control, name: 'country' });
-
-    // Map common countries to currencies (basic mapping)
-    const getCurrencyForCountry = (country: string) => {
-        const mapping: Record<string, string> = {
-            'Nigeria': '₦',
-            'United Kingdom': '£',
-            'United States': '$',
-            'Canada': 'CA$',
-            'Australia': 'AU$',
-            'Ghana': '₵',
-            'South Africa': 'R',
-        };
-        return mapping[country] || '£';
-    };
-    const currency = watchedCountry ? getCurrencyForCountry(watchedCountry) : '£';
-
     const onSubmit = async (data: ProfileFormValues) => {
+        const submission = { ...data, role: role || data.role };
+
         if (!identityDocument) {
-            toast.error('Upload an identity document to submit your profile for admin verification.');
+            // Identity document was skipped during onboarding; save profile in store and proceed
+            updateProfileInfo(submission);
+            toast.info('Profile saved. You can submit your identity document for verification anytime from your dashboard.');
+            setStep('questionnaire');
             return;
         }
 
-        const submission = { ...data, role: role || data.role };
         const formData = new FormData();
         formData.append('submission', JSON.stringify(submission));
         formData.append('identityDocument', identityDocument);
+
         setIsSubmitting(true);
         try {
             const response = await apiClient.post('/verification/account', formData, {
@@ -81,6 +74,7 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
                 verificationNotes: response.data.verificationNotes,
                 verificationSubmission: response.data.verificationSubmission,
                 verificationReviewedAt: response.data.verificationReviewedAt,
+                verificationDocumentName: identityDocument.name,
                 isOnboarded: false,
             });
             toast.success('Profile and identity document submitted for admin verification.');
@@ -95,60 +89,6 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
 
     const onError = () => {
         toast.error("Please fix the errors before continuing.");
-    };
-
-    const renderRoleFields = () => {
-        const normalizedRole = (role || '').toLowerCase().replace(/_/g, '-');
-        switch (normalizedRole) {
-            case 'agent':
-                return (
-                    <>
-                        <FormInput
-                            label="Professional License Number"
-                            register={register('licenseNumber')}
-                            placeholder="e.g. RE-12345678"
-                            error={errors.licenseNumber}
-                        />
-                        <FormInput
-                            label="Years of Experience"
-                            type="number"
-                            register={register('yearsExperience')}
-                            placeholder="e.g. 5"
-                            error={errors.yearsExperience}
-                        />
-                    </>
-                );
-            case 'account-manager':
-                return (
-                    <>
-                        <FormInput
-                            label="Current Company"
-                            register={register('company')}
-                            placeholder="e.g. Prime Realty Group"
-                            error={errors.company}
-                        />
-                    </>
-                );
-            case 'consultant':
-                return (
-                    <>
-                        <FormInput
-                            label="Primary Expertise"
-                            register={register('expertise')}
-                            placeholder="e.g. Investment Strategy, Legal"
-                            error={errors.expertise}
-                        />
-                        <FormInput
-                            label="LinkedIn Profile URL"
-                            register={register('linkedinUrl')}
-                            placeholder="https://linkedin.com/in/username"
-                            error={errors.linkedinUrl}
-                        />
-                    </>
-                );
-            default:
-                return null;
-        }
     };
 
     return (
@@ -166,22 +106,24 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
                     })()} Quick Profile
                 </h1>
                 <p className="text-[11px] md:text-sm text-slate-500 max-w-xs sm:max-w-md mx-auto leading-normal">
-                    Provide specific details about your professional background and expertise.
+                    Provide your professional bio and optional verification document.
                 </p>
             </div>
 
-            {hasExistingSubmission && user?.verificationStatus !== 'rejected' && !isEditingProfile ? (
+            {showAlreadySubmittedCard ? (
                 <section className="space-y-3 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="existing-verification-title">
                     <div className="flex items-start gap-3">
                         <span className="material-symbols-outlined mt-0.5 text-xl text-emerald-700" aria-hidden="true">task_alt</span>
                         <div>
-                            <h2 id="existing-verification-title" className="text-sm font-semibold text-slate-900">Profile and verification already submitted</h2>
-                            <p className="mt-1 text-xs leading-relaxed text-slate-600">Your profile and identity document are on file. Continue onboarding without uploading them again.</p>
+                            <h2 id="existing-verification-title" className="text-sm font-semibold text-slate-900">Profile and verification verified</h2>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-600">Your profile and identity document have been verified. You can proceed with onboarding or edit your profile details.</p>
                         </div>
                     </div>
-                    <button type="button" onClick={() => setStep('questionnaire')} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-white transition-colors hover:bg-primary-hover sm:w-auto">
-                        Continue to Expertise<span className="material-symbols-outlined text-base">arrow_forward</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                        <button type="button" onClick={() => setStep('questionnaire')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-white transition-colors hover:bg-primary-hover">
+                            Continue to Expertise<span className="material-symbols-outlined text-base">arrow_forward</span>
+                        </button>
+                    </div>
                 </section>
             ) : (
             <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-3.5 md:space-y-6 bg-white p-4 sm:p-6 md:p-10 rounded-2xl md:rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
@@ -192,29 +134,17 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
                 <input type="hidden" {...register('region')} />
                 <input type="hidden" {...register('country')} />
 
-                {/* Role Specific Top Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-2 md:mb-4">
-                    {renderRoleFields()}
-                </div>
-
-                <div className="w-full border-t border-slate-50 my-3 md:my-6"></div>
-
-                {/* Common Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    <div className="relative">
-                        <FormInput
-                            label={`Hourly Rate (${currency})`}
-                            register={register('hourlyRate')}
-                            placeholder={`${currency}25/hr`}
-                            error={errors.hourlyRate}
-                            required
-                        />
-                        {/* Currency Indicator */}
-                        <div className="absolute right-3.5 md:right-4 top-[30px] md:top-[38px] text-[10px] md:text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 md:py-1 rounded pointer-events-none">
-                            {currency} / hr
+                {hasDocumentOnFile && (
+                    <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-700">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="material-symbols-outlined text-base text-blue-700">description</span>
+                            <span className="truncate">Document on file: <strong className="font-semibold text-slate-900">{user?.verificationDocumentName}</strong></span>
                         </div>
+                        <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800 capitalize">
+                            {user?.verificationStatus || 'Pending'}
+                        </span>
                     </div>
-                </div>
+                )}
 
                 <div className="space-y-1 md:space-y-2">
                     <label className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">
@@ -238,16 +168,39 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
                 </div>
 
                 <div className="space-y-1.5 md:space-y-2">
-                    <label htmlFor="identity-document" className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display">Identity document <span className="text-red-600">*</span></label>
-                    <p className="text-[10px] md:text-xs text-amber-700 font-medium mb-1.5 md:mb-2">Required for administrator verification. PDF, JPG, or PNG up to 5 MB.</p>
-                    <input
-                        id="identity-document"
-                        type="file"
-                        accept="application/pdf,image/jpeg,image/png"
-                        onChange={(event) => setIdentityDocument(event.target.files?.[0] || null)}
-                        className="block w-full text-xs md:text-sm text-slate-500 file:mr-3 md:file:mr-4 file:py-1.5 md:file:py-2 file:px-3 md:file:px-4 file:rounded-full file:border-0 file:text-[10px] md:file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all"
-                    />
-                    {identityDocument && <p className="text-[10px] text-slate-500">Selected: {identityDocument.name}</p>}
+                    <label htmlFor="identity-document" className="text-xs md:text-sm font-semibold text-text-main ml-1 uppercase tracking-wider font-display flex items-center justify-between">
+                        <span>Identity document <span className="text-slate-400 text-xs font-normal lowercase">(optional for now)</span></span>
+                        {hasDocumentOnFile && <span className="text-[11px] font-normal text-slate-500 lowercase">(select new file to replace)</span>}
+                    </label>
+                    <p className="text-[10px] md:text-xs text-slate-500 font-medium mb-1.5 md:mb-2">
+                        Official government-issued ID (Passport, Driving Licence, or National ID Card). PDF, JPG, or PNG up to 5 MB.
+                    </p>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <input
+                            id="identity-document"
+                            type="file"
+                            accept="application/pdf,image/jpeg,image/png"
+                            onChange={(event) => setIdentityDocument(event.target.files?.[0] || null)}
+                            className="block w-full text-xs md:text-sm text-slate-500 file:mr-3 md:file:mr-4 file:py-1.5 md:file:py-2 file:px-3 md:file:px-4 file:rounded-xl file:border-0 file:text-[10px] md:file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
+                        />
+                        {identityDocument && (
+                            <button
+                                type="button"
+                                onClick={() => setIdentityDocument(null)}
+                                className="inline-flex items-center justify-center gap-1 text-xs text-slate-500 hover:text-red-600 px-2 py-1 rounded"
+                                title="Remove selected file"
+                            >
+                                <span className="material-symbols-outlined text-sm">close</span>
+                                <span>Clear</span>
+                            </button>
+                        )}
+                    </div>
+                    {identityDocument && (
+                        <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1 mt-1">
+                            <span className="material-symbols-outlined text-sm">check_circle</span>
+                            Selected: {identityDocument.name} ({(identityDocument.size / (1024 * 1024)).toFixed(2)} MB)
+                        </p>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-4 mt-4 md:mt-8 pt-2.5 md:pt-4 border-t border-slate-50">
