@@ -115,10 +115,10 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
                                 </span>
                             </>
                         )}
-                        {dueDate && (
+                        {task.dueDate && (
                             <>
                                 <span className="text-slate-300">·</span>
-                                <span className="whitespace-nowrap">Due {dueDate}</span>
+                                <TaskCountdown dueDate={task.dueDate} status={task.status} />
                             </>
                         )}
                         {formattedBudget && (

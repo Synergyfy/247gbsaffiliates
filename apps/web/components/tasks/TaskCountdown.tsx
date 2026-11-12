@@ -77,7 +77,7 @@ export default function TaskCountdown({
     const label = overdue
         ? `Overdue by ${days > 0 ? `${days}d ` : ''}${hours}h ${minutes}m`
         : days > 0
-            ? `${days}d ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`
+            ? `${days}d ${pad(hours)}h ${pad(minutes)}m`
             : `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
 
     return (
