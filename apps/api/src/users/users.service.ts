@@ -5,6 +5,7 @@ import axios from 'axios';
 import { User, UserRole, UserStatus, VerificationStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { Task, TaskStatus } from '../tasks/entities/task.entity';
 import { QuizAttempt } from '../assessment/entities/quiz_attempt.entity';
 import * as bcrypt from 'bcrypt';
@@ -189,7 +190,12 @@ export class UsersService {
 
     const qb = this.usersRepository
       .createQueryBuilder('user')
-      .where('user.status = :active', { active: UserStatus.ACTIVE });
+      .where('user.status = :active', { active: UserStatus.ACTIVE })
+      // A public profile is a claim of a verified identity. Pending and
+      // rejected affiliates must never appear in directory search results.
+      .andWhere('user.verificationStatus = :verified', {
+        verified: VerificationStatus.VERIFIED,
+      });
 
     if (allowedRoles.length) {
       qb.andWhere('user.role IN (:...allowedRoles)', { allowedRoles });
@@ -828,6 +834,73 @@ export class UsersService {
     return this.findOne(id);
   }
 
+  /**
+   * Persist the fields an affiliate controls themselves. Role, verification
+   * status and assessment state are deliberately not writable here.
+   *
+   * Skills are optional: they are only meaningful for agents, and the
+   * onboarding flow no longer presents that step to consultants or account
+   * managers.
+   */
+  async updateProfile(id: string, dto: UpdateProfileDto) {
+    const user = await this.findOne(id);
+
+    const textFields: Array<keyof UpdateProfileDto> = [
+      'firstName',
+      'lastName',
+      'bio',
+      'phone',
+      'city',
+      'region',
+      'country',
+      'profileImage',
+      'portfolioUrl',
+      'timezone',
+    ];
+    for (const key of textFields) {
+      const value = dto[key];
+      if (typeof value === 'string') {
+        (user as unknown as Record<string, unknown>)[key] = value.trim();
+      }
+    }
+
+    const postcode = dto.postcode ?? dto.postalCode;
+    if (typeof postcode === 'string') {
+      user.postcode = this.normalizePostcode(postcode);
+    }
+
+    if (typeof dto.currency === 'string' && dto.currency.trim()) {
+      user.currency = dto.currency.trim().toUpperCase();
+    }
+
+    if (dto.languages !== undefined) {
+      user.languages = this.normalizeStringList(dto.languages);
+    }
+
+    if (dto.skills !== undefined) {
+      user.skills = this.normalizeStringList(dto.skills);
+    }
+
+    await this.usersRepository.save(user);
+    // Re-evaluate onboarding after the write so a profile that now satisfies
+    // the role requirements is reflected immediately on the next profile read.
+    return this.getProfile(id);
+  }
+
+  private normalizeStringList(values: string[] | null | undefined): string[] {
+    if (!Array.isArray(values)) return [];
+    const seen = new Set<string>();
+    for (const raw of values) {
+      if (typeof raw !== 'string') continue;
+      // `simple-array` uses commas as the separator, so a comma inside a value
+      // would corrupt the stored list on the next read.
+      const value = raw.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+      if (value) seen.add(value);
+      if (seen.size >= 50) break;
+    }
+    return Array.from(seen);
+  }
+
   async getAgents(): Promise<Partial<User>[]> {
     return this.usersRepository.find({
       where: { role: UserRole.AGENT },
@@ -848,6 +921,10 @@ export class UsersService {
       },
       select: [
         'id',
+        // Central Hub recognises affiliates by its own user id; include it so
+        // delegation flows can address the right account without a second
+        // lookup per candidate.
+        'mcomUserId',
         'firstName',
         'lastName',
         'email',

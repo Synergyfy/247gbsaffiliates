@@ -1,5 +1,6 @@
 import { Controller, Get, Patch, Body, UseGuards, Request, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { UserRole } from './entities/user.entity';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -50,6 +51,17 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'List of agents' })
   async getAgents() {
     return this.usersService.getAgents();
+  }
+
+  @Patch('profile')
+  @ApiOperation({
+    summary: 'Update my profile',
+    description:
+      'Updates the authenticated affiliate profile. All fields are optional; skills are optional for consultants and account managers.',
+  })
+  @ApiResponse({ status: 200, description: 'Profile updated' })
+  async updateProfile(@Request() req, @Body() body: UpdateProfileDto) {
+    return this.usersService.updateProfile(req.user.userId, body);
   }
 
   @Patch('skills')
