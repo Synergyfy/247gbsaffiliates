@@ -17,7 +17,7 @@ export class Wallet {
   @Column('decimal', { precision: 12, scale: 2, default: 0 })
   balance: number;
 
-  @Column({ default: 'USD' })
+  @Column({ default: 'EUR' })
   currency: string;
 
   @OneToMany(() => Transaction, (transaction) => transaction.wallet)

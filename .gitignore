@@ -14,7 +14,6 @@ out
 
 # IDE
 .idea
-.vscode
 *.swp
 *.swo
 
@@ -22,7 +21,6 @@ out
 .DS_Store
 
 # env files
-.env*
 !.env.example
 
 # logs
@@ -42,3 +40,4 @@ coverage
 *.tsbuildinfo
 # user uploads
 apps/api/uploads
+config.bat

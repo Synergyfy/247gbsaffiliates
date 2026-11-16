@@ -56,7 +56,7 @@ export class InternalDirectoryController {
     const result = await this.walletService.creditForTask({
       userId: user.id,
       amount,
-      currency: body.currency || 'GBP',
+      currency: body.currency || 'EUR',
       description: body.description,
       reference: body.reference,
     });
@@ -68,7 +68,7 @@ export class InternalDirectoryController {
         email: user.email,
         reference: body.reference,
         amount,
-        currency: body.currency || 'GBP',
+        currency: body.currency || 'EUR',
         transactionId: result.transaction.id,
         balance: result.wallet?.balance,
         duplicated: result.duplicated,

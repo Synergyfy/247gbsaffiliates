@@ -132,6 +132,56 @@ describe('AccountManagerService.getDelegatableAgents', () => {
   });
 });
 
+describe('AccountManagerService.getManagedProjects', () => {
+  it('strips the project status before forwarding and filters the returned collection', async () => {
+    const { service } = buildHarness();
+    const centralGet = jest
+      .spyOn(
+        service as never as {
+          centralGet: (
+            managerId: string,
+            path: string,
+            params?: Record<string, unknown>,
+          ) => Promise<unknown>;
+        },
+        'centralGet',
+      )
+      .mockResolvedValue({
+        success: true,
+        data: [
+          { id: 'project-1', status: 'ACTIVE' },
+          { id: 'project-2', status: 'ON_HOLD' },
+          { id: 'project-3', status: 'ACTIVE' },
+        ],
+        total: 3,
+        page: 1,
+        limit: 20,
+      });
+
+    const result = (await service.getManagedProjects('manager-1', {
+      status: 'active',
+      page: 1,
+    })) as { data: Array<{ id: string }>; total: number };
+
+    expect(centralGet).toHaveBeenCalledWith('manager-1', '/projects', {
+      page: 1,
+    });
+    expect(result.data.map((project) => project.id)).toEqual([
+      'project-1',
+      'project-3',
+    ]);
+    expect(result.total).toBe(2);
+  });
+
+  it('rejects a status that is not a project status', async () => {
+    const { service } = buildHarness();
+
+    await expect(
+      service.getManagedProjects('manager-1', { status: 'IN_PROGRESS' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
 describe('AccountManagerService.resolveCentralAssigneeId', () => {
   const localId = '11111111-1111-4111-8111-111111111111';
   const centralId = '22222222-2222-4222-8222-222222222222';

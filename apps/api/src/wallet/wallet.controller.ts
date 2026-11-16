@@ -46,7 +46,7 @@ export class WalletController {
 
   @Get()
   @ApiOperation({ summary: 'Get my local wallet balance', description: 'Authenticated user. Returns local wallet details.' })
-  @ApiResponse({ status: 200, description: 'Wallet details', schema: { example: { id: 'uuid', balance: 100.00, currency: 'USD' } } })
+  @ApiResponse({ status: 200, description: 'Wallet details', schema: { example: { id: 'uuid', balance: 100.00, currency: 'EUR' } } })
   getMyWallet(@Request() req) {
     return this.walletService.findOneByUserId(req.user.userId);
   }

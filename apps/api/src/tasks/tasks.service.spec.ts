@@ -49,13 +49,38 @@ const mockRepo = {
   save: jest.fn().mockImplementation((task) => Promise.resolve({ ...mockTask, ...task })),
   findAndCount: jest.fn().mockResolvedValue([[mockTask], 1]),
   findOne: jest.fn().mockImplementation(({ where }) => {
-    if (where?.externalTaskId && where.externalTaskId === mockTask.externalTaskId) {
-      return Promise.resolve({ ...mockTask });
+    const clauses = Array.isArray(where) ? where : [where ?? {}];
+    for (const clause of clauses) {
+      if (
+        clause?.externalTaskId &&
+        clause.externalTaskId === mockTask.externalTaskId
+      ) {
+        return Promise.resolve({ ...mockTask });
+      }
+      if (clause?.id === 'uuid-task-1') {
+        // Account-manager scope lookup fetches by id, then checks ownership.
+        if (Object.keys(clause).length === 1) {
+          return Promise.resolve({ ...mockTask });
+        }
+        // The open-pool clause uses `status: OPEN` + `assignedAgentId: IsNull()`.
+        if (
+          clause.status === TaskStatus.OPEN &&
+          mockTask.status === TaskStatus.OPEN
+        ) {
+          return Promise.resolve({ ...mockTask });
+        }
+        if (clause.assignedAgentId === mockTask.assignedAgentId) {
+          return Promise.resolve({ ...mockTask });
+        }
+      }
     }
-    const { id, assignedAgentId } = where ?? {};
-    if (id === 'uuid-task-1' && (!assignedAgentId || assignedAgentId === mockTask.assignedAgentId)) return Promise.resolve({ ...mockTask }); // Return copy
     return Promise.resolve(null);
   }),
+  createQueryBuilder: jest.fn(() => ({
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(null),
+  })),
 };
 
 const mockUsersService = {
@@ -81,6 +106,7 @@ const mockConfigService = {
 };
 
 const mockAccountManagerService = {
+  canManageTask: jest.fn().mockResolvedValue(false),
   createManagedProjectTask: jest.fn().mockResolvedValue({
     success: true,
     data: {
@@ -116,7 +142,10 @@ describe('TasksService (AffiliateBackend)', () => {
     mockRepo.findOne.mockClear();
     mockRepo.save.mockClear();
     mockRepo.create.mockClear();
+    mockRepo.createQueryBuilder.mockClear();
     mockUsersService.findOne.mockClear();
+    mockAccountManagerService.canManageTask.mockClear();
+    mockAccountManagerService.canManageTask.mockResolvedValue(false);
     mockAccountManagerService.createManagedProjectTask.mockClear();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -211,17 +240,88 @@ describe('TasksService (AffiliateBackend)', () => {
     }));
   });
 
-  it('blocks task-list access when an affiliate has not completed all qualification requirements', async () => {
+  it('returns an empty work list (not a 403) when an affiliate is not yet qualified', async () => {
     mockUsersService.findOne.mockResolvedValueOnce({ ...mockUser, isQuizPassed: false });
 
-    await expect(service.findAll({}, 'uuid-agent-1', UserRole.AGENT)).rejects.toThrow(ForbiddenException);
+    await expect(service.findAll({}, 'uuid-agent-1', UserRole.AGENT)).resolves.toEqual({
+      items: [],
+      meta: { total: 0, page: 1, lastPage: 0 },
+    });
     expect(mockRepo.findAndCount).not.toHaveBeenCalled();
   });
 
-  it('hides task details from an affiliate it is not assigned to', async () => {
+  it('allows a qualified affiliate to open an unassigned open task', async () => {
+    mockTask.assignedAgentId = null;
+    mockTask.status = TaskStatus.OPEN;
+
+    const result = await service.findOneForUser(
+      'uuid-task-1',
+      'uuid-agent-1',
+      UserRole.AGENT,
+    );
+
+    expect(result.id).toBe('uuid-task-1');
+  });
+
+  it('hides an assigned task from an affiliate it is not assigned to', async () => {
     mockTask.assignedAgentId = 'uuid-other-agent';
+    mockTask.status = TaskStatus.ASSIGNED;
+
     await expect(service.findOneForUser('uuid-task-1', 'uuid-agent-1', UserRole.AGENT))
       .rejects.toThrow(NotFoundException);
+  });
+
+  it('allows the assigned affiliate to access task attachments', async () => {
+    mockTask.assignedAgentId = 'uuid-agent-1';
+    mockTask.status = TaskStatus.ACCEPTED;
+
+    await expect(
+      service.findOneForAttachment(
+        'uuid-task-1',
+        'uuid-agent-1',
+        UserRole.AGENT,
+      ),
+    ).resolves.toMatchObject({ id: 'uuid-task-1' });
+  });
+
+  it('does not expose attachments from an open task to the open pool', async () => {
+    mockTask.assignedAgentId = null;
+    mockTask.status = TaskStatus.OPEN;
+
+    await expect(
+      service.findOneForAttachment(
+        'uuid-task-1',
+        'uuid-agent-1',
+        UserRole.AGENT,
+      ),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('allows an account manager to open a task in their managed scope', async () => {
+    mockTask.assignedAgentId = 'uuid-other-agent';
+    mockTask.status = TaskStatus.ASSIGNED;
+    mockAccountManagerService.canManageTask.mockResolvedValue(true);
+
+    const result = await service.findOneForUser(
+      'uuid-task-1',
+      'uuid-agent-1',
+      UserRole.ACCOUNT_MANAGER,
+    );
+
+    expect(result.id).toBe('uuid-task-1');
+    expect(mockAccountManagerService.canManageTask).toHaveBeenCalledWith(
+      'uuid-agent-1',
+      expect.objectContaining({ id: 'uuid-task-1' }),
+    );
+  });
+
+  it('hides a task outside an account manager’s managed scope', async () => {
+    mockTask.assignedAgentId = 'uuid-other-agent';
+    mockTask.status = TaskStatus.ASSIGNED;
+
+    await expect(
+      service.findOneForUser('uuid-task-1', 'uuid-agent-1', UserRole.ACCOUNT_MANAGER),
+    ).rejects.toThrow(NotFoundException);
   });
 
   it('should assign task to agent', async () => {

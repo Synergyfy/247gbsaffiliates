@@ -23,6 +23,13 @@ import {
 } from '../users/entities/user.entity';
 import { QuizAttempt } from '../assessment/entities/quiz_attempt.entity';
 
+const PROJECT_STATUSES = new Set([
+  'ACTIVE',
+  'COMPLETED',
+  'ON_HOLD',
+  'ARCHIVED',
+]);
+
 @Injectable()
 export class AccountManagerService {
   private readonly logger = new Logger(AccountManagerService.name);
@@ -313,22 +320,90 @@ export class AccountManagerService {
     return this.centralPost(accountManagerId, `/requests/${encodeURIComponent(requestId)}/convert`, body);
   }
 
+  /**
+   * Central Hub validates a project list query against `AffiliateTaskStatus`.
+   * Project statuses are a different enum (`ACTIVE`, `COMPLETED`, `ON_HOLD`,
+   * `ARCHIVED`), so forwarding `status` produces a 400. Until Central's
+   * `AffiliateProjectQueryDto` validates against the project enum, strip the
+   * filter from the upstream call and apply it to the returned collection.
+   */
   async getManagedProjects(accountManagerId: string, query: Record<string, unknown>) {
-    // Strip status before forwarding to Central Hub because Central's AffiliateTaskQueryDto
-    // strictly validates against AffiliateTaskStatus enum which rejects AffiliateProjectStatus values (e.g. ACTIVE, ON_HOLD).
-    const { status, ...centralQuery } = query;
-    const response: any = await this.centralGet(accountManagerId, '/projects', centralQuery);
-    if (status && response && Array.isArray(response.data)) {
-      const filtered = response.data.filter(
-        (proj: any) => String(proj.status).toUpperCase() === String(status).toUpperCase(),
-      );
-      return {
-        ...response,
-        data: filtered,
-        total: filtered.length,
-      };
+    const { status, ...forwarded } = query ?? {};
+    const normalized =
+      typeof status === 'string' ? status.trim().toUpperCase() : '';
+
+    if (normalized && !PROJECT_STATUSES.has(normalized)) {
+      throw new BadRequestException({
+        code: 'INVALID_PROJECT_STATUS',
+        message: `Project status must be one of: ${Array.from(PROJECT_STATUSES).join(', ')}.`,
+      });
     }
-    return response;
+
+    const response = await this.centralGet<unknown>(
+      accountManagerId,
+      '/projects',
+      forwarded,
+    );
+    if (!normalized) return response;
+    return this.filterProjectResponse(response, normalized);
+  }
+
+  private filterProjectResponse(response: unknown, status: string): unknown {
+    const matches = (project: unknown): boolean => {
+      if (!project || typeof project !== 'object') return false;
+      const value = (project as Record<string, unknown>).status;
+      return typeof value === 'string' && value.toUpperCase() === status;
+    };
+
+    const filterCollection = (
+      container: Record<string, unknown>,
+      key: string,
+    ): boolean => {
+      const list = container[key];
+      if (!Array.isArray(list)) return false;
+      const filtered = list.filter(matches);
+      container[key] = filtered;
+      this.syncProjectTotals(container, filtered.length);
+      return true;
+    };
+
+    if (Array.isArray(response)) return response.filter(matches);
+    if (!response || typeof response !== 'object') return response;
+
+    const root = response as Record<string, unknown>;
+    // Common Central shapes: `{ data: [...] }`, `{ data: { items } }`,
+    // `{ data: { projects } }` and bare `{ items }`.
+    if (Array.isArray(root.data)) {
+      root.data = root.data.filter(matches);
+      this.syncProjectTotals(root, (root.data as unknown[]).length);
+      return root;
+    }
+    if (root.data && typeof root.data === 'object') {
+      const payload = root.data as Record<string, unknown>;
+      for (const key of ['projects', 'items', 'results', 'data']) {
+        if (filterCollection(payload, key)) return root;
+      }
+    }
+    for (const key of ['projects', 'items', 'results']) {
+      if (filterCollection(root, key)) return root;
+    }
+    return root;
+  }
+
+  private syncProjectTotals(container: Record<string, unknown>, total: number) {
+    if ('total' in container) container.total = total;
+    if ('count' in container) container.count = total;
+
+    const meta = container.meta;
+    if (meta && typeof meta === 'object') {
+      const metaRecord = meta as Record<string, unknown>;
+      if ('total' in metaRecord) metaRecord.total = total;
+      if ('lastPage' in metaRecord) {
+        const limit = Number(metaRecord.limit);
+        metaRecord.lastPage =
+          Number.isFinite(limit) && limit > 0 ? Math.ceil(total / limit) : 0;
+      }
+    }
   }
 
   closeManagedProject(
@@ -346,6 +421,21 @@ export class AccountManagerService {
    *   - tasks the manager created locally (campaigns/projects).
    * This prevents the revenue/agent dashboards from counting the whole portal.
    */
+  /**
+   * True when a task sits inside this manager's coordinated work: either they
+   * created it locally or it belongs to one of their Central businesses.
+   * Used for task-detail and evidence-download authorization.
+   */
+  async canManageTask(
+    accountManagerId: string,
+    task: Pick<Task, 'clientId' | 'centralBusinessId'>,
+  ): Promise<boolean> {
+    if (task.clientId === accountManagerId) return true;
+    if (!task.centralBusinessId) return false;
+    const businessIds = await this.managerBusinessIds(accountManagerId);
+    return businessIds.includes(task.centralBusinessId);
+  }
+
   private managerTaskQuery(accountManagerId: string, businessIds: string[]) {
     const qb = this.tasksRepo.createQueryBuilder('task').where(
       new Brackets((inner) => {
@@ -400,7 +490,7 @@ export class AccountManagerService {
     // single currency in play.
     const currencyRows = await scoped
       .clone()
-      .select("COALESCE(task.currency, 'USD')", 'currency')
+      .select("COALESCE(task.currency, 'EUR')", 'currency')
       .addSelect(
         'COALESCE(SUM(CASE WHEN task.status = :completedStatus THEN task.budget ELSE 0 END), 0)',
         'completedRevenue',
@@ -417,7 +507,7 @@ export class AccountManagerService {
         completedStatus: TaskStatus.COMPLETED,
         pendingStatuses,
       })
-      .groupBy("COALESCE(task.currency, 'USD')")
+      .groupBy("COALESCE(task.currency, 'EUR')")
       .orderBy('currency', 'ASC')
       .getRawMany<{
         currency: string;
@@ -427,7 +517,7 @@ export class AccountManagerService {
       }>();
 
     const revenueByCurrency = currencyRows.map((row) => ({
-      currency: (row.currency || 'USD').toUpperCase(),
+      currency: (row.currency || 'EUR').toUpperCase(),
       completedRevenue: Number(row.completedRevenue || 0),
       pendingRevenue: Number(row.pendingRevenue || 0),
       completedTasks: Number(row.completedTasks || 0),

@@ -95,7 +95,7 @@ export class Task {
   @Column({ type: 'integer', nullable: true })
   compensationPence: number | null;
 
-  @Column({ default: 'GBP' })
+  @Column({ default: 'EUR' })
   compensationCurrency: string;
 
   @Column({ default: false })
@@ -104,7 +104,7 @@ export class Task {
   @Column({ type: 'integer', nullable: true })
   businessChargePence: number | null;
 
-  @Column({ default: 'GBP' })
+  @Column({ default: 'EUR' })
   businessChargeCurrency: string;
 
   @Column({ default: false })
@@ -129,7 +129,7 @@ export class Task {
   @Column('decimal', { precision: 10, scale: 2, nullable: true })
   budget: number;
 
-  @Column({ default: 'USD' })
+  @Column({ default: 'EUR' })
   currency: string;
 
   @Column({ type: 'enum', enum: TaskStatus, default: TaskStatus.OPEN })

@@ -97,7 +97,7 @@ export class VerificationService {
     if (typeof cleanSubmission.city === 'string' && cleanSubmission.city) user.city = cleanSubmission.city;
     if (typeof cleanSubmission.region === 'string' && cleanSubmission.region) user.region = cleanSubmission.region;
     if (typeof cleanSubmission.country === 'string' && cleanSubmission.country) user.country = cleanSubmission.country;
-    if (!user.currency) user.currency = 'GBP';
+    if (!user.currency) user.currency = 'EUR';
 
     user.verificationDocument = document.buffer;
     user.verificationDocumentName = document.originalname.replace(/[\\/\r\n\0]/g, '_').slice(0, 180);
@@ -147,15 +147,14 @@ export class VerificationService {
       if (request.type === VerificationType.PAID_VISIBILITY) {
         await this.usersService.update(request.userId, { isPaidVisible: true });
       } else if (request.type === VerificationType.CONSULTANT_PROFILE) {
-        const user = await this.usersService.findOne(request.userId);
         await this.usersService.update(request.userId, {
           verificationStatus: VerificationStatus.VERIFIED,
           verificationNotes: request.adminNotes || null,
           verificationReviewedAt: new Date(),
         });
-        if (user.isQuizPassed && user.skills?.length) {
-          await this.usersService.completeOnboarding(request.userId);
-        }
+        // Re-derive onboarding from persisted state. The shared reconciler is
+        // role-aware, so non-agents no longer need a skill list to complete.
+        await this.usersService.reconcileOnboarding(request.userId);
       }
     }
 
