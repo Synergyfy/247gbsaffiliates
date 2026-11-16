@@ -135,12 +135,6 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
                                 </span>
                             </>
                         ) : null}
-                        {task.dueDate && (
-                            <>
-                                <span className="text-slate-300">·</span>
-                                <TaskCountdown dueDate={task.dueDate} status={task.status} />
-                            </>
-                        )}
                     </div>
                 </div>
 
