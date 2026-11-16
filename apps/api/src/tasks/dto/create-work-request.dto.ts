@@ -23,7 +23,7 @@ export class CreateWorkRequestDto {
   @Min(5)
   budget: number;
 
-  @ApiProperty({ example: 'GBP', required: false })
+  @ApiProperty({ example: 'EUR', required: false, default: 'EUR' })
   @IsString()
   @IsOptional()
   currency?: string;

@@ -57,7 +57,10 @@ export class AdminService {
       this.usersRepo.count({ where: { role: In(AFFILIATE_ROLES), verificationStatus: VerificationStatus.VERIFIED } }),
       this.usersRepo.createQueryBuilder('user')
         .where('user.role IN (:...roles)', { roles: AFFILIATE_ROLES })
-        .andWhere("user.verificationStatus = :verified AND user.isOnboarded = true AND user.isQuizPassed = true AND COALESCE(user.skills, '') <> ''", { verified: VerificationStatus.VERIFIED })
+        .andWhere(
+          "user.verificationStatus = :verified AND user.isOnboarded = true AND user.isQuizPassed = true AND (user.role <> :agentRole OR COALESCE(user.skills, '') <> '')",
+          { verified: VerificationStatus.VERIFIED, agentRole: UserRole.AGENT },
+        )
         .getCount(),
       this.attemptRepo.count({ where: { band: In(['Pass', 'Partial']) } }),
       this.attemptRepo.count({ where: { band: 'Fail' } }),
@@ -120,9 +123,21 @@ export class AdminService {
     if (isOnboarded !== undefined) qb.andWhere('user.isOnboarded = :isOnboarded', { isOnboarded });
     if (isQuizPassed !== undefined) qb.andWhere('user.isQuizPassed = :isQuizPassed', { isQuizPassed });
     if (qualification === 'qualified') {
-      qb.andWhere("user.verificationStatus = :qualifiedVerification AND user.isOnboarded = true AND user.isQuizPassed = true AND COALESCE(user.skills, '') <> ''", { qualifiedVerification: VerificationStatus.VERIFIED });
+      qb.andWhere(
+        "user.verificationStatus = :qualifiedVerification AND user.isOnboarded = true AND user.isQuizPassed = true AND (user.role <> :agentRole OR COALESCE(user.skills, '') <> '')",
+        {
+          qualifiedVerification: VerificationStatus.VERIFIED,
+          agentRole: UserRole.AGENT,
+        },
+      );
     } else if (qualification === 'incomplete') {
-      qb.andWhere("(user.verificationStatus <> :incompleteVerification OR user.isOnboarded = false OR user.isQuizPassed = false OR COALESCE(user.skills, '') = '')", { incompleteVerification: VerificationStatus.VERIFIED });
+      qb.andWhere(
+        "(user.verificationStatus <> :incompleteVerification OR user.isOnboarded = false OR user.isQuizPassed = false OR (user.role = :agentRole AND COALESCE(user.skills, '') = ''))",
+        {
+          incompleteVerification: VerificationStatus.VERIFIED,
+          agentRole: UserRole.AGENT,
+        },
+      );
     }
     if (search) {
       qb.andWhere(
@@ -151,7 +166,7 @@ export class AdminService {
     if (!user) throw new NotFoundException('Affiliate not found.');
 
     const attempts = await this.attemptRepo.find({ where: { userId: id }, order: { createdAt: 'DESC' }, take: 10 });
-    const qualified = user.verificationStatus === VerificationStatus.VERIFIED && user.isOnboarded && user.isQuizPassed && Boolean(user.skills?.length);
+    const qualified = this.isQualified(user);
     const learningSummary = await this.getLearningSummary(user.id, user.role);
     return {
       ...this.toAdminUserSummary(user),
@@ -225,8 +240,21 @@ export class AdminService {
     };
   }
 
+  /**
+   * Qualification is role-aware: only agents are matched by skill, so a
+   * consultant or account manager with no skills must still read as qualified.
+   */
+  private isQualified(user: User): boolean {
+    return Boolean(
+      user.verificationStatus === VerificationStatus.VERIFIED &&
+        user.isOnboarded &&
+        user.isQuizPassed &&
+        (user.role !== UserRole.AGENT || user.skills?.length),
+    );
+  }
+
   private toAdminUserSummary(user: User) {
-    const qualified = user.verificationStatus === VerificationStatus.VERIFIED && user.isOnboarded && user.isQuizPassed && Boolean(user.skills?.length);
+    const qualified = this.isQualified(user);
     const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
     return {
       id: user.id,

@@ -23,7 +23,7 @@ export class CreateTaskDto {
   @Min(5)
   budget: number;
 
-  @ApiProperty({ example: 'GBP', required: false })
+  @ApiProperty({ example: 'EUR', required: false, default: 'EUR' })
   @IsString()
   @IsOptional()
   currency?: string;
@@ -62,4 +62,14 @@ export class CreateTaskDto {
   @IsString()
   @IsOptional()
   centralProjectId?: string;
+
+  @ApiProperty({
+    example: 'uuid-central-business',
+    required: false,
+    description:
+      'Central Hub business this work belongs to. Set by server-side flows (for example converting a consultancy appointment) to keep the affiliate task linked to the client business.',
+  })
+  @IsString()
+  @IsOptional()
+  centralBusinessId?: string;
 }

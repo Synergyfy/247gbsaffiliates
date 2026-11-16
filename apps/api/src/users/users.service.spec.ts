@@ -78,6 +78,29 @@ describe('UsersService onboarding verification gate', () => {
     expect(result.isOnboarded).toBe(true);
     expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({ isOnboarded: true }));
   });
+
+  it.each([UserRole.CONSULTANT, UserRole.ACCOUNT_MANAGER])(
+    'completes onboarding for a %s without requiring skills',
+    async (role) => {
+      user.verificationStatus = VerificationStatus.VERIFIED;
+      user.role = role;
+      user.skills = undefined;
+
+      const result = await service.completeOnboarding('affiliate-1');
+
+      expect(result.isOnboarded).toBe(true);
+    },
+  );
+
+  it('still requires an agent to select at least one skill', async () => {
+    user.verificationStatus = VerificationStatus.VERIFIED;
+    user.role = UserRole.AGENT;
+    user.skills = [];
+
+    await expect(service.completeOnboarding('affiliate-1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
 });
 
 describe('UsersService postal-code lookup', () => {
