@@ -14,6 +14,7 @@ import { parseTaskMaterials } from '@/lib/taskMaterials';
 import { useAuthStore } from '@/store/useAuthStore';
 import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 import { getActionFailureMessage, reportRequestFailure } from '@/lib/requestErrors';
+import { resolveAttachmentUrl, downloadAttachmentBlob } from '@/lib/apiClient';
 
 const formatDate = (value?: string | null) => {
     if (!value) return 'Not specified';
@@ -33,10 +34,10 @@ const formatDateTime = (value?: string | null) => {
 
 const formatMoney = (task: { budget?: number; currency?: string; compensationPence?: number | null; compensationCurrency?: string | null }) => {
     if (task.budget != null && Number.isFinite(Number(task.budget)) && Number(task.budget) > 0) {
-        return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'USD' }).format(Number(task.budget));
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'EUR' }).format(Number(task.budget));
     }
     if (task.compensationPence != null && task.compensationPence > 0) {
-        return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(task.compensationPence / 100);
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'EUR' }).format(task.compensationPence / 100);
     }
     return null;
 };
@@ -165,29 +166,57 @@ const isImageAttachment = (attachment: TaskAttachment) =>
     /\.(png|jpe?g|gif|webp)$/i.test(attachment.url);
 
 function AttachmentPreview({ attachment }: { attachment: TaskAttachment }) {
+    const fullUrl = resolveAttachmentUrl(attachment.url);
+    const [isDownloading, setIsDownloading] = useState(false);
+
+    const handleDownload = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        setIsDownloading(true);
+        try {
+            await downloadAttachmentBlob(attachment.url, attachment.fileName);
+        } catch {
+            window.open(fullUrl, '_blank', 'noopener,noreferrer');
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
     if (isImageAttachment(attachment)) {
         return (
-            <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="group block">
+            <button
+                type="button"
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className="group block text-left"
+                title={`Download ${attachment.fileName || 'Image'}`}
+            >
                 <img
-                    src={attachment.url}
+                    src={fullUrl}
                     alt={attachment.fileName || 'Submission attachment'}
                     className="h-16 w-16 rounded-lg border border-slate-200 object-cover transition group-hover:opacity-90"
                 />
-                <span className="mt-1 block max-w-16 truncate text-[10px] text-slate-500">{attachment.fileName || 'Image'}</span>
-            </a>
+                <span className="mt-1 block max-w-16 truncate text-[10px] text-slate-500">
+                    {isDownloading ? 'Downloading…' : attachment.fileName || 'Image'}
+                </span>
+            </button>
         );
     }
     return (
-        <a
-            href={attachment.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+        <button
+            type="button"
+            onClick={handleDownload}
+            disabled={isDownloading}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+            title={`Download ${attachment.fileName || 'Attachment'}`}
         >
-            <span className="material-symbols-outlined !text-sm">description</span>
-            <span className="max-w-40 truncate">{attachment.fileName || 'Attachment'}</span>
-            <span className="material-symbols-outlined !text-xs">open_in_new</span>
-        </a>
+            <span className="material-symbols-outlined !text-sm">
+                {isDownloading ? 'hourglass_top' : 'description'}
+            </span>
+            <span className="max-w-40 truncate">
+                {isDownloading ? 'Downloading…' : attachment.fileName || 'Attachment'}
+            </span>
+            <span className="material-symbols-outlined !text-xs">download</span>
+        </button>
     );
 }
 
@@ -256,9 +285,11 @@ export default function AgentTaskDetailsPage() {
         [task?.description, task?.deliverables],
     );
 
-    const isQualified = user?.role === 'agent'
-        ? user?.verificationStatus === 'verified' && user?.isOnboarded === true && user?.isQuizPassed === true
-        : user?.isOnboarded === true;
+    const isQualified =
+        user?.verificationStatus === 'verified' &&
+        user?.isOnboarded === true &&
+        user?.isQuizPassed === true &&
+        (user?.role !== 'agent' || Boolean(user?.skills?.length));
 
     const run = async (action: () => Promise<unknown>, successMessage: string) => {
         setActionMessage('');
@@ -1046,7 +1077,7 @@ export default function AgentTaskDetailsPage() {
                         )}
                         {task.status === 'open' && (
                             <p className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700" role="status">
-                                This task is in the open pool. An administrator will assign it before you can accept it.
+                                This task is in the open pool. An account manager or administrator will assign it before you can accept it.
                             </p>
                         )}
                         {(task.status === 'declined' || task.status === 'cancelled') && (
@@ -1069,7 +1100,7 @@ export default function AgentTaskDetailsPage() {
                                     {task.compensationModel === 'MEMBERSHIP_INCLUDED'
                                         ? 'Included in the CHS membership service arrangement.'
                                         : task.compensationPence != null && task.compensationPence > 0
-                                          ? `${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'GBP' }).format(task.compensationPence / 100)} payable on approved completion.`
+                                          ? `${new Intl.NumberFormat(undefined, { style: 'currency', currency: task.compensationCurrency || 'EUR' }).format(task.compensationPence / 100)} payable on approved completion.`
                                           : money
                                             ? `${money} task budget.`
                                             : 'To be agreed with the account manager before work begins.'}

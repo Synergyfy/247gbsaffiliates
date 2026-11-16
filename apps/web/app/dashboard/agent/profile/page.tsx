@@ -127,11 +127,12 @@ export default function AgentProfilePage() {
     const avatar = profile.profileImage || profile.avatar || profile.image;
     const rateValue = hourlyRate ? [currency, hourlyRate].filter(Boolean).join(' ') : null;
 
+    const isAgentRole = !profile.role || profile.role.toLowerCase() === 'agent';
     const completionItems = [
         { label: 'Full name', complete: Boolean(fullName) },
         { label: 'Account email', complete: Boolean(displayValue(profile.email)) },
         { label: 'Professional bio', complete: Boolean(bio) },
-        { label: 'Skills', complete: skills.length > 0 },
+        ...(isAgentRole ? [{ label: 'Skills', complete: skills.length > 0 }] : []),
         { label: 'Target hourly rate', complete: Boolean(hourlyRate) },
     ];
     const completedCount = completionItems.filter((item) => item.complete).length;
