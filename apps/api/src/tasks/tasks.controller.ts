@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, Patch, Request, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Patch, Request, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException, NotFoundException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { basename, extname, join } from 'path';
 import * as fs from 'fs';
@@ -85,7 +85,11 @@ export class TasksController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get task details', description: 'Authenticated users. Affiliates can only view tasks assigned to them.' })
+  @ApiOperation({
+    summary: 'Get task details',
+    description:
+      'Authenticated users. Affiliates can view tasks assigned to them and unassigned open tasks they are qualified to accept.',
+  })
   findOne(@Param('id') id: string, @Request() req) {
     return this.tasksService.findOneForUser(id, req.user.userId, req.user.role);
   }
@@ -175,8 +179,9 @@ export class TasksController {
     @Request() req,
   ) {
     if (!file) throw new BadRequestException('A file is required');
-    // Only the assignee (or an admin) may attach deliverables.
-    await this.tasksService.findOneForUser(id, req.user.userId, req.user.role);
+    // Only the assignee, the coordinating account manager or an admin may
+    // attach deliverables — never an affiliate merely browsing the open pool.
+    await this.tasksService.findOneForAttachment(id, req.user.userId, req.user.role);
 
     // Multer's `dest` names files randomly without an extension — append it so
     // the served file keeps a correct content type. Prefixing the owning task
@@ -201,7 +206,7 @@ export class TasksController {
   @ApiOperation({
     summary: 'Serve an uploaded task attachment',
     description:
-      'Authenticated users can download task evidence. Files uploaded after this change carry the owning task id and are checked against the task assignee/admin role.',
+      'Authenticated task evidence download. Access is limited to the assignee, the coordinating account manager or an administrator; open-pool affiliates cannot download deliverables.',
   })
   async serveAttachment(
     @Param('filename') filename: string,
@@ -211,15 +216,32 @@ export class TasksController {
     // Task-scoped names are `<task-uuid>--<random>.<ext>`.
     const taskScoped = /^([a-f0-9-]{36})--[a-z0-9-]{8,64}\.[a-z0-9]{1,8}$/i.exec(filename);
     if (taskScoped) {
-      // Throws 404/403 when the caller is not the assignee (admins bypass the
-      // assignee check inside TasksService).
-      await this.tasksService.findOneForUser(
+      // Throws 404/403 when the caller is not the assignee or the coordinating
+      // account manager (admins bypass the ownership check inside TasksService).
+      await this.tasksService.findOneForAttachment(
         taskScoped[1],
         req.user.userId,
         req.user.role,
       );
-    } else if (!/^[a-f0-9-]{16,64}\.[a-z0-9]{1,8}$/i.test(filename)) {
-      // Legacy attachment naming (pre task-scoping) or path traversal attempt.
+    } else if (/^[a-f0-9-]{16,64}\.[a-z0-9]{1,8}$/i.test(filename)) {
+      // Legacy attachment naming (pre task-scoping). Resolve the owning task
+      // from its submission payload so the same authorization rules apply to
+      // existing deliverables instead of allowing any authenticated download.
+      const ownerTaskId =
+        await this.tasksService.findAttachmentOwnerTaskId(filename);
+      if (ownerTaskId) {
+        await this.tasksService.findOneForAttachment(
+          ownerTaskId,
+          req.user.userId,
+          req.user.role,
+        );
+      } else if (req.user.role !== UserRole.ADMIN) {
+        // An unattributed file cannot be authorized against a task; hide it
+        // from affiliates rather than serving the bytes to everyone.
+        throw new NotFoundException('Attachment not found');
+      }
+    } else {
+      // Path traversal attempt or a name we never generate.
       throw new BadRequestException('Invalid attachment name');
     }
 

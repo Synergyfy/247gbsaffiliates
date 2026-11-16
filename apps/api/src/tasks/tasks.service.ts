@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, In } from 'typeorm';
+import { Repository, Like, In, IsNull } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
@@ -217,7 +217,7 @@ export class TasksService {
       title: dto.title,
       description: dto.description,
       budget: dto.budget,
-      currency: dto.currency || 'GBP',
+      currency: dto.currency || 'EUR',
       type: TaskType.ONE_TIME,
       taskType: 'WORK_REQUEST',
       originSystem: OriginSystem.INTERNAL,
@@ -289,10 +289,10 @@ export class TasksService {
       prerequisiteExternalTaskId: dto.prerequisiteExternalTaskId ?? undefined,
       compensationModel: dto.compensationModel ?? undefined,
       compensationPence: dto.compensationPence ?? undefined,
-      compensationCurrency: dto.compensationCurrency ?? 'GBP',
+      compensationCurrency: dto.compensationCurrency ?? 'EUR',
       billableToBusiness: dto.billableToBusiness ?? false,
       businessChargePence: dto.businessChargePence ?? undefined,
-      businessChargeCurrency: dto.businessChargeCurrency ?? 'GBP',
+      businessChargeCurrency: dto.businessChargeCurrency ?? 'EUR',
       chargeApprovalRequired: dto.chargeApprovalRequired ?? false,
       paymentStatus: dto.paymentStatus ?? undefined,
       ...(dto.chargeApprovalRequired === false
@@ -371,7 +371,20 @@ export class TasksService {
     let where: any = baseWhere;
 
     if (requesterId && requesterRole && AFFILIATE_ROLES.includes(requesterRole)) {
-      await this.assertQualifiedAffiliate(requesterId);
+      try {
+        await this.assertQualifiedAffiliate(requesterId);
+      } catch (error) {
+        if (error instanceof ForbiddenException) {
+          // Pending/rejected affiliates still need to render their dashboard.
+          // An empty work list is the documented contract; a 403 here surfaces
+          // as a generic "failed to load tasks" banner on the client.
+          return {
+            items: [],
+            meta: { total: 0, page, lastPage: 0 },
+          };
+        }
+        throw error;
+      }
       const me = await this.usersService.findOne(requesterId);
       const mine = [{ ...baseWhere, assignedAgentId: requesterId }];
       if (me?.email) mine.push({ ...baseWhere, assigneeEmail: me.email.toLowerCase() });
@@ -425,12 +438,94 @@ export class TasksService {
         where: [
           { id, assignedAgentId: requesterId },
           ...(me?.email ? [{ id, assigneeEmail: me.email.toLowerCase() }] : []),
+          // Open work is intentionally visible to every qualified affiliate so
+          // they can review scope, requirements and budget before accepting it.
+          // The old assignment-only lookup returned 404 for the very tasks the
+          // dashboard listed in the open pool.
+          { id, status: TaskStatus.OPEN, assignedAgentId: IsNull() },
+          // Account Managers may coordinate work they did not create and are
+          // not assigned to; the scope check below decides whether this row is
+          // actually theirs.
+          ...(requesterRole === UserRole.ACCOUNT_MANAGER ? [{ id }] : []),
         ],
       });
       if (!task) throw new NotFoundException('Task not found');
+
+      // Account Managers coordinate work without necessarily being the
+      // assignee. Grant detail access for tasks inside their managed scope so
+      // review screens and attachment downloads work for the coordinator.
+      if (requesterRole === UserRole.ACCOUNT_MANAGER) {
+        const isAssignee =
+          task.assignedAgentId === requesterId ||
+          (task.assigneeEmail && me?.email
+            ? task.assigneeEmail === me.email.toLowerCase()
+            : false);
+        if (
+          !isAssignee &&
+          !(await this.accountManagerService.canManageTask(requesterId, task))
+        ) {
+          throw new NotFoundException('Task not found');
+        }
+      }
+
       return task;
     }
     return this.findOne(id);
+  }
+
+  /**
+   * Evidence access is stricter than task preview: only the assignee, the
+   * coordinating account manager or an administrator may touch attachments.
+   * An open task can be read by any qualified affiliate, but its files are not
+   * public to the open pool.
+   */
+  async findOneForAttachment(
+    id: string,
+    requesterId: string,
+    requesterRole: UserRole,
+  ) {
+    if (requesterRole === UserRole.ADMIN) {
+      return this.findOne(id);
+    }
+    if (!AFFILIATE_ROLES.includes(requesterRole)) {
+      throw new ForbiddenException('You are not authorized to access this attachment.');
+    }
+
+    await this.assertQualifiedAffiliate(requesterId);
+    const me = await this.usersService.findOne(requesterId);
+    const assigned = await this.tasksRepo.findOne({
+      where: [
+        { id, assignedAgentId: requesterId },
+        ...(me?.email ? [{ id, assigneeEmail: me.email.toLowerCase() }] : []),
+      ],
+    });
+    if (assigned) return assigned;
+
+    if (requesterRole === UserRole.ACCOUNT_MANAGER) {
+      const task = await this.tasksRepo.findOne({ where: { id } });
+      if (task && (await this.accountManagerService.canManageTask(requesterId, task))) {
+        return task;
+      }
+    }
+
+    throw new NotFoundException('Task not found');
+  }
+
+  /**
+   * Resolve the task that owns a legacy (pre task-scoped) attachment filename.
+   * New uploads carry the task id in the filename; older files only appear in
+   * the task's `submissionData`, so the download route must check there before
+   * serving the bytes.
+   */
+  async findAttachmentOwnerTaskId(filename: string): Promise<string | null> {
+    const task = await this.tasksRepo
+      .createQueryBuilder('task')
+      .select(['task.id'])
+      .where('task.submissionData::text ILIKE :filename', {
+        filename: `%${filename}%`,
+      })
+      .getOne();
+    return task?.id ?? null;
   }
 
   async assign(id: string, agentId: string) {
@@ -740,19 +835,17 @@ export class TasksService {
       });
     }
 
-    // Every affiliate role must be verified and onboarded. Agents additionally
-    // need the assessment and at least one skill before taking work.
+    // Every affiliate role must be verified, onboarded and assessed. Only
+    // agents need a skill list for marketplace matching — consultants and
+    // account managers are relationship roles and must never be locked out by
+    // an empty skills array.
     if (
       user.verificationStatus !== VerificationStatus.VERIFIED ||
-      !user.isOnboarded
+      !user.isOnboarded ||
+      !user.isQuizPassed ||
+      (user.role === UserRole.AGENT && !user.skills?.length)
     ) {
       throw this.taskAccessError(user);
-    }
-
-    if (user.role === UserRole.AGENT) {
-      if (!user.isQuizPassed || !user.skills?.length) {
-        throw this.taskAccessError(user);
-      }
     }
 
     return user;
@@ -765,6 +858,7 @@ export class TasksService {
    * even after the user has finished the flow.
    */
   private taskAccessError(user: {
+    role?: UserRole;
     verificationStatus: VerificationStatus;
     isOnboarded: boolean;
     isQuizPassed: boolean;
@@ -790,7 +884,7 @@ export class TasksService {
       message = 'Your account is verified. Complete the assessment to unlock delegated work.';
     } else if (!user.isOnboarded) {
       message = 'Your account is verified and your assessment is passed. Finish the remaining onboarding steps to unlock delegated work.';
-    } else if (user.skills && !hasSkills) {
+    } else if (user.role === UserRole.AGENT && !hasSkills) {
       message = 'Your account is verified. Add at least one skill so work can be matched to you.';
     } else {
       message = 'Administrator verification, onboarding, assessment and skill requirements must be complete before affiliate task access.';
