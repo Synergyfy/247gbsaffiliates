@@ -690,16 +690,20 @@ export const useManagedProjects = (
     queryKey: ['managed-projects', filters],
     enabled,
     queryFn: async () => {
-      const response = await apiClient.get('/account-manager/managed-projects', { params: filters });
-      const projects = unwrapManagedList<ManagedProject>(response.data, 'managed projects');
-      return projects.map((project) => ({
-        ...project,
-        tasks: Array.isArray(project.tasks)
-          ? project.tasks.map((task) =>
-              normalizeManagedTaskRecord(task as unknown as Record<string, unknown>),
-            )
-          : project.tasks,
-      }));
+      try {
+        const response = await apiClient.get('/account-manager/managed-projects', { params: filters });
+        const projects = unwrapManagedList<ManagedProject>(response.data, 'managed projects');
+        return projects.map((project) => ({
+          ...project,
+          tasks: Array.isArray(project.tasks)
+            ? project.tasks.map((task) =>
+                normalizeManagedTaskRecord(task as unknown as Record<string, unknown>),
+              )
+            : project.tasks,
+        }));
+      } catch (error) {
+        throw normalizeTaskError(error);
+      }
     },
   });
 

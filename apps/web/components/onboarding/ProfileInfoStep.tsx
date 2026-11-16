@@ -55,10 +55,31 @@ const ProfileInfoStep: React.FC<{ isEditingProfile?: boolean }> = ({ isEditingPr
         const submission = { ...data, role: role || data.role };
 
         if (!identityDocument) {
-            // Identity document was skipped during onboarding; save profile in store and proceed
-            updateProfileInfo(submission);
-            toast.info('Profile saved. You can submit your identity document for verification anytime from your dashboard.');
-            setStep(nextStep);
+            setIsSubmitting(true);
+            try {
+                const response = await apiClient.patch('/users/profile', {
+                    bio: submission.bio?.trim() || undefined,
+                    phone: submission.phone?.trim() || undefined,
+                    postalCode: submission.postalCode?.trim() || undefined,
+                    city: submission.city?.trim() || undefined,
+                    region: submission.region?.trim() || undefined,
+                    country: submission.country?.trim() || undefined,
+                    currency: 'EUR',
+                });
+                updateProfileInfo(submission);
+                if (response.data) {
+                    updateUser(response.data);
+                }
+                toast.success('Profile saved successfully.');
+                setStep(nextStep);
+            } catch (error) {
+                console.error('Profile update failed:', error);
+                updateProfileInfo(submission);
+                toast.info('Profile saved locally. You can submit your identity document for verification anytime from your dashboard.');
+                setStep(nextStep);
+            } finally {
+                setIsSubmitting(false);
+            }
             return;
         }
 

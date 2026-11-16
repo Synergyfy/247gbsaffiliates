@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/apiClient';
 import { useLearningProgress, useLearningResources } from '@/hooks/useLearningResources';
 import { Task, useTasks } from '@/hooks/useTasks';
+import { useAppointments, AppointmentStatus } from '@/hooks/useAppointments';
 import { useMcomWallet } from '@/hooks/useMcomWallet';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OverviewStage, QueryMessage, RoleOverview, SummaryCard } from '@/components/dashboard/RoleOverview';
@@ -37,10 +38,12 @@ export default function ConsultantDashboard() {
     const isPendingVerification = profile?.verificationStatus?.toLowerCase() === 'pending' || (!verified && profile?.verificationStatus !== 'rejected');
     const hasTaskAccess = Boolean(verified && profile?.isOnboarded);
     const tasksQuery = useTasks({ limit: 50, enabled: hasTaskAccess });
+    const appointmentsQuery = useAppointments({ limit: 10, enabled: hasTaskAccess });
     const walletQuery = useMcomWallet();
 
     const myTasks = profile?.id ? (tasksQuery.tasks || []).filter((task) => task.assignedAgentId === profile.id || (task.assigneeEmail && task.assigneeEmail.toLowerCase() === profile.email?.toLowerCase())) : [] as Task[];
-    const sessions = myTasks.filter((task) => task.type?.toLowerCase() === 'consultancy');
+    const realSessions = appointmentsQuery.appointments;
+    const upcomingSessions = realSessions.filter((a) => a.status === AppointmentStatus.SCHEDULED || a.status === AppointmentStatus.RESCHEDULED || a.status === AppointmentStatus.IN_PROGRESS);
     const activeTasks = myTasks.filter((task) => !isClosed(task));
     const completedTasks = myTasks.filter(isComplete);
     const awaitingReview = myTasks.filter((task) => task.status === 'submitted');
@@ -63,7 +66,8 @@ export default function ConsultantDashboard() {
     else if (awaitingReview.length) nextStep = { title: 'Your submitted work is awaiting review', detail: `${awaitingReview.length} submission${awaitingReview.length === 1 ? ' is' : 's are'} with the reviewer.`, href: '/dashboard/consultant/tasks', action: 'View submissions' };
     else if (profile?.verificationStatus === 'rejected') nextStep = { title: 'Review your verification status', detail: 'Your account has a persisted rejected status. Open your profile for the recorded status and available next step.', href: '/dashboard/consultant/profile', action: 'Review profile' };
     else if (isPendingVerification) nextStep = { title: 'Verification under administrator review', detail: 'Your profile and quiz have been submitted. An administrator is currently reviewing your ID verification before client assignments unlock.', href: '/dashboard/consultant/verification', action: 'Check verification' };
-    else if (activeTasks.length === 0 && sessions.length > 0) nextStep = { title: 'Check your consultancy sessions', detail: `You have ${sessions.length} consultancy assignment${sessions.length === 1 ? '' : 's'} in your work history.`, href: '/dashboard/consultant/sessions', action: 'View sessions' };
+    else if (activeTasks.length === 0 && upcomingSessions.length > 0) nextStep = { title: 'Check your upcoming consultancy sessions', detail: `You have ${upcomingSessions.length} upcoming advisory appointment${upcomingSessions.length === 1 ? '' : 's'} scheduled.`, href: '/dashboard/consultant/sessions', action: 'View sessions' };
+    else if (activeTasks.length === 0 && realSessions.length > 0) nextStep = { title: 'Check your consultancy sessions', detail: `You have ${realSessions.length} consultancy session${realSessions.length === 1 ? '' : 's'} in your records.`, href: '/dashboard/consultant/sessions', action: 'View sessions' };
 
     return (
         <RoleOverview name={displayName.split(/\s+/)[0]} description="Follow your professional progress and manage consultancy work assigned to you." stages={stages} nextStep={nextStep} profileHref="/dashboard/consultant/profile">
@@ -117,7 +121,7 @@ export default function ConsultantDashboard() {
                     </QueryMessage>
                 </section>
                 <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-span-2">
-                    <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-950">Consultancy sessions</h2><p className="mt-1 text-xs text-slate-500">Consultancy-type assignments in your task records</p></div><Link href="/dashboard/consultant/sessions" className="text-xs font-semibold text-blue-700 hover:underline">Sessions</Link></div>
+                    <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-950">Consultancy sessions</h2><p className="mt-1 text-xs text-slate-500">Scheduled client advisory appointments</p></div><Link href="/dashboard/consultant/sessions" className="text-xs font-semibold text-blue-700 hover:underline">View all</Link></div>
                     {!hasTaskAccess ? (
                         <div className="py-8 text-center">
                             <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">event_available</span>
@@ -126,12 +130,12 @@ export default function ConsultantDashboard() {
                                 Client appointments and consultation sessions will appear here once your ID verification is approved.
                             </p>
                         </div>
-                    ) : tasksQuery.isLoading && !tasksQuery.isError ? (
+                    ) : appointmentsQuery.isLoading && !appointmentsQuery.isError ? (
                         <p className="py-3 text-xs text-slate-500">Loading sessions…</p>
-                    ) : tasksQuery.isError ? (
-                        <RequestErrorState area="Consultancy sessions" label="Consultancy sessions" error={tasksQuery.error} onRetry={() => void tasksQuery.refetch()} supportHref="/dashboard/consultant/messages" />
-                    ) : sessions.length ? (
-                        <ul className="divide-y divide-slate-100">{sessions.slice(0, 4).map((session) => <li key={session.id}><Link href={`/dashboard/consultant/tasks/${session.id}`} className="flex justify-between gap-2 py-3"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{session.title}</span><span className="mt-0.5 block text-xs text-slate-500">{session.dueDate ? `Due ${new Date(session.dueDate).toLocaleDateString()}` : 'No date recorded'}</span></span><span className="self-center text-xs capitalize text-slate-600">{session.status.replaceAll('_', ' ')}</span></Link></li>)}</ul>
+                    ) : appointmentsQuery.isError ? (
+                        <RequestErrorState area="Consultancy sessions" label="Consultancy sessions" error={appointmentsQuery.error} onRetry={() => void appointmentsQuery.refetch()} supportHref="/dashboard/consultant/messages" />
+                    ) : realSessions.length ? (
+                        <ul className="divide-y divide-slate-100">{realSessions.slice(0, 4).map((session) => <li key={session.id}><Link href="/dashboard/consultant/sessions" className="flex justify-between gap-2 py-3 hover:bg-slate-50/50 rounded-lg px-1 transition-colors"><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{session.title}</span><span className="mt-0.5 block text-xs text-slate-500">{new Date(session.scheduledAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} · {session.durationMinutes}m</span></span><span className="self-center text-xs capitalize text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 font-medium">{session.status.toLowerCase().replaceAll('_', ' ')}</span></Link></li>)}</ul>
                     ) : (
                         <div className="py-8 text-center">
                             <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">event_available</span>
@@ -139,6 +143,9 @@ export default function ConsultantDashboard() {
                             <p className="mx-auto mt-1 max-w-xs text-xs text-slate-500">
                                 Scheduled client appointments and consultation sessions will appear here.
                             </p>
+                            <Link href="/dashboard/consultant/sessions" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline">
+                                Schedule a session →
+                            </Link>
                         </div>
                     )}
                 </section>
