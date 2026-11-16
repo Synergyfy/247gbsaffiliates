@@ -48,12 +48,12 @@ function TaskCard({ task, basePath }: { task: Task; basePath: string }) {
         task.budget != null && Number(task.budget) > 0
             ? new Intl.NumberFormat(undefined, {
                   style: 'currency',
-                  currency: task.currency || 'USD',
+                  currency: task.currency || 'EUR',
               }).format(Number(task.budget))
             : task.compensationPence != null && task.compensationPence > 0
               ? new Intl.NumberFormat(undefined, {
                     style: 'currency',
-                    currency: task.compensationCurrency || 'GBP',
+                    currency: task.compensationCurrency || 'EUR',
                 }).format(task.compensationPence / 100)
               : null;
 

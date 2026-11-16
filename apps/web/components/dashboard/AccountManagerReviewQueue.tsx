@@ -18,6 +18,7 @@ import {
 } from '@/hooks/useTasks';
 import { getActionFailureMessage, reportRequestFailure } from '@/lib/requestErrors';
 import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { resolveAttachmentUrl, downloadAttachmentBlob } from '@/lib/apiClient';
 
 const getErrorMessage = (err: unknown, fallback: string): string => {
   reportRequestFailure('AccountManagerWorkspace action', err);
@@ -116,16 +117,21 @@ function Submission({ task }: { task: ManagedTask }) {
       {submission.attachments?.length ? (
         <div className="flex flex-wrap gap-2">
           {submission.attachments.map((attachment) => (
-            <a
+            <button
               key={attachment.url}
-              href={attachment.url}
-              target="_blank"
-              rel="noopener noreferrer"
+              type="button"
+              onClick={async () => {
+                try {
+                  await downloadAttachmentBlob(attachment.url, attachment.fileName);
+                } catch {
+                  window.open(resolveAttachmentUrl(attachment.url), '_blank', 'noopener,noreferrer');
+                }
+              }}
               className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 font-semibold text-blue-700 hover:bg-blue-50"
             >
-              <span className="material-symbols-outlined text-sm">description</span>
+              <span className="material-symbols-outlined text-sm">download</span>
               {attachment.fileName || 'Attachment'}
-            </a>
+            </button>
           ))}
         </div>
       ) : null}
@@ -483,7 +489,7 @@ function AffiliateAssigneePicker({
             </span>
             {selectedAffiliate.hourlyRate != null ? (
               <span className="font-semibold text-slate-700">
-                {selectedAffiliate.currency || 'GBP'} {selectedAffiliate.hourlyRate}/hr
+                {selectedAffiliate.currency || 'EUR'} {selectedAffiliate.hourlyRate}/hr
               </span>
             ) : null}
           </div>
@@ -757,14 +763,14 @@ function TaskRow({
               ))}
               {effectiveTask.compensationPence != null && effectiveTask.compensationPence > 0 ? (
                 <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-800">
-                  Compensation: {effectiveTask.compensationCurrency || 'GBP'}{' '}
+                  Compensation: {effectiveTask.compensationCurrency || 'EUR'}{' '}
                   {(effectiveTask.compensationPence / 100).toFixed(2)}
                   {effectiveTask.paymentStatus ? ` (${label(effectiveTask.paymentStatus)})` : ''}
                 </span>
               ) : null}
               {effectiveTask.businessChargePence != null && effectiveTask.businessChargePence > 0 ? (
                 <span className="rounded bg-sky-50 px-2 py-1 text-sky-800">
-                  Business charge: {effectiveTask.businessChargeCurrency || effectiveTask.compensationCurrency || 'GBP'}{' '}
+                  Business charge: {effectiveTask.businessChargeCurrency || effectiveTask.compensationCurrency || 'EUR'}{' '}
                   {(effectiveTask.businessChargePence / 100).toFixed(2)}
                   {effectiveTask.chargeApprovedAt ? ' (approved)' : effectiveTask.chargeApprovalRequired ? ' (awaiting approval)' : ''}
                 </span>
@@ -1747,7 +1753,7 @@ function RequestRow({
       await quote({
         requestId: request.id,
         estimatedCostPence: Math.round(amount * 100),
-        currency: request.currency || 'GBP',
+        currency: request.currency || 'EUR',
       });
       setFeedback('Quote sent to the client for approval.');
       setQuoteAmount('');
@@ -1857,7 +1863,7 @@ function RequestRow({
                   <strong className="font-semibold">Quote sent:</strong>{' '}
                   {new Intl.NumberFormat(undefined, {
                     style: 'currency',
-                    currency: request.currency || 'GBP',
+                    currency: request.currency || 'EUR',
                   }).format(request.estimatedCostPence / 100)}
                   {request.status === 'QUOTED' ? ' — awaiting business approval' : ''}
                 </div>
@@ -2106,7 +2112,7 @@ function RequestRow({
             </div>
 
             <div className="mt-4">
-              <label className="text-xs font-bold text-slate-800">Estimated Cost ({request.currency || 'GBP'})</label>
+              <label className="text-xs font-bold text-slate-800">Estimated Cost ({request.currency || 'EUR'})</label>
               <input
                 type="number"
                 min={0}
@@ -2264,7 +2270,7 @@ function DirectTaskCard({ task }: { task: Task }) {
             {task.budget != null && (
               <span>
                 <strong className="font-semibold text-slate-800">Budget:</strong>{' '}
-                {new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'USD' }).format(
+                {new Intl.NumberFormat(undefined, { style: 'currency', currency: task.currency || 'EUR' }).format(
                   Number(task.budget),
                 )}
               </span>
@@ -2772,10 +2778,9 @@ export default function AccountManagerReviewQueue() {
               >
                 <option value="">All project statuses</option>
                 <option value="ACTIVE">Active</option>
-                <option value="AWAITING_BUSINESS_APPROVAL">Awaiting approval</option>
-                <option value="ON_HOLD">On hold</option>
                 <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
+                <option value="ON_HOLD">On hold</option>
+                <option value="ARCHIVED">Archived</option>
               </select>
               <select
                 value={projectSort}
@@ -2825,6 +2830,11 @@ export default function AccountManagerReviewQueue() {
                   folder_managed
                 </span>
                 <p className="mt-2 text-sm font-semibold text-slate-700">No managed projects found</p>
+                {projectStatus && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    No {projectStatus.toLowerCase().replace('_', ' ')} projects in the currently synchronized batch.
+                  </p>
+                )}
               </div>
             )}
           </div>

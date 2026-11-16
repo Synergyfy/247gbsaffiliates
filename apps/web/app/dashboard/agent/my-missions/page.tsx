@@ -24,7 +24,7 @@ function formatBudget(task: Task) {
     if (task.budget == null || !Number.isFinite(Number(task.budget))) return null;
     return new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: task.currency || 'USD',
+        currency: task.currency || 'EUR',
     }).format(Number(task.budget));
 }
 

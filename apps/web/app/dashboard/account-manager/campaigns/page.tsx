@@ -8,7 +8,7 @@ import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
 import { toast } from 'react-toastify';
 
 const terminalStatuses = ['completed', 'approved', 'cancelled', 'declined'];
-const campaignCurrency = (task: Task) => (task.currency || 'GBP').toUpperCase();
+const campaignCurrency = (task: Task) => (task.currency || 'EUR').toUpperCase();
 const formatBudget = (amount: number, currency: string) => {
     try {
         return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount);
