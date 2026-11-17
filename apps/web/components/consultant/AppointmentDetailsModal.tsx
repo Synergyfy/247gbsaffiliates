@@ -44,6 +44,7 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
 
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
+  const [notesExpanded, setNotesExpanded] = useState(false);
 
   // Initialize form state when entering edit or reschedule mode
   React.useEffect(() => {
@@ -61,6 +62,7 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
       setSelectedSlot(null);
       setConflictError(null);
       setGeneralError(null);
+      setNotesExpanded(false);
       setMode('view');
     }
   }, [appointment, isOpen]);
@@ -194,15 +196,47 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
 
   const scheduledDate = new Date(appointment.scheduledAt);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-      <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity" onClick={onClose} aria-hidden="true" />
+  const isLongNotes = Boolean(
+    appointment.notes &&
+      (appointment.notes.length > 75 || appointment.notes.includes('\n'))
+  );
 
-      <div className="relative w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+  const getCollapsedNotes = (text: string) => {
+    const firstLine = text.split('\n')[0];
+    if (firstLine.length <= 75) {
+      return firstLine;
+    }
+    const cut = text.slice(0, 75);
+    const lastSpace = cut.lastIndexOf(' ');
+    return lastSpace > 45 ? cut.slice(0, lastSpace) : cut;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4 overflow-hidden">
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Modal / Mobile Bottom Sheet */}
+      <div
+        className="relative w-full max-w-xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200 overflow-hidden flex flex-col max-h-[88dvh] sm:max-h-[90vh] transition-transform duration-200 ease-out"
+        role="dialog"
+        aria-modal="true"
+      >
+        {/* Mobile Pull Handle */}
+        <div className="flex justify-center pt-2.5 pb-1 sm:hidden shrink-0">
+          <div className="h-1 w-9 rounded-full bg-slate-300" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 bg-slate-50/60 shrink-0">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3 sm:py-3.5 bg-slate-50/70 shrink-0">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-blue-700 text-xl">event</span>
+            <span className="material-symbols-outlined text-blue-700 text-xl">
+              {mode === 'reschedule' ? 'schedule' : mode === 'edit' ? 'edit' : 'event'}
+            </span>
             <h2 className="text-base sm:text-lg font-bold text-slate-900">
               {mode === 'reschedule' ? 'Reschedule Session' : mode === 'edit' ? 'Edit Session Details' : 'Session Details'}
             </h2>
@@ -210,14 +244,15 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="Close"
           >
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
         </div>
 
-        {/* Body Content */}
-        <div className="overflow-y-auto p-5 space-y-4 text-xs sm:text-sm">
+        {/* Scrollable Body Content */}
+        <div className="overflow-y-auto px-4 py-2.5 sm:px-5 sm:py-3.5 space-y-2 text-xs sm:text-sm min-h-0 flex-1">
           {/* General Error Banner */}
           {generalError && (
             <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-red-900 flex items-start gap-2">
@@ -235,164 +270,104 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                   <h3 className="text-base font-bold leading-snug text-slate-950 sm:text-lg">
                     {appointment.title}
                   </h3>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <div className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-slate-600">
                     <span className="material-symbols-outlined !text-sm text-slate-400">
                       storefront
                     </span>
                     <span className="truncate">{businessName}</span>
-                  </p>
+                  </div>
                 </div>
-                <div>{getStatusBadge(appointment.status)}</div>
+                <div className="shrink-0">{getStatusBadge(appointment.status)}</div>
               </div>
 
-              {/* Schedule Info Row (Flat with hairline divider) */}
-              <div className="grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
-                <div className="space-y-0.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {/* Schedule Info & Meeting Channel (Compact 2-column grid with tight divider) */}
+              <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-2">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Scheduled Time
                   </span>
-                  <p className="text-xs font-semibold text-slate-900 sm:text-sm">
+                  <p className="mt-0.5 text-xs font-semibold text-slate-900 leading-tight">
                     {scheduledDate.toLocaleDateString(undefined, {
                       weekday: 'short',
-                      year: 'numeric',
                       month: 'short',
                       day: 'numeric',
+                      year: 'numeric',
                     })}
                   </p>
-                  <p className="text-xs text-slate-600">
+                  <p className="text-[11px] text-slate-500 leading-tight">
                     {scheduledDate.toLocaleTimeString(undefined, {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}{' '}
-                    ({appointment.durationMinutes} mins)
+                    ({appointment.durationMinutes}m)
                   </p>
                 </div>
 
-                <div className="space-y-0.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Meeting Channel
                   </span>
                   {appointment.meetingUrl ? (
-                    <div className="pt-0.5">
+                    <div className="mt-0.5">
                       <a
                         href={appointment.meetingUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-blue-700"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-800 hover:underline"
                       >
                         <span className="material-symbols-outlined !text-sm">videocam</span>
-                        <span>Open Video Meeting</span>
+                        <span>Open Meeting</span>
+                        <span className="material-symbols-outlined !text-xs">open_in_new</span>
                       </a>
                     </div>
                   ) : (
-                    <p className="pt-1 text-xs italic text-slate-500">No meeting link provided</p>
+                    <p className="mt-0.5 text-[11px] italic text-slate-400">No meeting link</p>
                   )}
                 </div>
               </div>
 
-              {/* Notes / Agenda (Flat with hairline divider) */}
-              <div className="space-y-1 border-t border-slate-100 pt-3">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {/* Advisory Notes & Agenda (Flat layout with subtle divider, collapsed strictly to 2 lines with inline ...read more) */}
+              <div className="border-t border-slate-100 pt-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Advisory Notes & Agenda
                 </span>
-                <div className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">
-                  {appointment.notes || (
+                <div className="mt-0.5 text-xs leading-relaxed text-slate-700">
+                  {appointment.notes ? (
+                    <p>
+                      {notesExpanded ? (
+                        <>
+                          <span className="whitespace-pre-wrap">{appointment.notes}</span>{' '}
+                          <button
+                            type="button"
+                            onClick={() => setNotesExpanded(false)}
+                            className="inline font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                          >
+                            (show less)
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span>
+                            {isLongNotes
+                              ? `${getCollapsedNotes(appointment.notes)}… `
+                              : appointment.notes}
+                          </span>
+                          {isLongNotes && (
+                            <button
+                              type="button"
+                              onClick={() => setNotesExpanded(true)}
+                              className="inline font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                            >
+                              read more
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </p>
+                  ) : (
                     <span className="italic text-slate-400">
                       No notes recorded for this session.
                     </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Actions Toolbar */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {!isCancelled && !isCompleted && (
-                    <button
-                      type="button"
-                      onClick={() => setMode('reschedule')}
-                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                    >
-                      <span className="material-symbols-outlined !text-sm">schedule</span>
-                      <span>Reschedule</span>
-                    </button>
-                  )}
-                  {!isCancelled && (
-                    <button
-                      type="button"
-                      onClick={() => setMode('edit')}
-                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                    >
-                      <span className="material-symbols-outlined !text-sm">edit</span>
-                      <span>Edit</span>
-                    </button>
-                  )}
-                  {!isCancelled && !isCompleted && !isConverted && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (
-                          confirm(
-                            'Are you sure you want to cancel this appointment? This will free the slot.',
-                          )
-                        ) {
-                          handleStatusChange(AppointmentStatus.CANCELLED);
-                        }
-                      }}
-                      disabled={updateAppointment.isPending}
-                      className="inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {appointment.status === AppointmentStatus.SCHEDULED && (
-                    <button
-                      type="button"
-                      onClick={() => handleStatusChange(AppointmentStatus.IN_PROGRESS)}
-                      disabled={updateAppointment.isPending}
-                      className="inline-flex h-8 items-center rounded-lg bg-amber-500 px-3 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-amber-600"
-                    >
-                      Start Session
-                    </button>
-                  )}
-                  {appointment.status === AppointmentStatus.IN_PROGRESS && (
-                    <button
-                      type="button"
-                      onClick={() => handleStatusChange(AppointmentStatus.COMPLETED)}
-                      disabled={updateAppointment.isPending}
-                      className="inline-flex h-8 items-center rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-emerald-700"
-                    >
-                      Complete Session
-                    </button>
-                  )}
-
-                  {isConverted ? (
-                    <Link
-                      href={`/dashboard/consultant/tasks/${appointment.convertedTaskId}`}
-                      className="inline-flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700"
-                    >
-                      <span>Open Task</span>
-                      <span className="material-symbols-outlined !text-sm leading-none">
-                        arrow_forward
-                      </span>
-                    </Link>
-                  ) : (
-                    !isCancelled &&
-                    onConvertToTask && (
-                      <button
-                        type="button"
-                        onClick={() => onConvertToTask(appointment)}
-                        className="inline-flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700"
-                      >
-                        <span>Convert to Task</span>
-                        <span className="material-symbols-outlined !text-sm leading-none">
-                          arrow_forward
-                        </span>
-                      </button>
-                    )
                   )}
                 </div>
               </div>
@@ -431,24 +406,6 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                   onChange={(e) => setEditNotes(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-600"
                 />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setMode('view')}
-                  className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Back
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveEdit}
-                  disabled={updateAppointment.isPending}
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {updateAppointment.isPending ? 'Saving…' : 'Save Changes'}
-                </button>
               </div>
             </div>
           )}
@@ -520,7 +477,7 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                           setSelectedSlot(slot);
                           setConflictError(null);
                         }}
-                        className={`px-2 py-1.5 text-xs font-medium rounded-lg text-center transition-all ${
+                        className={`px-2 py-2 text-xs font-medium rounded-lg text-center transition-all ${
                           isSelected
                             ? 'bg-blue-600 text-white font-semibold'
                             : slot.isAvailable
@@ -534,24 +491,152 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                   })}
                 </div>
               </div>
+            </div>
+          )}
+        </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setMode('view')}
-                  className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveReschedule}
-                  disabled={updateAppointment.isPending || !selectedSlot}
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {updateAppointment.isPending ? 'Rescheduling…' : 'Confirm Reschedule'}
-                </button>
+        {/* Pinned Bottom Actions Footer */}
+        <div className="border-t border-slate-100 bg-white px-4 py-3 sm:px-5 sm:py-3.5 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-3.5 shrink-0">
+          {/* VIEW MODE FOOTER */}
+          {mode === 'view' && (
+            <div className="space-y-2.5">
+              {/* Secondary Actions Toolbar (Reschedule, Edit, Cancel) */}
+              {(!isCancelled || !isCompleted) && (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    {!isCancelled && !isCompleted && (
+                      <button
+                        type="button"
+                        onClick={() => setMode('reschedule')}
+                        className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        <span className="material-symbols-outlined !text-sm text-slate-500">schedule</span>
+                        <span>Reschedule</span>
+                      </button>
+                    )}
+                    {!isCancelled && (
+                      <button
+                        type="button"
+                        onClick={() => setMode('edit')}
+                        className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        <span className="material-symbols-outlined !text-sm text-slate-500">edit</span>
+                        <span>Edit</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {!isCancelled && !isCompleted && !isConverted && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            'Are you sure you want to cancel this appointment? This will free the slot.',
+                          )
+                        ) {
+                          handleStatusChange(AppointmentStatus.CANCELLED);
+                        }
+                      }}
+                      disabled={updateAppointment.isPending}
+                      className="inline-flex h-9 items-center rounded-lg px-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Primary Action Buttons */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 pt-1 border-t border-slate-100">
+                {appointment.status === AppointmentStatus.SCHEDULED && (
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(AppointmentStatus.IN_PROGRESS)}
+                    disabled={updateAppointment.isPending}
+                    className="inline-flex h-11 sm:h-9 items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-4 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-amber-600 active:scale-[0.99]"
+                  >
+                    <span className="material-symbols-outlined !text-base">play_arrow</span>
+                    <span>Start Session</span>
+                  </button>
+                )}
+
+                {appointment.status === AppointmentStatus.IN_PROGRESS && (
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(AppointmentStatus.COMPLETED)}
+                    disabled={updateAppointment.isPending}
+                    className="inline-flex h-11 sm:h-9 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-emerald-700 active:scale-[0.99]"
+                  >
+                    <span className="material-symbols-outlined !text-base">check_circle</span>
+                    <span>Complete Session</span>
+                  </button>
+                )}
+
+                {isConverted ? (
+                  <Link
+                    href={`/dashboard/consultant/tasks/${appointment.convertedTaskId}`}
+                    className="inline-flex h-11 sm:h-9 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700 active:scale-[0.99]"
+                  >
+                    <span>Open Task</span>
+                    <span className="material-symbols-outlined !text-sm leading-none">arrow_forward</span>
+                  </Link>
+                ) : (
+                  !isCancelled &&
+                  onConvertToTask && (
+                    <button
+                      type="button"
+                      onClick={() => onConvertToTask(appointment)}
+                      className="inline-flex h-11 sm:h-9 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700 active:scale-[0.99]"
+                    >
+                      <span>Convert to Task</span>
+                      <span className="material-symbols-outlined !text-sm leading-none">arrow_forward</span>
+                    </button>
+                  )
+                )}
               </div>
+            </div>
+          )}
+
+          {/* EDIT MODE FOOTER */}
+          {mode === 'edit' && (
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setMode('view')}
+                className="h-10 sm:h-9 px-4 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={updateAppointment.isPending}
+                className="h-10 sm:h-9 px-4 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {updateAppointment.isPending ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          )}
+
+          {/* RESCHEDULE MODE FOOTER */}
+          {mode === 'reschedule' && (
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setMode('view')}
+                className="h-10 sm:h-9 px-4 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveReschedule}
+                disabled={updateAppointment.isPending || !selectedSlot}
+                className="h-10 sm:h-9 px-4 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {updateAppointment.isPending ? 'Rescheduling…' : 'Confirm Reschedule'}
+              </button>
             </div>
           )}
         </div>

@@ -176,7 +176,7 @@ export const BookAppointmentModal: React.FC<BookAppointmentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-5 overflow-hidden">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity"
@@ -184,10 +184,15 @@ export const BookAppointmentModal: React.FC<BookAppointmentModalProps> = ({
         aria-hidden="true"
       />
 
-      {/* Modal Dialog */}
-      <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+      {/* Modal Dialog / Mobile Bottom Sheet */}
+      <div className="relative w-full max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200 overflow-hidden flex flex-col max-h-[90dvh] sm:max-h-[92vh] transition-transform duration-200 ease-out" role="dialog" aria-modal="true">
+        {/* Mobile Pull Handle */}
+        <div className="flex justify-center pt-2.5 pb-1 sm:hidden shrink-0">
+          <div className="h-1 w-9 rounded-full bg-slate-300" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 bg-slate-50/60 shrink-0">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3 sm:py-4 bg-slate-50/60 shrink-0">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Advisory Session</span>
             <h2 className="text-base sm:text-lg font-bold text-slate-900 mt-0.5">Schedule Client Appointment</h2>
@@ -195,7 +200,7 @@ export const BookAppointmentModal: React.FC<BookAppointmentModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             aria-label="Close modal"
           >
             <span className="material-symbols-outlined text-xl">close</span>
@@ -203,7 +208,8 @@ export const BookAppointmentModal: React.FC<BookAppointmentModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="overflow-y-auto p-5 space-y-4 text-xs sm:text-sm">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+          <div className="overflow-y-auto p-4 sm:p-5 space-y-4 text-xs sm:text-sm min-h-0 flex-1">
           {/* Conflict Banner */}
           {conflictError && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 sm:p-4 text-amber-900 flex items-start gap-2.5">
@@ -426,20 +432,22 @@ export const BookAppointmentModal: React.FC<BookAppointmentModalProps> = ({
             {errors.notes && <p className="text-[11px] text-red-600 font-medium">{errors.notes.message}</p>}
           </div>
 
-          {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+          </div>
+
+          {/* Pinned Footer Actions */}
+          <div className="grid grid-cols-2 gap-2.5 sm:flex sm:items-center sm:justify-end border-t border-slate-100 bg-white px-4 py-3 sm:px-5 sm:py-3.5 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-3.5 shrink-0">
             <button
               type="button"
               onClick={onClose}
               disabled={createAppointment.isPending}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              className="h-11 sm:h-9 px-4 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={createAppointment.isPending || !selectedSlot}
-              className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xs flex items-center gap-1.5"
+              className="h-11 sm:h-9 px-5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xs flex items-center justify-center gap-1.5"
             >
               {createAppointment.isPending ? (
                 <>
