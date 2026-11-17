@@ -16,9 +16,201 @@ import { ConvertSessionToTaskModal } from '@/components/consultant/ConvertSessio
 
 type FilterTab = 'ALL' | 'UPCOMING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
+const statusTextColors: Record<AppointmentStatus, string> = {
+  [AppointmentStatus.SCHEDULED]: 'text-blue-700',
+  [AppointmentStatus.IN_PROGRESS]: 'text-amber-700',
+  [AppointmentStatus.COMPLETED]: 'text-emerald-700',
+  [AppointmentStatus.RESCHEDULED]: 'text-purple-700',
+  [AppointmentStatus.CANCELLED]: 'text-slate-500',
+};
+
+const formatInlineDateTime = (iso: string) => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Date TBD';
+  const dayPart = new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(date);
+  const timePart = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+  return `${dayPart} · ${timePart}`;
+};
+
+function SessionCard({
+  appt,
+  businessName,
+  isUpdating,
+  onOpenDetails,
+  onStart,
+  onComplete,
+  onConvert,
+}: {
+  appt: Appointment;
+  businessName: string;
+  isUpdating: boolean;
+  onOpenDetails: (appt: Appointment) => void;
+  onStart: (appt: Appointment) => void;
+  onComplete: (appt: Appointment) => void;
+  onConvert: (appt: Appointment) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const isCancelled = appt.status === AppointmentStatus.CANCELLED;
+  const isInProgress = appt.status === AppointmentStatus.IN_PROGRESS;
+  const isUpcoming =
+    appt.status === AppointmentStatus.SCHEDULED || appt.status === AppointmentStatus.RESCHEDULED;
+  const isConverted = Boolean(appt.convertedTaskId);
+
+  return (
+    <article
+      className={`group rounded-xl border bg-white p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all hover:border-slate-300 hover:shadow-xs sm:p-3 ${
+        isInProgress
+          ? 'border-amber-200/90'
+          : isUpcoming
+            ? 'border-blue-200/80'
+            : 'border-slate-200/90'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => setCollapsed((prev) => !prev)}
+        aria-expanded={!collapsed}
+        className="flex w-full items-start justify-between gap-2 text-left"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h2 className="text-sm font-bold leading-snug text-slate-950">{appt.title}</h2>
+            <span
+              className={`shrink-0 whitespace-nowrap text-[10px] font-bold uppercase tracking-wider ${
+                statusTextColors[appt.status] || 'text-slate-600'
+              }`}
+            >
+              {appt.status.replaceAll('_', ' ')}
+            </span>
+          </div>
+
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+            <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+              <span className="material-symbols-outlined !text-xs leading-none text-slate-400">
+                storefront
+              </span>
+              <span className="max-w-[160px] truncate sm:max-w-[260px]">{businessName}</span>
+            </span>
+            <span className="text-slate-300">·</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap text-slate-600">
+              <span className="material-symbols-outlined !text-xs leading-none text-slate-400">
+                schedule
+              </span>
+              {formatInlineDateTime(appt.scheduledAt)} ({appt.durationMinutes}m)
+            </span>
+          </div>
+        </div>
+
+        <span
+          aria-hidden="true"
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors group-hover:bg-slate-100 group-hover:text-slate-700"
+        >
+          <span className="material-symbols-outlined !text-base leading-none">
+            {collapsed ? 'expand_more' : 'expand_less'}
+          </span>
+        </span>
+      </button>
+
+      {!collapsed && (
+        <div className="mt-2 border-t border-slate-100 pt-2">
+          {appt.notes && (
+            <p className="mb-2 line-clamp-2 text-xs leading-5 text-slate-600">{appt.notes}</p>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {appt.meetingUrl && !isCancelled ? (
+                <a
+                  href={appt.meetingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline"
+                >
+                  <span className="material-symbols-outlined !text-sm leading-none">videocam</span>
+                  <span>Join video session</span>
+                </a>
+              ) : (
+                <span>
+                  <strong className="font-semibold text-slate-700">Duration:</strong>{' '}
+                  {appt.durationMinutes} mins
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => onOpenDetails(appt)}
+                className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Details
+              </button>
+
+              {isUpcoming && (
+                <button
+                  type="button"
+                  onClick={() => onStart(appt)}
+                  disabled={isUpdating}
+                  className="inline-flex h-7 items-center rounded-lg bg-amber-500 px-2.5 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-amber-600 disabled:opacity-50"
+                >
+                  Start
+                </button>
+              )}
+
+              {isInProgress && (
+                <button
+                  type="button"
+                  onClick={() => onComplete(appt)}
+                  disabled={isUpdating}
+                  className="inline-flex h-7 items-center rounded-lg bg-emerald-600 px-2.5 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  Complete
+                </button>
+              )}
+
+              {isConverted ? (
+                <Link
+                  href={`/dashboard/consultant/tasks/${appt.convertedTaskId}`}
+                  className="inline-flex h-7 items-center gap-1 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700"
+                >
+                  <span>Open Task</span>
+                  <span className="material-symbols-outlined !text-xs leading-none">
+                    arrow_forward
+                  </span>
+                </Link>
+              ) : (
+                !isCancelled && (
+                  <button
+                    type="button"
+                    onClick={() => onConvert(appt)}
+                    className="inline-flex h-7 items-center gap-1 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700"
+                  >
+                    <span>Convert to Task</span>
+                    <span className="material-symbols-outlined !text-xs leading-none">
+                      arrow_forward
+                    </span>
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
 export default function SessionsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'upcoming' | 'newest'>('upcoming');
   const [isBookModalOpen, setIsBookModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -30,7 +222,6 @@ export default function SessionsPage() {
   const { appointments, isLoading, isError, error, refetch } = useAppointments({ limit: 100 });
   const updateAppointment = useUpdateAppointment();
 
-  // Map business UUID to readable name
   const businessMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const b of businesses) {
@@ -43,13 +234,12 @@ export default function SessionsPage() {
     return businessMap.get(clientBusinessId) || `Business (${clientBusinessId.slice(0, 8)}…)`;
   };
 
-  // Filter appointments
   const filteredAppointments = useMemo(() => {
-    return appointments.filter((appt) => {
-      // Tab filter
+    const list = appointments.filter((appt) => {
       if (activeTab === 'UPCOMING') {
         const isUpcomingStatus =
-          appt.status === AppointmentStatus.SCHEDULED || appt.status === AppointmentStatus.RESCHEDULED;
+          appt.status === AppointmentStatus.SCHEDULED ||
+          appt.status === AppointmentStatus.RESCHEDULED;
         if (!isUpcomingStatus) return false;
       } else if (activeTab === 'IN_PROGRESS') {
         if (appt.status !== AppointmentStatus.IN_PROGRESS) return false;
@@ -59,7 +249,6 @@ export default function SessionsPage() {
         if (appt.status !== AppointmentStatus.CANCELLED) return false;
       }
 
-      // Search filter
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase();
         const bName = getBusinessName(appt.clientBusinessId).toLowerCase();
@@ -71,16 +260,24 @@ export default function SessionsPage() {
 
       return true;
     });
-  }, [appointments, activeTab, searchTerm, businessMap]);
 
-  // Tab counts
+    return [...list].sort((a, b) => {
+      const timeA = new Date(a.scheduledAt).getTime();
+      const timeB = new Date(b.scheduledAt).getTime();
+      return sortBy === 'upcoming' ? timeA - timeB : timeB - timeA;
+    });
+  }, [appointments, activeTab, searchTerm, sortBy, businessMap]);
+
   const counts = useMemo(() => {
     let upcoming = 0;
     let inProgress = 0;
     let completed = 0;
     let cancelled = 0;
     for (const appt of appointments) {
-      if (appt.status === AppointmentStatus.SCHEDULED || appt.status === AppointmentStatus.RESCHEDULED) {
+      if (
+        appt.status === AppointmentStatus.SCHEDULED ||
+        appt.status === AppointmentStatus.RESCHEDULED
+      ) {
         upcoming += 1;
       } else if (appt.status === AppointmentStatus.IN_PROGRESS) {
         inProgress += 1;
@@ -91,61 +288,15 @@ export default function SessionsPage() {
       }
     }
     return {
-      all: appointments.length,
-      upcoming,
-      inProgress,
-      completed,
-      cancelled,
+      ALL: appointments.length,
+      UPCOMING: upcoming,
+      IN_PROGRESS: inProgress,
+      COMPLETED: completed,
+      CANCELLED: cancelled,
     };
   }, [appointments]);
 
-  const getStatusBadge = (status: AppointmentStatus) => {
-    switch (status) {
-      case AppointmentStatus.SCHEDULED:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-            Scheduled
-          </span>
-        );
-      case AppointmentStatus.IN_PROGRESS:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
-            In Progress
-          </span>
-        );
-      case AppointmentStatus.COMPLETED:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="material-symbols-outlined text-xs">check</span>
-            Completed
-          </span>
-        );
-      case AppointmentStatus.CANCELLED:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-            Cancelled
-          </span>
-        );
-      case AppointmentStatus.RESCHEDULED:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-            <span className="material-symbols-outlined text-xs">update</span>
-            Rescheduled
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-            {status}
-          </span>
-        );
-    }
-  };
-
-  const handleStartSession = async (e: React.MouseEvent, appt: Appointment) => {
-    e.stopPropagation();
+  const handleStartSession = async (appt: Appointment) => {
     try {
       await updateAppointment.mutateAsync({
         id: appt.id,
@@ -153,12 +304,11 @@ export default function SessionsPage() {
       });
       setActionSuccessNotice(`Session "${appt.title}" marked as In Progress.`);
     } catch {
-      // Ignored
+      // Handled by query state
     }
   };
 
-  const handleCompleteSession = async (e: React.MouseEvent, appt: Appointment) => {
-    e.stopPropagation();
+  const handleCompleteSession = async (appt: Appointment) => {
     try {
       await updateAppointment.mutateAsync({
         id: appt.id,
@@ -166,131 +316,140 @@ export default function SessionsPage() {
       });
       setActionSuccessNotice(`Session "${appt.title}" marked as Completed.`);
     } catch {
-      // Ignored
+      // Handled by query state
     }
   };
 
+  const filterPills: Array<{ id: FilterTab; label: string; count: number; icon: string }> = [
+    { id: 'ALL', label: 'All sessions', count: counts.ALL, icon: 'calendar_month' },
+    { id: 'UPCOMING', label: 'Upcoming', count: counts.UPCOMING, icon: 'event_upcoming' },
+    { id: 'IN_PROGRESS', label: 'In progress', count: counts.IN_PROGRESS, icon: 'pending_actions' },
+    { id: 'COMPLETED', label: 'Completed', count: counts.COMPLETED, icon: 'task_alt' },
+    { id: 'CANCELLED', label: 'Cancelled', count: counts.CANCELLED, icon: 'event_busy' },
+  ];
+
   return (
-    <div className="mx-auto w-full max-w-[1500px] space-y-4 px-3 py-4 sm:px-5 lg:px-7">
-      {/* Page Header */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-700">Consultant Workspace</p>
-          <h1 className="mt-0.5 text-xl font-semibold text-slate-950 sm:text-2xl">Consultancy Sessions</h1>
-          <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-            Coordinate advisory appointments with Central Hub businesses and convert strategic findings into billable tasks.
+    <div className="mx-auto w-full max-w-[1600px] space-y-3 pb-8">
+      {/* Compact Header Row */}
+      <header className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 shadow-2xs">
+        <div className="min-w-0">
+          <h1 className="text-base font-bold text-slate-950 sm:text-lg">Consultancy Sessions</h1>
+          <p className="text-xs text-slate-500">
+            Coordinate advisory appointments with Central Hub businesses and convert findings into tasks.
           </p>
         </div>
 
         <button
           type="button"
           onClick={() => setIsBookModalOpen(true)}
-          className="inline-flex w-full sm:w-auto items-center justify-center gap-2 self-start sm:self-auto rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs transition-all shrink-0"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700"
         >
-          <span className="material-symbols-outlined text-lg">calendar_month</span>
-          <span>Schedule New Session</span>
+          <span className="material-symbols-outlined !text-sm leading-none">add</span>
+          <span>Schedule Session</span>
         </button>
       </header>
 
       {/* Success Notice Banner */}
       {actionSuccessNotice && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-emerald-900 text-xs flex items-center justify-between gap-3 animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-emerald-700 text-base">check_circle</span>
+        <div
+          role="status"
+          className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2 text-xs text-emerald-900"
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined !text-sm text-emerald-700">
+              check_circle
+            </span>
             <p className="font-medium">{actionSuccessNotice}</p>
           </div>
           <button
             type="button"
             onClick={() => setActionSuccessNotice(null)}
             className="text-emerald-700 hover:text-emerald-900"
+            aria-label="Dismiss notice"
           >
-            <span className="material-symbols-outlined text-base">close</span>
+            <span className="material-symbols-outlined !text-sm">close</span>
           </button>
         </div>
       )}
 
-      {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setActiveTab('ALL')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'ALL'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            All ({counts.all})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('UPCOMING')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'UPCOMING'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            Upcoming ({counts.upcoming})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('IN_PROGRESS')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'IN_PROGRESS'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            In Progress ({counts.inProgress})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('COMPLETED')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'COMPLETED'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            Completed ({counts.completed})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('CANCELLED')}
-            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'CANCELLED'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            Cancelled ({counts.cancelled})
-          </button>
-        </div>
+      {/* Status Filter Pills */}
+      <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto px-0.5 py-0.5 touch-pan-x no-scrollbar sm:grid sm:grid-cols-5 sm:overflow-visible sm:px-0">
+        {filterPills.map((pill) => {
+          const active = activeTab === pill.id;
+          return (
+            <button
+              key={pill.id}
+              type="button"
+              onClick={() => setActiveTab(pill.id)}
+              className={`flex min-w-[130px] shrink-0 snap-start items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all sm:min-w-0 sm:shrink ${
+                active
+                  ? 'border-blue-500/70 bg-blue-50/60 text-blue-900 shadow-2xs'
+                  : 'border-slate-200/90 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/50'
+              }`}
+            >
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <span
+                  className={`material-symbols-outlined !text-base leading-none ${
+                    active ? 'text-blue-600' : 'text-slate-400'
+                  }`}
+                >
+                  {pill.icon}
+                </span>
+                <span className="truncate">{pill.label}</span>
+              </span>
+              <span
+                className={`tabular-nums text-[11px] ${
+                  active ? 'font-bold text-blue-700' : 'text-slate-400'
+                }`}
+              >
+                ({pill.count})
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-        {/* Search */}
-        <div className="relative min-w-56 sm:max-w-xs">
-          <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">
-            search
-          </span>
+      {/* Compact Search & Sort Bar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex h-8 min-w-[200px] flex-1 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 shadow-2xs focus-within:border-blue-600">
+          <span className="material-symbols-outlined !text-base text-slate-400">search</span>
           <input
             type="text"
-            placeholder="Search sessions or businesses…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-xs text-slate-900 outline-none focus:border-blue-600 transition-all placeholder-slate-400"
+            aria-label="Search sessions or businesses"
+            placeholder="Search sessions or client businesses…"
+            className="h-full min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-400"
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="text-[11px] font-semibold text-slate-400 hover:text-slate-600"
+            >
+              Clear
+            </button>
+          )}
         </div>
+
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as 'upcoming' | 'newest')}
+          aria-label="Sort consultancy sessions"
+          className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 shadow-2xs focus:border-blue-600 focus:outline-none"
+        >
+          <option value="upcoming">Sort: Soonest first</option>
+          <option value="newest">Sort: Latest first</option>
+        </select>
       </div>
 
       {/* Main Content Area */}
       {isLoading ? (
-        <div className="space-y-3 py-4">
-          <div className="h-20 w-full animate-pulse rounded-xl bg-slate-100" />
-          <div className="h-20 w-full animate-pulse rounded-xl bg-slate-100" />
-          <div className="h-20 w-full animate-pulse rounded-xl bg-slate-100" />
+        <div className="flex min-h-[30vh] items-center justify-center px-4">
+          <div className="flex items-center gap-3 text-sm font-medium text-slate-500" role="status">
+            <span className="size-4 animate-spin rounded-full border-2 border-blue-100 border-b-blue-700" />
+            Loading consultancy sessions…
+          </div>
         </div>
       ) : isError ? (
         <RequestErrorState
@@ -299,195 +458,69 @@ export default function SessionsPage() {
           error={error}
           onRetry={() => void refetch()}
           supportHref="/dashboard/consultant/messages"
+          compact={false}
         />
       ) : filteredAppointments.length > 0 ? (
-        <section className="space-y-3">
-          {filteredAppointments.map((appt) => {
-            const scheduledDate = new Date(appt.scheduledAt);
-            const isCancelled = appt.status === AppointmentStatus.CANCELLED;
-            const isCompleted = appt.status === AppointmentStatus.COMPLETED;
-            const isConverted = Boolean(appt.convertedTaskId);
-            const bName = getBusinessName(appt.clientBusinessId);
-
-            return (
-              <div
-                key={appt.id}
-                onClick={() => {
-                  setSelectedAppointment(appt);
-                  setIsDetailsModalOpen(true);
-                }}
-                className="group relative rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-5 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4"
-              >
-                {/* Left: Date pill + Info */}
-                <div className="flex items-start gap-3 min-w-0">
-                  {/* Calendar Date Badge */}
-                  <div className="shrink-0 rounded-xl bg-slate-100/80 p-2 sm:p-2.5 text-center min-w-[54px] sm:min-w-[62px]">
-                    <span className="block text-[10px] font-bold uppercase tracking-wider text-blue-700">
-                      {scheduledDate.toLocaleDateString(undefined, { month: 'short' })}
-                    </span>
-                    <span className="block text-lg font-extrabold text-slate-900 leading-tight">
-                      {scheduledDate.getDate()}
-                    </span>
-                    <span className="block text-[10px] text-slate-500 font-medium">
-                      {scheduledDate.toLocaleDateString(undefined, { weekday: 'short' })}
-                    </span>
-                  </div>
-
-                  {/* Main Details */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-sm sm:text-base font-bold text-slate-950 group-hover:text-blue-700 transition-colors truncate">
-                        {appt.title}
-                      </h2>
-                      {getStatusBadge(appt.status)}
-                    </div>
-
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
-                      <span className="flex items-center gap-1 font-medium text-slate-700">
-                        <span className="material-symbols-outlined text-sm text-slate-400">storefront</span>
-                        {bName}
-                      </span>
-                      <span className="flex items-center gap-1 text-slate-500">
-                        <span className="material-symbols-outlined text-sm text-slate-400">schedule</span>
-                        {scheduledDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} ({appt.durationMinutes} mins)
-                      </span>
-                    </div>
-
-                    {appt.notes && (
-                      <p className="mt-1.5 text-xs text-slate-500 line-clamp-1 max-w-2xl">{appt.notes}</p>
-                    )}
-
-                    {/* Converted Task Link */}
-                    {isConverted && (
-                      <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
-                        <span className="material-symbols-outlined text-sm">task_alt</span>
-                        <span>Converted to Task</span>
-                        <Link
-                          href={`/dashboard/consultant/tasks/${appt.convertedTaskId}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="underline hover:text-blue-900 ml-1"
-                        >
-                          Open Task →
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right: Quick Action Buttons */}
-                <div
-                  className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 shrink-0 w-full md:w-auto border-t border-slate-100 pt-2.5 md:border-0 md:pt-0 self-end md:self-center"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Meeting Link Button */}
-                  {appt.meetingUrl && !isCancelled && (
-                    <a
-                      href={appt.meetingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold hover:bg-blue-100 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-sm">videocam</span>
-                      <span>Join</span>
-                    </a>
-                  )}
-
-                  {/* Start Session Quick Action */}
-                  {appt.status === AppointmentStatus.SCHEDULED && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleStartSession(e, appt)}
-                      disabled={updateAppointment.isPending}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors shadow-2xs"
-                    >
-                      Start
-                    </button>
-                  )}
-
-                  {/* Complete Session Quick Action */}
-                  {appt.status === AppointmentStatus.IN_PROGRESS && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleCompleteSession(e, appt)}
-                      disabled={updateAppointment.isPending}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-2xs"
-                    >
-                      Complete
-                    </button>
-                  )}
-
-                  {/* Convert to Task CTA */}
-                  {!isCancelled && !isConverted && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAppointmentToConvert(appt);
-                        setIsConvertModalOpen(true);
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-2xs flex items-center gap-1"
-                    >
-                      <span className="material-symbols-outlined text-sm">assignment_add</span>
-                      <span className="hidden sm:inline">Convert to Task</span>
-                      <span className="sm:hidden">Convert</span>
-                    </button>
-                  )}
-
-                  {/* Details / More Chevron */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedAppointment(appt);
-                      setIsDetailsModalOpen(true);
-                    }}
-                    className="p-1.5 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
-                    aria-label="View appointment details"
-                  >
-                    <span className="material-symbols-outlined text-base">arrow_forward</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </section>
+        <div className="space-y-2">
+          {filteredAppointments.map((appt) => (
+            <SessionCard
+              key={appt.id}
+              appt={appt}
+              businessName={getBusinessName(appt.clientBusinessId)}
+              isUpdating={updateAppointment.isPending}
+              onOpenDetails={(item) => {
+                setSelectedAppointment(item);
+                setIsDetailsModalOpen(true);
+              }}
+              onStart={(item) => void handleStartSession(item)}
+              onComplete={(item) => void handleCompleteSession(item)}
+              onConvert={(item) => {
+                setAppointmentToConvert(item);
+                setIsConvertModalOpen(true);
+              }}
+            />
+          ))}
+        </div>
       ) : (
-        /* Empty State */
-        <section className="rounded-2xl border border-slate-200 bg-white p-10 text-center sm:p-14">
-          <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
-            <span className="material-symbols-outlined text-2xl" aria-hidden="true">
-              calendar_today
-            </span>
-          </div>
+        <section className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+          <span className="material-symbols-outlined text-3xl text-slate-300" aria-hidden="true">
+            calendar_today
+          </span>
           {appointments.length === 0 ? (
             <>
-              <h2 className="text-base font-bold text-slate-900">No consultancy sessions scheduled yet</h2>
-              <p className="mx-auto mt-1 max-w-md text-xs text-slate-500 leading-relaxed">
-                When you schedule advisory sessions with Central Hub client businesses, your calendar and deliverables will appear here.
+              <h2 className="mt-1.5 text-sm font-semibold text-slate-800">
+                No consultancy sessions scheduled yet
+              </h2>
+              <p className="mx-auto mt-1 max-w-md text-xs text-slate-500">
+                When you schedule advisory sessions with Central Hub client businesses, they will appear here.
               </p>
-              <div className="mt-4">
+              <div className="mt-3">
                 <button
                   type="button"
                   onClick={() => setIsBookModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-all shadow-xs"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700"
                 >
-                  <span className="material-symbols-outlined text-base">calendar_month</span>
+                  <span className="material-symbols-outlined !text-sm leading-none">add</span>
                   <span>Schedule Your First Session</span>
                 </button>
               </div>
             </>
           ) : (
             <>
-              <h2 className="text-base font-bold text-slate-900">No matching sessions found</h2>
+              <h2 className="mt-1.5 text-sm font-semibold text-slate-800">
+                No matching sessions
+              </h2>
               <p className="mx-auto mt-1 max-w-md text-xs text-slate-500">
-                Try selecting another status tab or clearing your search term.
+                Try switching status filters or clearing your search query.
               </p>
-              <div className="mt-4">
+              <div className="mt-3">
                 <button
                   type="button"
                   onClick={() => {
                     setActiveTab('ALL');
                     setSearchTerm('');
                   }}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="inline-flex h-8 items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Clear Filters
                 </button>
@@ -532,7 +565,9 @@ export default function SessionsPage() {
           setAppointmentToConvert(null);
         }}
         onSuccess={(createdTaskId) => {
-          setActionSuccessNotice(`Session converted into task #${createdTaskId.slice(0, 8)} successfully.`);
+          setActionSuccessNotice(
+            `Session converted into task #${createdTaskId.slice(0, 8)} successfully.`,
+          );
           refetch();
         }}
       />

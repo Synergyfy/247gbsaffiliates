@@ -231,40 +231,27 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
             <>
               {/* Title & Status */}
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold text-slate-950 leading-snug">{appointment.title}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5 font-medium flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-sm text-slate-400">storefront</span>
-                    {businessName}
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold leading-snug text-slate-950 sm:text-lg">
+                    {appointment.title}
+                  </h3>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                    <span className="material-symbols-outlined !text-sm text-slate-400">
+                      storefront
+                    </span>
+                    <span className="truncate">{businessName}</span>
                   </p>
                 </div>
                 <div>{getStatusBadge(appointment.status)}</div>
               </div>
 
-              {/* Converted Task Notice */}
-              {isConverted && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3 sm:p-4 text-blue-900 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="material-symbols-outlined text-blue-700 text-xl">task_alt</span>
-                    <div>
-                      <p className="font-semibold text-xs text-blue-950">Converted into Managed Task</p>
-                      <p className="text-[11px] text-blue-700 mt-0.5">This consultancy session generated an active deliverable task.</p>
-                    </div>
-                  </div>
-                  <Link
-                    href={`/dashboard/consultant/tasks/${appointment.convertedTaskId}`}
-                    className="shrink-0 px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800 transition-colors"
-                  >
-                    View Task →
-                  </Link>
-                </div>
-              )}
-
-              {/* Schedule Info Box */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+              {/* Schedule Info Row (Flat with hairline divider) */}
+              <div className="grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
                 <div className="space-y-0.5">
-                  <span className="text-[10px] uppercase font-semibold text-slate-500">Scheduled Time</span>
-                  <p className="font-semibold text-slate-900 text-xs sm:text-sm">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Scheduled Time
+                  </span>
+                  <p className="text-xs font-semibold text-slate-900 sm:text-sm">
                     {scheduledDate.toLocaleDateString(undefined, {
                       weekday: 'short',
                       year: 'numeric',
@@ -272,49 +259,61 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                       day: 'numeric',
                     })}
                   </p>
-                  <p className="text-slate-600 text-xs">
-                    {scheduledDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} ({appointment.durationMinutes} mins)
+                  <p className="text-xs text-slate-600">
+                    {scheduledDate.toLocaleTimeString(undefined, {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}{' '}
+                    ({appointment.durationMinutes} mins)
                   </p>
                 </div>
 
                 <div className="space-y-0.5">
-                  <span className="text-[10px] uppercase font-semibold text-slate-500">Meeting Channel</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Meeting Channel
+                  </span>
                   {appointment.meetingUrl ? (
                     <div className="pt-0.5">
                       <a
                         href={appointment.meetingUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-2xs"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-blue-700"
                       >
-                        <span className="material-symbols-outlined text-sm">videocam</span>
+                        <span className="material-symbols-outlined !text-sm">videocam</span>
                         <span>Open Video Meeting</span>
                       </a>
                     </div>
                   ) : (
-                    <p className="text-slate-500 text-xs italic pt-1">No meeting link provided</p>
+                    <p className="pt-1 text-xs italic text-slate-500">No meeting link provided</p>
                   )}
                 </div>
               </div>
 
-              {/* Notes / Agenda */}
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-semibold text-slate-500">Advisory Notes & Agenda</span>
-                <div className="p-3 bg-white border border-slate-200 rounded-xl text-slate-700 text-xs leading-relaxed whitespace-pre-wrap min-h-16">
-                  {appointment.notes || <span className="text-slate-400 italic">No notes recorded for this session.</span>}
+              {/* Notes / Agenda (Flat with hairline divider) */}
+              <div className="space-y-1 border-t border-slate-100 pt-3">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Advisory Notes & Agenda
+                </span>
+                <div className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">
+                  {appointment.notes || (
+                    <span className="italic text-slate-400">
+                      No notes recorded for this session.
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Actions Toolbar */}
-              <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {!isCancelled && !isCompleted && (
                     <button
                       type="button"
                       onClick={() => setMode('reschedule')}
-                      className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                     >
-                      <span className="material-symbols-outlined text-sm">schedule</span>
+                      <span className="material-symbols-outlined !text-sm">schedule</span>
                       <span>Reschedule</span>
                     </button>
                   )}
@@ -322,22 +321,39 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                     <button
                       type="button"
                       onClick={() => setMode('edit')}
-                      className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1"
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                     >
-                      <span className="material-symbols-outlined text-sm">edit</span>
+                      <span className="material-symbols-outlined !text-sm">edit</span>
                       <span>Edit</span>
+                    </button>
+                  )}
+                  {!isCancelled && !isCompleted && !isConverted && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            'Are you sure you want to cancel this appointment? This will free the slot.',
+                          )
+                        ) {
+                          handleStatusChange(AppointmentStatus.CANCELLED);
+                        }
+                      }}
+                      disabled={updateAppointment.isPending}
+                      className="inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      Cancel
                     </button>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* Status Progression */}
+                <div className="flex flex-wrap items-center gap-1.5">
                   {appointment.status === AppointmentStatus.SCHEDULED && (
                     <button
                       type="button"
                       onClick={() => handleStatusChange(AppointmentStatus.IN_PROGRESS)}
                       disabled={updateAppointment.isPending}
-                      className="px-3.5 py-2 rounded-xl bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 transition-colors shadow-2xs"
+                      className="inline-flex h-8 items-center rounded-lg bg-amber-500 px-3 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-amber-600"
                     >
                       Start Session
                     </button>
@@ -347,38 +363,36 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                       type="button"
                       onClick={() => handleStatusChange(AppointmentStatus.COMPLETED)}
                       disabled={updateAppointment.isPending}
-                      className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-2xs"
+                      className="inline-flex h-8 items-center rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-emerald-700"
                     >
                       Complete Session
                     </button>
                   )}
 
-                  {/* Convert to Task CTA */}
-                  {!isCancelled && !isConverted && onConvertToTask && (
-                    <button
-                      type="button"
-                      onClick={() => onConvertToTask(appointment)}
-                      className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-2xs flex items-center gap-1.5"
+                  {isConverted ? (
+                    <Link
+                      href={`/dashboard/consultant/tasks/${appointment.convertedTaskId}`}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700"
                     >
-                      <span className="material-symbols-outlined text-sm">assignment_add</span>
-                      <span>Convert to Task</span>
-                    </button>
-                  )}
-
-                  {/* Cancel Button */}
-                  {!isCancelled && !isCompleted && !isConverted && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm('Are you sure you want to cancel this appointment? This will free the slot.')) {
-                          handleStatusChange(AppointmentStatus.CANCELLED);
-                        }
-                      }}
-                      disabled={updateAppointment.isPending}
-                      className="px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
+                      <span>Open Task</span>
+                      <span className="material-symbols-outlined !text-sm leading-none">
+                        arrow_forward
+                      </span>
+                    </Link>
+                  ) : (
+                    !isCancelled &&
+                    onConvertToTask && (
+                      <button
+                        type="button"
+                        onClick={() => onConvertToTask(appointment)}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white shadow-2xs transition-colors hover:bg-blue-700"
+                      >
+                        <span>Convert to Task</span>
+                        <span className="material-symbols-outlined !text-sm leading-none">
+                          arrow_forward
+                        </span>
+                      </button>
+                    )
                   )}
                 </div>
               </div>

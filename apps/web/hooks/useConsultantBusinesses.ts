@@ -49,7 +49,7 @@ export function useConsultantBusinesses() {
             if (item.centralBusinessId && !businessMap.has(item.centralBusinessId)) {
               businessMap.set(item.centralBusinessId, {
                 id: item.centralBusinessId,
-                name: item.businessName?.trim() || `Business (${item.centralBusinessId.slice(0, 8)}...)`,
+                name: item.businessName?.trim() || `Business (${item.centralBusinessId.slice(0, 8)}…)`,
                 source: 'assigned',
                 accountManagerName: item.accountManagerName ?? null,
               });
@@ -67,9 +67,44 @@ export function useConsultantBusinesses() {
             if (item.centralBusinessId && !businessMap.has(item.centralBusinessId)) {
               businessMap.set(item.centralBusinessId, {
                 id: item.centralBusinessId,
-                name: item.businessName?.trim() || item.contactName?.trim() || `Prospect (${item.centralBusinessId.slice(0, 8)}...)`,
+                name: item.businessName?.trim() || item.contactName?.trim() || `Prospect (${item.centralBusinessId.slice(0, 8)}…)`,
                 source: 'prospect',
               });
+            }
+          }
+        } catch {
+          // Gracefully continue
+        }
+
+        // 3. Also resolve client business names from tasks (open pool & assigned)
+        try {
+          const res = await apiClient.get('/tasks', { params: { limit: 100 } });
+          const payload = res.data;
+          const raw =
+            Array.isArray(payload)
+              ? payload
+              : Array.isArray(payload?.items)
+                ? payload.items
+                : Array.isArray(payload?.data)
+                  ? payload.data
+                  : Array.isArray(payload?.data?.items)
+                    ? payload.data.items
+                    : [];
+          for (const task of raw) {
+            if (task?.centralBusinessId && task?.centralBusinessName) {
+              const existing = businessMap.get(task.centralBusinessId);
+              if (
+                !existing ||
+                existing.name.startsWith('Business (') ||
+                existing.name.startsWith('Prospect (')
+              ) {
+                businessMap.set(task.centralBusinessId, {
+                  id: task.centralBusinessId,
+                  name: String(task.centralBusinessName).trim(),
+                  source: existing?.source ?? 'assigned',
+                  accountManagerName: existing?.accountManagerName ?? null,
+                });
+              }
             }
           }
         } catch {
@@ -81,4 +116,3 @@ export function useConsultantBusinesses() {
     }),
   );
 }
-
