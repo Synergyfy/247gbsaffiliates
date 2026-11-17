@@ -10,6 +10,7 @@ import {
 } from '@/hooks/useAppointments';
 import { useConsultantBusinesses } from '@/hooks/useConsultantBusinesses';
 import { RequestErrorState } from '@/components/dashboard/RequestErrorState';
+import { RolePageFrame } from '@/components/dashboard/RolePageFrame';
 import { BookAppointmentModal } from '@/components/consultant/BookAppointmentModal';
 import { AppointmentDetailsModal } from '@/components/consultant/AppointmentDetailsModal';
 import { ConvertSessionToTaskModal } from '@/components/consultant/ConvertSessionToTaskModal';
@@ -329,7 +330,8 @@ export default function SessionsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-3 pb-8">
+    <RolePageFrame verticalPadding>
+      <div className="space-y-3 pb-8">
       {/* Compact Header Row */}
       <header className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 shadow-2xs">
         <div className="min-w-0">
@@ -571,6 +573,7 @@ export default function SessionsPage() {
           refetch();
         }}
       />
-    </div>
+      </div>
+    </RolePageFrame>
   );
 }
